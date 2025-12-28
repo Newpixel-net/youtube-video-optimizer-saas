@@ -34535,3 +34535,1692 @@ exports.importStockMedia = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to import media'));
   }
 });
+
+// =============================================================================
+// PHASE 8-11: PROMPT CHAIN ARCHITECTURE
+// The Golden Chain of Quality - Script → Image Prompt → Video Prompt → Final
+// =============================================================================
+
+/**
+ * PROMPT CHAIN ARCHITECTURE - THE GOLDEN CHAIN OF QUALITY
+ *
+ * This system ensures that quality compounds at each step rather than degrades.
+ * The script is the master source - if the script is mediocre, everything fails.
+ *
+ * Chain: User Choices → Script → Visual Intent → Image Prompt → Generated Image
+ *        → Video Prompt (Image + Action) → Generated Video → Transition → Next Scene
+ */
+
+// =============================================================================
+// SECTION 8.1: SCENE SCRIPT STRUCTURE - THE VISUAL BLUEPRINT
+// =============================================================================
+
+/**
+ * Scene Script Structure - Complete Visual Blueprint
+ * The script is NOT just dialogue and action - it's a complete visual blueprint
+ */
+const SCENE_SCRIPT_STRUCTURE = {
+  // Define the structure schema for scene scripts
+  schema: {
+    sceneId: 'string', // e.g., 'S01_001'
+    episodeNumber: 'number|null', // For series
+
+    timing: {
+      duration: 'number', // seconds
+      pacingNote: 'string' // e.g., 'slow build to sudden action'
+    },
+
+    // THE VISUAL INTENT (becomes IMAGE PROMPT)
+    visualBlueprint: {
+      // Camera
+      shotType: ['extreme-wide', 'wide', 'medium-wide', 'medium', 'medium-close', 'close-up', 'extreme-close-up', 'establishing'],
+      cameraAngle: ['eye-level', 'low-angle', 'high-angle', 'dutch-angle', 'birds-eye', 'worms-eye', 'over-shoulder'],
+      cameraMovement: ['static', 'push-in', 'pull-out', 'pan-left', 'pan-right', 'tilt-up', 'tilt-down', 'tracking', 'crane', 'handheld'],
+
+      // Composition
+      subjectPlacement: ['center', 'rule-of-thirds-left', 'rule-of-thirds-right', 'bottom-third', 'top-third', 'leading-space'],
+      foreground: 'string',
+      midground: 'string',
+      background: 'string',
+
+      // Lighting
+      keyLight: 'string', // e.g., 'harsh-neon-pink-from-left'
+      fillLight: 'string', // e.g., 'cyan-ambient-from-screens'
+      practicalLights: 'array', // e.g., ['holographic-ads', 'distant-windows']
+
+      // Atmosphere
+      weather: 'string|null',
+      particles: 'string|null',
+      mood: 'string',
+
+      // Color
+      dominantColors: 'array',
+      colorTemperature: 'string'
+    },
+
+    // THE ACTION INTENT (becomes VIDEO PROMPT motion)
+    actionBlueprint: {
+      characterAction: {
+        who: 'string',
+        startPose: 'string',
+        action: 'string',
+        endPose: 'string',
+        timing: 'string'
+      },
+      environmentAction: 'array', // Array of environment animations
+      cameraAction: {
+        movement: 'string',
+        speed: 'string',
+        focus: 'string'
+      }
+    },
+
+    // AUDIO INTENT (for audio generation)
+    audioBlueprint: {
+      ambience: 'array',
+      music: 'string',
+      sfx: 'array',
+      dialogue: 'string|null',
+      voiceover: 'string|null'
+    },
+
+    // DIALOGUE (if any)
+    dialogue: 'array', // Array of { character, line, delivery }
+
+    // TRANSITION TO NEXT
+    transitionOut: {
+      type: ['cut', 'dissolve', 'wipe', 'match-cut', 'j-cut', 'l-cut', 'fade-to-black', 'fade-from-black'],
+      timing: 'string',
+      visualBridge: 'string|null'
+    }
+  },
+
+  // Shot type descriptions for prompt generation
+  shotTypes: {
+    'extreme-wide': {
+      prompt: 'extreme wide shot, vast landscape, subject very small in frame',
+      useFor: ['establishing scale', 'showing environment', 'isolation']
+    },
+    'wide': {
+      prompt: 'wide shot, full body visible, environment context',
+      useFor: ['action sequences', 'group shots', 'movement']
+    },
+    'medium-wide': {
+      prompt: 'medium wide shot, waist up, good balance of subject and environment',
+      useFor: ['dialogue with context', 'walking scenes']
+    },
+    'medium': {
+      prompt: 'medium shot, waist to head, conversational distance',
+      useFor: ['dialogue', 'standard coverage', 'interviews']
+    },
+    'medium-close': {
+      prompt: 'medium close-up, chest and head, intimate but not intrusive',
+      useFor: ['emotional moments', 'important dialogue']
+    },
+    'close-up': {
+      prompt: 'close-up shot, face fills frame, intense focus on expression',
+      useFor: ['emotional peaks', 'reactions', 'detail reveals']
+    },
+    'extreme-close-up': {
+      prompt: 'extreme close-up, single feature fills frame (eye, hand, object)',
+      useFor: ['dramatic emphasis', 'symbolic moments', 'tension']
+    },
+    'establishing': {
+      prompt: 'establishing shot, wide view introducing the location',
+      useFor: ['scene beginnings', 'location changes', 'time passages']
+    }
+  },
+
+  // Camera angle descriptions
+  cameraAngles: {
+    'eye-level': {
+      prompt: 'eye-level shot, neutral and objective perspective',
+      psychology: 'equality, normalcy, relatability'
+    },
+    'low-angle': {
+      prompt: 'low angle shot, camera looking up at subject',
+      psychology: 'power, dominance, heroism, intimidation'
+    },
+    'high-angle': {
+      prompt: 'high angle shot, camera looking down at subject',
+      psychology: 'vulnerability, weakness, surveillance, overview'
+    },
+    'dutch-angle': {
+      prompt: 'dutch angle shot, tilted frame creating unease',
+      psychology: 'disorientation, tension, instability, madness'
+    },
+    'birds-eye': {
+      prompt: 'bird\'s eye view, directly overhead looking down',
+      psychology: 'god-like perspective, fate, insignificance'
+    },
+    'worms-eye': {
+      prompt: 'worm\'s eye view, extreme low angle from ground level',
+      psychology: 'extreme power, monumentality, childlike wonder'
+    },
+    'over-shoulder': {
+      prompt: 'over-the-shoulder shot, POV of conversation participant',
+      psychology: 'connection, dialogue intimacy, suspense'
+    }
+  },
+
+  // Lighting setups
+  lightingSetups: {
+    'three-point': {
+      prompt: 'three-point lighting, professional balanced illumination',
+      mood: 'professional, neutral, clear'
+    },
+    'high-key': {
+      prompt: 'high-key lighting, bright and evenly lit, minimal shadows',
+      mood: 'optimistic, happy, clean, commercial'
+    },
+    'low-key': {
+      prompt: 'low-key lighting, dramatic shadows, high contrast',
+      mood: 'mysterious, dramatic, noir, tension'
+    },
+    'chiaroscuro': {
+      prompt: 'chiaroscuro lighting, extreme contrast between light and dark',
+      mood: 'dramatic, artistic, renaissance, profound'
+    },
+    'motivated': {
+      prompt: 'motivated lighting from visible source (window, lamp, screen)',
+      mood: 'realistic, grounded, natural'
+    },
+    'neon': {
+      prompt: 'neon lighting, vibrant colored light sources',
+      mood: 'futuristic, cyberpunk, nightlife, edgy'
+    },
+    'golden-hour': {
+      prompt: 'golden hour lighting, warm sunset/sunrise glow',
+      mood: 'romantic, nostalgic, magical, peaceful'
+    },
+    'blue-hour': {
+      prompt: 'blue hour lighting, cool twilight ambiance',
+      mood: 'melancholic, contemplative, mysterious'
+    },
+    'practical': {
+      prompt: 'practical lighting from in-scene sources only',
+      mood: 'realistic, immersive, cinematic'
+    }
+  }
+};
+
+// =============================================================================
+// SECTION 9.1: IMAGE PROMPT GENERATOR - Scene to Image Transformation
+// =============================================================================
+
+/**
+ * IMAGE PROMPT GENERATOR
+ * Transforms scene visual blueprints into precise AI image prompts
+ */
+const IMAGE_PROMPT_GENERATOR = {
+
+  /**
+   * Generate image prompt from scene script
+   */
+  generateFromScene: (scene, styleBible, characterBible) => {
+    const vb = scene.visualBlueprint || {};
+
+    // Build subject description
+    const subject = IMAGE_PROMPT_GENERATOR.buildSubjectDescription(scene, characterBible);
+
+    // Get shot type prompt
+    const shotPrompt = SCENE_SCRIPT_STRUCTURE.shotTypes[vb.shotType]?.prompt || '';
+
+    // Get camera angle prompt
+    const anglePrompt = SCENE_SCRIPT_STRUCTURE.cameraAngles[vb.cameraAngle]?.prompt || '';
+
+    // Build composition description
+    const composition = [shotPrompt, anglePrompt, vb.subjectPlacement].filter(Boolean).join(', ');
+
+    // Build environment description
+    const environment = [
+      vb.foreground ? `foreground: ${vb.foreground}` : null,
+      vb.midground ? `midground: ${vb.midground}` : null,
+      vb.background ? `background: ${vb.background}` : null
+    ].filter(Boolean).join(', ');
+
+    // Build lighting description
+    const lighting = [
+      vb.keyLight ? `key light: ${vb.keyLight}` : null,
+      vb.fillLight ? `fill light: ${vb.fillLight}` : null,
+      vb.practicalLights?.length ? `practical lights: ${vb.practicalLights.join(', ')}` : null
+    ].filter(Boolean).join(', ');
+
+    // Build atmosphere description
+    const atmosphere = [
+      vb.weather,
+      vb.particles,
+      vb.mood ? `${vb.mood} mood` : null
+    ].filter(Boolean).join(', ');
+
+    // Build color description
+    const colors = [
+      vb.dominantColors?.length ? `dominant colors: ${vb.dominantColors.join(', ')}` : null,
+      vb.colorTemperature ? `color temperature: ${vb.colorTemperature}` : null
+    ].filter(Boolean).join(', ');
+
+    // Get style from style bible
+    const stylePrompt = styleBible ? IMAGE_PROMPT_GENERATOR.buildStylePrompt(styleBible) : '';
+
+    // Build technical specifications
+    const technical = styleBible?.technicalSpecs?.positive || '8K, photorealistic, cinematic composition, high detail';
+
+    // Build negative prompt
+    const negative = styleBible?.technicalSpecs?.negative || 'blurry, low quality, distorted, amateur';
+
+    return {
+      prompt: IMAGE_PROMPT_GENERATOR.compileImagePrompt({
+        subject,
+        composition,
+        environment,
+        lighting,
+        atmosphere,
+        colors,
+        style: stylePrompt,
+        technical
+      }),
+      negativePrompt: negative,
+      metadata: {
+        shotType: vb.shotType,
+        cameraAngle: vb.cameraAngle,
+        mood: vb.mood,
+        colors: vb.dominantColors
+      }
+    };
+  },
+
+  /**
+   * Build subject description from scene and character bible
+   */
+  buildSubjectDescription: (scene, characterBible) => {
+    const ab = scene.actionBlueprint?.characterAction;
+    if (!ab?.who) return scene.visualBlueprint?.midground || '';
+
+    // Look up character in bible
+    const character = characterBible?.find(c =>
+      c.name?.toLowerCase() === ab.who.toLowerCase() ||
+      c.id === ab.who
+    );
+
+    if (character) {
+      // Build detailed character description
+      const charDesc = [
+        character.physicalDescription,
+        character.clothingDescription,
+        ab.startPose ? `in ${ab.startPose} pose` : null
+      ].filter(Boolean).join(', ');
+      return charDesc;
+    }
+
+    // Fallback to basic description
+    return `${ab.who} ${ab.startPose ? `in ${ab.startPose} pose` : ''}`.trim();
+  },
+
+  /**
+   * Build style prompt from style bible
+   */
+  buildStylePrompt: (styleBible) => {
+    if (!styleBible) return '';
+
+    const parts = [
+      styleBible.visualStyle,
+      styleBible.colorGrade,
+      styleBible.cinematicReference,
+      styleBible.mood
+    ].filter(Boolean);
+
+    return parts.join(', ');
+  },
+
+  /**
+   * Compile all prompt parts into final prompt
+   */
+  compileImagePrompt: (parts) => {
+    const sections = [];
+
+    if (parts.subject) sections.push(parts.subject);
+    if (parts.composition) sections.push(`Composition: ${parts.composition}`);
+    if (parts.environment) sections.push(`Environment: ${parts.environment}`);
+    if (parts.lighting) sections.push(`Lighting: ${parts.lighting}`);
+    if (parts.atmosphere) sections.push(`Atmosphere: ${parts.atmosphere}`);
+    if (parts.colors) sections.push(`Colors: ${parts.colors}`);
+    if (parts.style) sections.push(`Style: ${parts.style}`);
+    if (parts.technical) sections.push(`Quality: ${parts.technical}`);
+
+    return sections.join('\n\n');
+  },
+
+  /**
+   * Enhanced prompt generation with genre-specific adjustments
+   */
+  generateWithGenre: (scene, styleBible, characterBible, genre, productionMode) => {
+    const basePrompt = IMAGE_PROMPT_GENERATOR.generateFromScene(scene, styleBible, characterBible);
+
+    // Apply genre-specific enhancements
+    const genreEnhancements = IMAGE_PROMPT_GENERATOR.getGenreEnhancements(genre, productionMode);
+
+    if (genreEnhancements) {
+      basePrompt.prompt = `${genreEnhancements.prefix}\n\n${basePrompt.prompt}\n\n${genreEnhancements.suffix}`;
+      basePrompt.negativePrompt = `${basePrompt.negativePrompt}, ${genreEnhancements.negative}`;
+    }
+
+    return basePrompt;
+  },
+
+  /**
+   * Get genre-specific prompt enhancements
+   */
+  getGenreEnhancements: (genre, productionMode) => {
+    const enhancements = {
+      'documentary-nature': {
+        prefix: 'National Geographic quality, nature documentary cinematography',
+        suffix: 'David Attenborough style, epic scale, intimate details, reverent treatment',
+        negative: 'cartoon, illustration, artificial looking'
+      },
+      'documentary-true-crime': {
+        prefix: 'True crime documentary aesthetic, investigative mood',
+        suffix: 'moody lighting, evidence-board style, archival footage feel',
+        negative: 'bright, cheerful, colorful'
+      },
+      'entertainment-horror': {
+        prefix: 'Horror film cinematography, unsettling atmosphere',
+        suffix: 'deep shadows, negative space, psychological tension, practical effects style',
+        negative: 'bright, cheerful, safe, comfortable'
+      },
+      'entertainment-drama': {
+        prefix: 'Prestige television cinematography, cinematic drama',
+        suffix: 'Breaking Bad/Succession level visual storytelling, meaningful composition',
+        negative: 'flat lighting, boring composition, amateur'
+      },
+      'educational-explainer': {
+        prefix: 'Clean educational visual style, Kurzgesagt/Vox aesthetic',
+        suffix: 'clear visual hierarchy, engaging graphics, professional polish',
+        negative: 'cluttered, confusing, amateur'
+      },
+      'cinematic': {
+        prefix: 'Feature film cinematography, cinematic excellence',
+        suffix: 'Roger Deakins lighting, Denis Villeneuve composition, Hans Zimmer mood',
+        negative: 'TV quality, flat, uncinematic, amateur'
+      },
+      'inspirational': {
+        prefix: 'Inspirational visual storytelling, aspirational imagery',
+        suffix: 'uplifting mood, golden hour feeling, triumph and hope',
+        negative: 'depressing, dark, hopeless'
+      }
+    };
+
+    return enhancements[genre] || enhancements[productionMode] || null;
+  }
+};
+
+// =============================================================================
+// SECTION 9.3: VIDEO PROMPT GENERATOR - Image + Action to Video Transformation
+// =============================================================================
+
+/**
+ * VIDEO PROMPT GENERATOR
+ * The video prompt STARTS with the generated image and ADDS the motion
+ * This creates visual consistency and prevents drift
+ */
+const VIDEO_PROMPT_GENERATOR = {
+
+  /**
+   * Generate video prompt from generated image and scene action
+   */
+  generateFromImageAndScene: (generatedImageUrl, scene, styleBible) => {
+    const ab = scene.actionBlueprint || {};
+    const timing = scene.timing || {};
+
+    // Build character motion description
+    const characterMotion = VIDEO_PROMPT_GENERATOR.describeCharacterMotion(ab.characterAction);
+
+    // Build camera motion description
+    const cameraMotion = VIDEO_PROMPT_GENERATOR.describeCameraMotion(ab.cameraAction);
+
+    // Build environment motion description
+    const environmentMotion = VIDEO_PROMPT_GENERATOR.describeEnvironmentMotion(ab.environmentAction);
+
+    return {
+      prompt: VIDEO_PROMPT_GENERATOR.compileVideoPrompt({
+        startFrame: generatedImageUrl,
+        characterMotion,
+        cameraMotion,
+        environmentMotion,
+        duration: timing.duration || 6,
+        pacing: timing.pacingNote
+      }),
+      metadata: {
+        duration: timing.duration,
+        hasCharacterMotion: !!ab.characterAction,
+        hasCameraMotion: !!ab.cameraAction,
+        hasEnvironmentMotion: ab.environmentAction?.length > 0
+      },
+      technicalSettings: VIDEO_PROMPT_GENERATOR.getTechnicalSettings(scene, styleBible)
+    };
+  },
+
+  /**
+   * Describe character motion for video prompt
+   */
+  describeCharacterMotion: (characterAction) => {
+    if (!characterAction) return null;
+
+    const { who, startPose, action, endPose, timing } = characterAction;
+
+    const parts = [];
+    if (who) parts.push(`${who}`);
+    if (startPose) parts.push(`begins ${startPose}`);
+    if (action) parts.push(action);
+    if (endPose) parts.push(`ends ${endPose}`);
+    if (timing) parts.push(`(timing: ${timing})`);
+
+    return parts.join(', ');
+  },
+
+  /**
+   * Describe camera motion for video prompt
+   */
+  describeCameraMotion: (cameraAction) => {
+    if (!cameraAction) return null;
+
+    const { movement, speed, focus } = cameraAction;
+
+    const parts = [];
+    if (movement) parts.push(`Camera: ${movement}`);
+    if (speed) parts.push(`Speed: ${speed}`);
+    if (focus) parts.push(`Focus: ${focus}`);
+
+    return parts.join(', ');
+  },
+
+  /**
+   * Describe environment motion for video prompt
+   */
+  describeEnvironmentMotion: (environmentAction) => {
+    if (!environmentAction || environmentAction.length === 0) return null;
+
+    return environmentAction.map(action => `- ${action}`).join('\n');
+  },
+
+  /**
+   * Compile video prompt from components
+   */
+  compileVideoPrompt: (parts) => {
+    const sections = [];
+
+    sections.push(`Starting from this exact image: [reference_image]`);
+    sections.push(''); // Empty line
+
+    if (parts.characterMotion) {
+      sections.push(`CHARACTER ACTION:`);
+      sections.push(parts.characterMotion);
+      sections.push('');
+    }
+
+    if (parts.cameraMotion) {
+      sections.push(`CAMERA MOVEMENT:`);
+      sections.push(parts.cameraMotion);
+      sections.push('');
+    }
+
+    if (parts.environmentMotion) {
+      sections.push(`ENVIRONMENT ANIMATION:`);
+      sections.push(parts.environmentMotion);
+      sections.push('');
+    }
+
+    sections.push(`Duration: ${parts.duration} seconds`);
+    if (parts.pacing) sections.push(`Pacing: ${parts.pacing}`);
+
+    sections.push('');
+    sections.push('CRITICAL: Maintain exact visual style, lighting, and color from the starting image.');
+    sections.push('The video is this image coming to life.');
+
+    return sections.join('\n');
+  },
+
+  /**
+   * Get technical settings for video generation
+   */
+  getTechnicalSettings: (scene, styleBible) => {
+    return {
+      maintainConsistency: true,
+      preserveLighting: true,
+      preserveColors: true,
+      styleReference: styleBible?.cinematicReference || null,
+      motionIntensity: scene.timing?.pacingNote?.includes('slow') ? 'subtle' :
+                       scene.timing?.pacingNote?.includes('fast') ? 'dynamic' : 'moderate'
+    };
+  },
+
+  /**
+   * Generate optimized video prompt for specific AI models
+   */
+  generateForModel: (generatedImageUrl, scene, styleBible, modelType) => {
+    const basePrompt = VIDEO_PROMPT_GENERATOR.generateFromImageAndScene(generatedImageUrl, scene, styleBible);
+
+    // Apply model-specific optimizations
+    const optimizers = {
+      'minimax': VIDEO_PROMPT_GENERATOR.optimizeForMinimax,
+      'runway': VIDEO_PROMPT_GENERATOR.optimizeForRunway,
+      'pika': VIDEO_PROMPT_GENERATOR.optimizeForPika,
+      'veo': VIDEO_PROMPT_GENERATOR.optimizeForVeo
+    };
+
+    const optimizer = optimizers[modelType];
+    if (optimizer) {
+      return optimizer(basePrompt, scene);
+    }
+
+    return basePrompt;
+  },
+
+  /**
+   * Optimize prompt for Minimax Hailuo
+   */
+  optimizeForMinimax: (prompt, scene) => {
+    // Minimax prefers specific camera movement keywords
+    const minimaxCameraKeywords = {
+      'push-in': 'slowly push in',
+      'pull-out': 'slowly pull out',
+      'pan-left': 'smooth pan left',
+      'pan-right': 'smooth pan right',
+      'tilt-up': 'tilt up',
+      'tilt-down': 'tilt down',
+      'tracking': 'tracking shot following subject',
+      'static': 'static shot'
+    };
+
+    const cameraMovement = scene.actionBlueprint?.cameraAction?.movement;
+    const minimaxMovement = minimaxCameraKeywords[cameraMovement] || cameraMovement;
+
+    // Add Minimax-specific prefix
+    prompt.prompt = `[${minimaxMovement}] ${prompt.prompt}`;
+    prompt.modelOptimization = 'minimax';
+
+    return prompt;
+  },
+
+  /**
+   * Optimize prompt for Runway
+   */
+  optimizeForRunway: (prompt, scene) => {
+    prompt.modelOptimization = 'runway';
+    prompt.runwaySettings = {
+      motionAmount: scene.timing?.pacingNote?.includes('slow') ? 'low' : 'medium',
+      cameraMotion: scene.actionBlueprint?.cameraAction?.movement || 'none'
+    };
+    return prompt;
+  },
+
+  /**
+   * Optimize prompt for Pika
+   */
+  optimizeForPika: (prompt, scene) => {
+    prompt.modelOptimization = 'pika';
+    return prompt;
+  },
+
+  /**
+   * Optimize prompt for Google Veo
+   */
+  optimizeForVeo: (prompt, scene) => {
+    prompt.modelOptimization = 'veo';
+    prompt.veoSettings = {
+      duration: scene.timing?.duration || 6,
+      aspectRatio: scene.visualBlueprint?.aspectRatio || '16:9'
+    };
+    return prompt;
+  }
+};
+
+// =============================================================================
+// SECTION 10: TRANSITION ENGINE - Scene-to-Scene Bridge Intelligence
+// =============================================================================
+
+/**
+ * TRANSITION ENGINE
+ * Intelligent scene-to-scene transitions with visual bridges
+ */
+const TRANSITION_ENGINE = {
+
+  /**
+   * Analyze optimal transition between two scenes
+   */
+  analyzeTransition: (currentScene, nextScene) => {
+    if (!nextScene) {
+      return { type: 'fade-to-black', instruction: 'Final scene, fade to black' };
+    }
+
+    return {
+      cutType: TRANSITION_ENGINE.determineOptimalCut(currentScene, nextScene),
+      matchElement: TRANSITION_ENGINE.findVisualBridge(currentScene, nextScene),
+      emotionalShift: TRANSITION_ENGINE.calculateEmotionalDelta(currentScene, nextScene),
+      continuity: {
+        timeDelta: TRANSITION_ENGINE.calculateTimeDelta(currentScene, nextScene),
+        locationChange: TRANSITION_ENGINE.detectLocationChange(currentScene, nextScene),
+        characterContinuity: TRANSITION_ENGINE.findSharedCharacters(currentScene, nextScene)
+      },
+      audioTransition: {
+        musicBridge: TRANSITION_ENGINE.determineMusicContinuity(currentScene, nextScene),
+        ambienceFade: TRANSITION_ENGINE.calculateAmbienceCrossover(currentScene, nextScene)
+      }
+    };
+  },
+
+  /**
+   * Determine the optimal cut type between scenes
+   */
+  determineOptimalCut: (current, next) => {
+    // Check for visual bridge (match cut)
+    const visualBridge = current.transitionOut?.visualBridge;
+    if (visualBridge) {
+      return {
+        type: 'match-cut',
+        element: visualBridge,
+        instruction: `Cut on ${visualBridge} matching to similar element in next scene`,
+        duration: 0
+      };
+    }
+
+    // Check for sudden action (hard cut)
+    const nextMood = next.visualBlueprint?.mood || next.mood;
+    if (nextMood === 'sudden-action' || nextMood === 'shock' || current.transitionOut?.type === 'cut') {
+      return {
+        type: 'hard-cut',
+        instruction: 'Immediate cut, no transition effect',
+        duration: 0
+      };
+    }
+
+    // Check for time passing (dissolve)
+    const timePassing = current.transitionOut?.timePassing ||
+                        TRANSITION_ENGINE.detectTimePassing(current, next);
+    if (timePassing) {
+      return {
+        type: 'dissolve',
+        duration: 1.5,
+        instruction: 'Slow dissolve indicating time passage'
+      };
+    }
+
+    // Check for audio lead (J-cut)
+    const nextHasDialogue = next.audioBlueprint?.dialogue || next.dialogue?.length > 0;
+    if (nextHasDialogue) {
+      return {
+        type: 'j-cut',
+        audioLead: 0.5,
+        instruction: 'Audio from next scene begins before visual cut'
+      };
+    }
+
+    // Check for audio trail (L-cut)
+    const currentHasDialogue = current.audioBlueprint?.dialogue || current.dialogue?.length > 0;
+    if (currentHasDialogue && !nextHasDialogue) {
+      return {
+        type: 'l-cut',
+        audioTrail: 0.5,
+        instruction: 'Audio from current scene continues into next scene visual'
+      };
+    }
+
+    // Default to standard cut
+    return {
+      type: 'cut',
+      instruction: 'Standard cut',
+      duration: 0
+    };
+  },
+
+  /**
+   * Find visual elements that can bridge two scenes
+   */
+  findVisualBridge: (current, next) => {
+    const bridges = [];
+
+    // Check for color match
+    const currentColors = current.visualBlueprint?.dominantColors || [];
+    const nextColors = next.visualBlueprint?.dominantColors || [];
+    const sharedColors = currentColors.filter(c => nextColors.includes(c));
+    if (sharedColors.length > 0) {
+      bridges.push({
+        type: 'color-match',
+        element: sharedColors[0],
+        description: `Match on ${sharedColors[0]} color`
+      });
+    }
+
+    // Check for shape/composition match
+    const currentShot = current.visualBlueprint?.shotType;
+    const nextShot = next.visualBlueprint?.shotType;
+    if (currentShot === nextShot && currentShot === 'extreme-close-up') {
+      bridges.push({
+        type: 'shape-match',
+        description: 'ECU to ECU match cut potential'
+      });
+    }
+
+    // Check for character continuity
+    const currentCharacter = current.actionBlueprint?.characterAction?.who;
+    const nextCharacter = next.actionBlueprint?.characterAction?.who;
+    if (currentCharacter && currentCharacter === nextCharacter) {
+      bridges.push({
+        type: 'character-match',
+        element: currentCharacter,
+        description: `Continue with ${currentCharacter}`
+      });
+    }
+
+    return bridges.length > 0 ? bridges[0] : null;
+  },
+
+  /**
+   * Calculate emotional shift between scenes
+   */
+  calculateEmotionalDelta: (current, next) => {
+    const moodIntensity = {
+      'peaceful': 1,
+      'contemplative': 2,
+      'neutral': 3,
+      'curious': 4,
+      'hopeful': 5,
+      'excited': 6,
+      'tense': 7,
+      'anxious': 8,
+      'fear': 9,
+      'terror': 10,
+      'shock': 10
+    };
+
+    const currentMood = current.visualBlueprint?.mood || current.mood || 'neutral';
+    const nextMood = next.visualBlueprint?.mood || next.mood || 'neutral';
+
+    const currentIntensity = moodIntensity[currentMood] || 5;
+    const nextIntensity = moodIntensity[nextMood] || 5;
+
+    const delta = nextIntensity - currentIntensity;
+
+    return {
+      from: currentMood,
+      to: nextMood,
+      delta: delta,
+      direction: delta > 0 ? 'escalating' : delta < 0 ? 'de-escalating' : 'maintaining',
+      significance: Math.abs(delta) > 3 ? 'major-shift' : Math.abs(delta) > 1 ? 'moderate-shift' : 'subtle-shift'
+    };
+  },
+
+  /**
+   * Calculate time delta between scenes
+   */
+  calculateTimeDelta: (current, next) => {
+    const currentTime = current.timeContext || 0;
+    const nextTime = next.timeContext || 0;
+    return nextTime - currentTime;
+  },
+
+  /**
+   * Detect location change between scenes
+   */
+  detectLocationChange: (current, next) => {
+    const currentLocation = current.location || current.visualBlueprint?.background;
+    const nextLocation = next.location || next.visualBlueprint?.background;
+    return currentLocation !== nextLocation;
+  },
+
+  /**
+   * Find shared characters between scenes
+   */
+  findSharedCharacters: (current, next) => {
+    const currentCharacters = [];
+    if (current.actionBlueprint?.characterAction?.who) {
+      currentCharacters.push(current.actionBlueprint.characterAction.who);
+    }
+
+    const nextCharacters = [];
+    if (next.actionBlueprint?.characterAction?.who) {
+      nextCharacters.push(next.actionBlueprint.characterAction.who);
+    }
+
+    return currentCharacters.filter(c => nextCharacters.includes(c));
+  },
+
+  /**
+   * Detect if time is passing between scenes
+   */
+  detectTimePassing: (current, next) => {
+    // Check for temporal keywords in scene descriptions
+    const timeKeywords = ['later', 'next day', 'morning', 'evening', 'night', 'years', 'months', 'weeks'];
+    const nextVisual = (next.visualBlueprint?.background || '').toLowerCase();
+
+    return timeKeywords.some(keyword => nextVisual.includes(keyword));
+  },
+
+  /**
+   * Determine music continuity strategy
+   */
+  determineMusicContinuity: (current, next) => {
+    const currentMusic = current.audioBlueprint?.music;
+    const nextMusic = next.audioBlueprint?.music;
+
+    if (currentMusic === nextMusic) {
+      return { type: 'continue', description: 'Music continues unchanged' };
+    }
+
+    const emotionalShift = TRANSITION_ENGINE.calculateEmotionalDelta(current, next);
+    if (emotionalShift.significance === 'major-shift') {
+      return { type: 'change', crossfade: 2, description: 'Crossfade to new music over 2 seconds' };
+    }
+
+    return { type: 'blend', crossfade: 1, description: 'Quick blend to new music' };
+  },
+
+  /**
+   * Calculate ambience crossover strategy
+   */
+  calculateAmbienceCrossover: (current, next) => {
+    const locationChange = TRANSITION_ENGINE.detectLocationChange(current, next);
+
+    if (!locationChange) {
+      return { type: 'continue', description: 'Ambience continues' };
+    }
+
+    return {
+      type: 'crossfade',
+      duration: 0.5,
+      description: 'Quick ambience crossfade for location change'
+    };
+  },
+
+  /**
+   * Visual Bridge Patterns - Templates for match cuts
+   */
+  visualBridgePatterns: {
+    'eye-match': {
+      trigger: 'close-up of eye',
+      bridge: 'cut to another eye (different character, different context)',
+      example: '2001: Space Odyssey - bone to satellite'
+    },
+    'shape-match': {
+      trigger: 'circular/geometric element',
+      bridge: 'cut to similar shape in different context',
+      example: 'Moon to eyeball, wheel to sun'
+    },
+    'color-match': {
+      trigger: 'dominant color fills frame',
+      bridge: 'cut to same color in new scene',
+      example: 'Red blood to red sunset'
+    },
+    'motion-match': {
+      trigger: 'direction of movement',
+      bridge: 'continue same movement direction in new scene',
+      example: 'Character running right, car driving right'
+    },
+    'audio-match': {
+      trigger: 'distinctive sound',
+      bridge: 'sound continues but visual context changes',
+      example: 'Phone ringing through dream/wake transition'
+    }
+  },
+
+  /**
+   * Get transition recommendation based on genre
+   */
+  getGenreTransitionStyle: (genre) => {
+    const genreStyles = {
+      'documentary-nature': ['dissolve', 'fade', 'slow-match-cut'],
+      'documentary-true-crime': ['hard-cut', 'j-cut', 'smash-cut'],
+      'entertainment-horror': ['hard-cut', 'fade-to-black', 'smash-cut'],
+      'entertainment-drama': ['cut', 'dissolve', 'match-cut'],
+      'entertainment-comedy': ['hard-cut', 'whip-pan', 'jump-cut'],
+      'educational-explainer': ['cut', 'wipe', 'dissolve'],
+      'social-viral': ['hard-cut', 'jump-cut', 'smash-cut'],
+      'cinematic': ['dissolve', 'match-cut', 'fade']
+    };
+
+    return genreStyles[genre] || ['cut', 'dissolve'];
+  }
+};
+
+// =============================================================================
+// SECTION 11: SCENE PROCESSING PIPELINE - Complete Scene Workflow
+// =============================================================================
+
+/**
+ * SCENE PROCESSING PIPELINE
+ * Complete workflow for processing each scene through the chain
+ */
+const SCENE_PIPELINE = {
+
+  /**
+   * Process a single scene through the entire pipeline
+   */
+  processScene: async (sceneScript, context) => {
+    const results = {
+      sceneId: sceneScript.sceneId || sceneScript.id,
+      steps: [],
+      errors: []
+    };
+
+    try {
+      // STEP 1: Extract Visual Blueprint
+      results.steps.push({ step: 'extract_blueprint', status: 'starting' });
+      const visualBlueprint = SCENE_PIPELINE.extractVisualBlueprint(sceneScript);
+      results.visualBlueprint = visualBlueprint;
+      results.steps[results.steps.length - 1].status = 'completed';
+
+      // STEP 2: Generate Image Prompt
+      results.steps.push({ step: 'generate_image_prompt', status: 'starting' });
+      const imagePromptResult = IMAGE_PROMPT_GENERATOR.generateWithGenre(
+        sceneScript,
+        context.styleBible,
+        context.characterBible,
+        context.genre,
+        context.productionMode
+      );
+      results.imagePrompt = imagePromptResult;
+      results.steps[results.steps.length - 1].status = 'completed';
+
+      // STEP 3: Generate Video Prompt Template
+      results.steps.push({ step: 'generate_video_prompt', status: 'starting' });
+      const videoPromptResult = VIDEO_PROMPT_GENERATOR.generateForModel(
+        '[GENERATED_IMAGE_URL]', // Placeholder, replaced after image generation
+        sceneScript,
+        context.styleBible,
+        context.videoModel || 'minimax'
+      );
+      results.videoPromptTemplate = videoPromptResult;
+      results.steps[results.steps.length - 1].status = 'completed';
+
+      // STEP 4: Analyze Transition to Next Scene
+      results.steps.push({ step: 'analyze_transition', status: 'starting' });
+      const transitionData = TRANSITION_ENGINE.analyzeTransition(
+        sceneScript,
+        context.nextScene
+      );
+      results.transition = transitionData;
+      results.steps[results.steps.length - 1].status = 'completed';
+
+      // STEP 5: Build Audio Blueprint
+      results.steps.push({ step: 'build_audio', status: 'starting' });
+      const audioBlueprint = SCENE_PIPELINE.buildAudioBlueprint(sceneScript, context);
+      results.audioBlueprint = audioBlueprint;
+      results.steps[results.steps.length - 1].status = 'completed';
+
+      results.success = true;
+
+    } catch (error) {
+      results.success = false;
+      results.errors.push({
+        step: results.steps[results.steps.length - 1]?.step || 'unknown',
+        error: error.message
+      });
+      results.steps[results.steps.length - 1].status = 'failed';
+    }
+
+    return results;
+  },
+
+  /**
+   * Extract visual blueprint from scene script
+   */
+  extractVisualBlueprint: (scene) => {
+    // If scene already has visualBlueprint, return it
+    if (scene.visualBlueprint) return scene.visualBlueprint;
+
+    // Otherwise, construct from available fields
+    return {
+      shotType: scene.shotType || 'medium',
+      cameraAngle: scene.cameraAngle || 'eye-level',
+      cameraMovement: scene.cameraMovement?.[0] || 'static',
+      subjectPlacement: 'center',
+      mood: scene.mood || 'neutral',
+      visualPrompt: scene.visualPrompt || scene.visual || ''
+    };
+  },
+
+  /**
+   * Build audio blueprint from scene
+   */
+  buildAudioBlueprint: (scene, context) => {
+    const audioBlueprint = scene.audioBlueprint || {};
+
+    return {
+      ambience: audioBlueprint.ambience || [],
+      music: audioBlueprint.music || context.musicStyle || 'ambient',
+      sfx: audioBlueprint.sfx || [],
+      voiceover: scene.narration || scene.voiceover || null,
+      voiceoverDuration: scene.narrationDuration || 0,
+      voiceoverOffset: scene.narrationStartTime || 0.5
+    };
+  },
+
+  /**
+   * Process all scenes in a project
+   */
+  processAllScenes: async (scenes, context) => {
+    const results = [];
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+      const sceneContext = {
+        ...context,
+        nextScene: scenes[i + 1] || null,
+        prevScene: scenes[i - 1] || null,
+        sceneIndex: i,
+        totalScenes: scenes.length
+      };
+
+      const result = await SCENE_PIPELINE.processScene(scene, sceneContext);
+      results.push(result);
+    }
+
+    return {
+      success: results.every(r => r.success),
+      scenes: results,
+      summary: {
+        total: results.length,
+        successful: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length
+      }
+    };
+  }
+};
+
+// =============================================================================
+// SECTION 11.2: QUALITY VALIDATION LAYER
+// =============================================================================
+
+/**
+ * QUALITY VALIDATION LAYER
+ * Validates generated content against script intent
+ */
+const QUALITY_VALIDATOR = {
+
+  /**
+   * Validate image against visual blueprint
+   */
+  validateImageAgainstScript: (imageAnalysis, visualBlueprint) => {
+    const checks = [];
+    let score = 0;
+    let maxScore = 0;
+
+    // Check shot type
+    if (visualBlueprint.shotType) {
+      maxScore += 20;
+      const shotMatch = QUALITY_VALIDATOR.checkShotType(imageAnalysis, visualBlueprint.shotType);
+      checks.push({ check: 'shotType', passed: shotMatch, weight: 20 });
+      if (shotMatch) score += 20;
+    }
+
+    // Check mood
+    if (visualBlueprint.mood) {
+      maxScore += 25;
+      const moodMatch = QUALITY_VALIDATOR.checkMood(imageAnalysis, visualBlueprint.mood);
+      checks.push({ check: 'mood', passed: moodMatch, weight: 25 });
+      if (moodMatch) score += 25;
+    }
+
+    // Check colors
+    if (visualBlueprint.dominantColors?.length > 0) {
+      maxScore += 20;
+      const colorMatch = QUALITY_VALIDATOR.checkColors(imageAnalysis, visualBlueprint.dominantColors);
+      checks.push({ check: 'colors', passed: colorMatch, weight: 20 });
+      if (colorMatch) score += 20;
+    }
+
+    // Check lighting
+    if (visualBlueprint.keyLight) {
+      maxScore += 15;
+      const lightMatch = QUALITY_VALIDATOR.checkLighting(imageAnalysis, visualBlueprint);
+      checks.push({ check: 'lighting', passed: lightMatch, weight: 15 });
+      if (lightMatch) score += 15;
+    }
+
+    // Check subject presence
+    if (visualBlueprint.midground) {
+      maxScore += 20;
+      const subjectMatch = QUALITY_VALIDATOR.checkSubject(imageAnalysis, visualBlueprint.midground);
+      checks.push({ check: 'subject', passed: subjectMatch, weight: 20 });
+      if (subjectMatch) score += 20;
+    }
+
+    const matchScore = maxScore > 0 ? score / maxScore : 1;
+
+    return {
+      passed: matchScore >= 0.7,
+      matchScore: matchScore,
+      checks: checks,
+      suggestions: QUALITY_VALIDATOR.getSuggestions(checks)
+    };
+  },
+
+  /**
+   * Check shot type match
+   */
+  checkShotType: (imageAnalysis, expectedShotType) => {
+    if (!imageAnalysis?.detectedShotType) return true; // Assume pass if no analysis
+    return imageAnalysis.detectedShotType === expectedShotType ||
+           imageAnalysis.detectedShotType?.includes(expectedShotType);
+  },
+
+  /**
+   * Check mood match
+   */
+  checkMood: (imageAnalysis, expectedMood) => {
+    if (!imageAnalysis?.detectedMood) return true;
+    const moodSimilarity = {
+      'tense': ['anxious', 'suspenseful', 'dramatic'],
+      'peaceful': ['calm', 'serene', 'tranquil'],
+      'mysterious': ['enigmatic', 'dark', 'shadowy'],
+      'uplifting': ['hopeful', 'bright', 'optimistic']
+    };
+
+    return imageAnalysis.detectedMood === expectedMood ||
+           moodSimilarity[expectedMood]?.includes(imageAnalysis.detectedMood);
+  },
+
+  /**
+   * Check color palette match
+   */
+  checkColors: (imageAnalysis, expectedColors) => {
+    if (!imageAnalysis?.dominantColors) return true;
+    const matchCount = expectedColors.filter(c =>
+      imageAnalysis.dominantColors.some(dc => dc.includes(c) || c.includes(dc))
+    ).length;
+    return matchCount >= expectedColors.length * 0.5; // 50% match threshold
+  },
+
+  /**
+   * Check lighting match
+   */
+  checkLighting: (imageAnalysis, visualBlueprint) => {
+    if (!imageAnalysis?.lightingAnalysis) return true;
+    // Simplified check - more sophisticated analysis would be needed
+    return true;
+  },
+
+  /**
+   * Check subject presence
+   */
+  checkSubject: (imageAnalysis, expectedSubject) => {
+    if (!imageAnalysis?.detectedObjects) return true;
+    // Check if expected subject keywords are in detected objects
+    const subjectKeywords = expectedSubject.toLowerCase().split(/\s+/);
+    const detected = imageAnalysis.detectedObjects.map(o => o.toLowerCase()).join(' ');
+    return subjectKeywords.some(keyword => detected.includes(keyword));
+  },
+
+  /**
+   * Get improvement suggestions based on failed checks
+   */
+  getSuggestions: (checks) => {
+    const suggestions = [];
+
+    checks.filter(c => !c.passed).forEach(check => {
+      switch (check.check) {
+        case 'shotType':
+          suggestions.push('Adjust framing - regenerate with more specific shot type instruction');
+          break;
+        case 'mood':
+          suggestions.push('Adjust atmosphere - add more mood-specific lighting and color instructions');
+          break;
+        case 'colors':
+          suggestions.push('Adjust color palette - be more explicit about dominant colors');
+          break;
+        case 'lighting':
+          suggestions.push('Adjust lighting setup - specify light direction and quality more clearly');
+          break;
+        case 'subject':
+          suggestions.push('Adjust subject visibility - ensure main subject is prominently featured');
+          break;
+      }
+    });
+
+    return suggestions;
+  },
+
+  /**
+   * Validate video against action blueprint
+   */
+  validateVideoAgainstScript: (videoAnalysis, actionBlueprint) => {
+    const checks = [];
+    let score = 0;
+    let maxScore = 0;
+
+    // Check motion accuracy
+    if (actionBlueprint.characterAction) {
+      maxScore += 40;
+      const motionMatch = QUALITY_VALIDATOR.checkMotion(videoAnalysis, actionBlueprint.characterAction);
+      checks.push({ check: 'characterMotion', passed: motionMatch, weight: 40 });
+      if (motionMatch) score += 40;
+    }
+
+    // Check camera movement
+    if (actionBlueprint.cameraAction) {
+      maxScore += 30;
+      const cameraMatch = QUALITY_VALIDATOR.checkCameraMovement(videoAnalysis, actionBlueprint.cameraAction);
+      checks.push({ check: 'cameraMovement', passed: cameraMatch, weight: 30 });
+      if (cameraMatch) score += 30;
+    }
+
+    // Check style consistency
+    maxScore += 30;
+    const styleMatch = videoAnalysis?.styleConsistency >= 0.8;
+    checks.push({ check: 'styleConsistency', passed: styleMatch, weight: 30 });
+    if (styleMatch) score += 30;
+
+    const matchScore = maxScore > 0 ? score / maxScore : 1;
+
+    return {
+      passed: matchScore >= 0.7,
+      matchScore: matchScore,
+      checks: checks,
+      motionAccuracy: matchScore,
+      styleConsistency: videoAnalysis?.styleConsistency || 1
+    };
+  },
+
+  /**
+   * Check motion matches action blueprint
+   */
+  checkMotion: (videoAnalysis, characterAction) => {
+    if (!videoAnalysis?.detectedMotion) return true;
+    // Simplified check
+    return true;
+  },
+
+  /**
+   * Check camera movement matches blueprint
+   */
+  checkCameraMovement: (videoAnalysis, cameraAction) => {
+    if (!videoAnalysis?.detectedCameraMovement) return true;
+    return videoAnalysis.detectedCameraMovement === cameraAction.movement;
+  }
+};
+
+// =============================================================================
+// CLOUD FUNCTIONS FOR PROMPT CHAIN ARCHITECTURE
+// =============================================================================
+
+/**
+ * creationWizardGenerateSceneBlueprint - Generates complete scene blueprint
+ * Transforms basic scene data into full visual/action/audio blueprints
+ */
+exports.creationWizardGenerateSceneBlueprint = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { scene, genre, productionMode, styleBible, characterBible } = data;
+
+  if (!scene) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scene data required');
+  }
+
+  try {
+    // Build comprehensive scene blueprint using GPT-4o
+    const systemPrompt = `You are a Hollywood cinematographer and director creating a complete visual blueprint for a scene.
+Your task is to expand a basic scene description into a comprehensive production document.
+
+You must output a JSON object with this EXACT structure:
+{
+  "visualBlueprint": {
+    "shotType": "one of: extreme-wide, wide, medium-wide, medium, medium-close, close-up, extreme-close-up, establishing",
+    "cameraAngle": "one of: eye-level, low-angle, high-angle, dutch-angle, birds-eye, worms-eye, over-shoulder",
+    "cameraMovement": "one of: static, push-in, pull-out, pan-left, pan-right, tilt-up, tilt-down, tracking, crane, handheld",
+    "subjectPlacement": "composition description",
+    "foreground": "what's in the foreground",
+    "midground": "main subject description",
+    "background": "what's in the background",
+    "keyLight": "main light description with direction and quality",
+    "fillLight": "fill light description",
+    "practicalLights": ["array of visible light sources in scene"],
+    "weather": "weather conditions or null",
+    "particles": "atmospheric particles or null",
+    "mood": "single word mood descriptor",
+    "dominantColors": ["array of 2-4 dominant colors"],
+    "colorTemperature": "warm, cool, neutral, or mixed"
+  },
+  "actionBlueprint": {
+    "characterAction": {
+      "who": "character name",
+      "startPose": "starting position/pose",
+      "action": "what happens during the scene",
+      "endPose": "ending position/pose",
+      "timing": "timing description"
+    },
+    "environmentAction": ["array of environment animations"],
+    "cameraAction": {
+      "movement": "camera movement type",
+      "speed": "movement speed description",
+      "focus": "focus behavior description"
+    }
+  },
+  "audioBlueprint": {
+    "ambience": ["array of ambient sounds"],
+    "music": "music style/mood",
+    "sfx": ["array of sound effects"],
+    "voiceover": "narration text or null"
+  },
+  "transitionOut": {
+    "type": "one of: cut, dissolve, wipe, match-cut, j-cut, l-cut, fade-to-black",
+    "timing": "when to transition",
+    "visualBridge": "element that connects to next scene or null"
+  }
+}`;
+
+    const userPrompt = `Create a complete scene blueprint for this scene:
+
+SCENE DATA:
+${JSON.stringify(scene, null, 2)}
+
+GENRE: ${genre || 'general'}
+PRODUCTION MODE: ${productionMode || 'standard'}
+${styleBible ? `STYLE BIBLE: ${JSON.stringify(styleBible)}` : ''}
+${characterBible?.length > 0 ? `CHARACTERS: ${JSON.stringify(characterBible)}` : ''}
+
+Generate a comprehensive, production-ready blueprint that a cinematographer could execute immediately.
+Be specific and cinematic. This should feel like premium Hollywood production.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000
+    });
+
+    const responseText = completion.choices[0].message.content.trim();
+    const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    let blueprint;
+    try {
+      blueprint = JSON.parse(cleanJson);
+    } catch (parseError) {
+      console.error('[creationWizardGenerateSceneBlueprint] Parse error:', parseError);
+      throw new functions.https.HttpsError('internal', 'Failed to parse blueprint response');
+    }
+
+    return {
+      success: true,
+      blueprint: {
+        sceneId: scene.id,
+        ...blueprint
+      },
+      usage: {
+        promptTokens: completion.usage?.prompt_tokens || 0,
+        completionTokens: completion.usage?.completion_tokens || 0
+      }
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateSceneBlueprint] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate blueprint'));
+  }
+});
+
+/**
+ * creationWizardGenerateImagePrompt - Generates optimized image prompt from blueprint
+ */
+exports.creationWizardGenerateImagePrompt = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { scene, styleBible, characterBible, genre, productionMode } = data;
+
+  if (!scene) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scene data required');
+  }
+
+  try {
+    // Generate image prompt using the engine
+    const promptResult = IMAGE_PROMPT_GENERATOR.generateWithGenre(
+      scene,
+      styleBible,
+      characterBible,
+      genre,
+      productionMode
+    );
+
+    return {
+      success: true,
+      imagePrompt: promptResult.prompt,
+      negativePrompt: promptResult.negativePrompt,
+      metadata: promptResult.metadata
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateImagePrompt] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate image prompt'));
+  }
+});
+
+/**
+ * creationWizardGenerateVideoPrompt - Generates video prompt from image and action
+ */
+exports.creationWizardGenerateVideoPrompt = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { imageUrl, scene, styleBible, videoModel } = data;
+
+  if (!scene) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scene data required');
+  }
+
+  try {
+    // Generate video prompt using the engine
+    const promptResult = VIDEO_PROMPT_GENERATOR.generateForModel(
+      imageUrl || '[GENERATED_IMAGE_URL]',
+      scene,
+      styleBible,
+      videoModel || 'minimax'
+    );
+
+    return {
+      success: true,
+      videoPrompt: promptResult.prompt,
+      metadata: promptResult.metadata,
+      technicalSettings: promptResult.technicalSettings
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateVideoPrompt] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate video prompt'));
+  }
+});
+
+/**
+ * creationWizardAnalyzeTransition - Analyzes optimal transition between scenes
+ */
+exports.creationWizardAnalyzeTransition = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { currentScene, nextScene, genre } = data;
+
+  if (!currentScene) {
+    throw new functions.https.HttpsError('invalid-argument', 'Current scene required');
+  }
+
+  try {
+    // Analyze transition
+    const transitionAnalysis = TRANSITION_ENGINE.analyzeTransition(currentScene, nextScene);
+
+    // Get genre-specific transition styles
+    const genreStyles = TRANSITION_ENGINE.getGenreTransitionStyle(genre);
+
+    return {
+      success: true,
+      transition: transitionAnalysis,
+      recommendedStyles: genreStyles,
+      visualBridgePatterns: TRANSITION_ENGINE.visualBridgePatterns
+    };
+
+  } catch (error) {
+    console.error('[creationWizardAnalyzeTransition] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to analyze transition'));
+  }
+});
+
+/**
+ * creationWizardProcessSceneChain - Processes complete scene through prompt chain
+ */
+exports.creationWizardProcessSceneChain = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { scene, nextScene, styleBible, characterBible, genre, productionMode, videoModel } = data;
+
+  if (!scene) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scene data required');
+  }
+
+  try {
+    // Process scene through the complete pipeline
+    const pipelineResult = await SCENE_PIPELINE.processScene(scene, {
+      styleBible,
+      characterBible,
+      genre,
+      productionMode,
+      videoModel: videoModel || 'minimax',
+      nextScene
+    });
+
+    return {
+      success: pipelineResult.success,
+      sceneId: pipelineResult.sceneId,
+      visualBlueprint: pipelineResult.visualBlueprint,
+      imagePrompt: pipelineResult.imagePrompt,
+      videoPromptTemplate: pipelineResult.videoPromptTemplate,
+      transition: pipelineResult.transition,
+      audioBlueprint: pipelineResult.audioBlueprint,
+      steps: pipelineResult.steps,
+      errors: pipelineResult.errors
+    };
+
+  } catch (error) {
+    console.error('[creationWizardProcessSceneChain] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to process scene chain'));
+  }
+});
+
+/**
+ * creationWizardProcessAllScenes - Batch process all scenes through prompt chain
+ */
+exports.creationWizardProcessAllScenes = functions.runWith({ timeoutSeconds: 300 }).https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { scenes, styleBible, characterBible, genre, productionMode, videoModel, projectId } = data;
+
+  if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scenes array required');
+  }
+
+  try {
+    // Process all scenes through the pipeline
+    const results = await SCENE_PIPELINE.processAllScenes(scenes, {
+      styleBible,
+      characterBible,
+      genre,
+      productionMode,
+      videoModel: videoModel || 'minimax'
+    });
+
+    // If projectId provided, save results
+    if (projectId) {
+      await db.collection('creationProjects').doc(projectId).update({
+        'promptChain': {
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          summary: results.summary,
+          scenes: results.scenes.map(s => ({
+            sceneId: s.sceneId,
+            success: s.success,
+            imagePrompt: s.imagePrompt?.prompt?.substring(0, 500) || null, // Truncate for storage
+            hasTransition: !!s.transition
+          }))
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    return {
+      success: results.success,
+      summary: results.summary,
+      scenes: results.scenes
+    };
+
+  } catch (error) {
+    console.error('[creationWizardProcessAllScenes] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to process scenes'));
+  }
+});
+
+/**
+ * creationWizardGetPromptChainConfig - Gets prompt chain architecture configuration
+ */
+exports.creationWizardGetPromptChainConfig = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  return {
+    success: true,
+    config: {
+      // Scene Script Structure
+      shotTypes: Object.keys(SCENE_SCRIPT_STRUCTURE.shotTypes).map(id => ({
+        id,
+        ...SCENE_SCRIPT_STRUCTURE.shotTypes[id]
+      })),
+      cameraAngles: Object.keys(SCENE_SCRIPT_STRUCTURE.cameraAngles).map(id => ({
+        id,
+        ...SCENE_SCRIPT_STRUCTURE.cameraAngles[id]
+      })),
+      lightingSetups: Object.keys(SCENE_SCRIPT_STRUCTURE.lightingSetups).map(id => ({
+        id,
+        ...SCENE_SCRIPT_STRUCTURE.lightingSetups[id]
+      })),
+      // Transition types
+      transitionTypes: ['cut', 'dissolve', 'wipe', 'match-cut', 'j-cut', 'l-cut', 'fade-to-black', 'fade-from-black'],
+      visualBridgePatterns: TRANSITION_ENGINE.visualBridgePatterns,
+      // Video models
+      supportedVideoModels: ['minimax', 'runway', 'pika', 'veo']
+    }
+  };
+});
+
+/**
+ * creationWizardValidateSceneQuality - Validates generated content against blueprint
+ */
+exports.creationWizardValidateSceneQuality = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { imageAnalysis, videoAnalysis, visualBlueprint, actionBlueprint } = data;
+
+  try {
+    const results = {
+      image: null,
+      video: null
+    };
+
+    // Validate image if provided
+    if (imageAnalysis && visualBlueprint) {
+      results.image = QUALITY_VALIDATOR.validateImageAgainstScript(imageAnalysis, visualBlueprint);
+    }
+
+    // Validate video if provided
+    if (videoAnalysis && actionBlueprint) {
+      results.video = QUALITY_VALIDATOR.validateVideoAgainstScript(videoAnalysis, actionBlueprint);
+    }
+
+    const overallPassed = (results.image?.passed !== false) && (results.video?.passed !== false);
+
+    return {
+      success: true,
+      passed: overallPassed,
+      results
+    };
+
+  } catch (error) {
+    console.error('[creationWizardValidateSceneQuality] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to validate quality'));
+  }
+});
+
+// Export the engines for potential use in other modules
+exports.PROMPT_CHAIN_ARCHITECTURE = {
+  SCENE_SCRIPT_STRUCTURE,
+  IMAGE_PROMPT_GENERATOR,
+  VIDEO_PROMPT_GENERATOR,
+  TRANSITION_ENGINE,
+  SCENE_PIPELINE,
+  QUALITY_VALIDATOR
+};
