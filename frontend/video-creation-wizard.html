@@ -3095,7 +3095,7 @@
                 },
                 characterBible: {
                     enabled: false,         // Toggle to enable/disable character bible
-                    characters: []          // Array of { id, name, description, appliedToScenes[] }
+                    characters: []          // Array of { id, name, description, referenceImageUrl, referenceImageStatus, appliedToScenes[] }
                 },
                 technicalSpecs: {
                     enabled: true,          // Usually enabled by default
@@ -3106,6 +3106,7 @@
                 showStyleBibleModal: false,
                 showCharacterBibleModal: false,
                 editingCharacterId: null,   // Currently editing character ID
+                generatingPortraitCharId: null, // Character ID currently generating portrait
                 // Edit with AI state
                 editingScene: null,     // Scene ID being edited
                 editMaskCanvas: null,   // Canvas element for mask
@@ -3504,6 +3505,8 @@
                         state.storyboard = { ...state.storyboard, ...project.storyboard };
                         // Phase 4: Initialize Scene Memory defaults for older projects
                         initSceneMemory();
+                        // Refresh character portrait base64 from URLs (don't await, run in background)
+                        refreshCharacterPortraitBase64();
                     }
 
                     // Restore animation data
@@ -4009,6 +4012,9 @@
                 id: 'char-' + Date.now(),
                 name: 'New Character',
                 description: '',
+                referenceImageUrl: null,        // Character portrait image URL
+                referenceImageStatus: 'none',   // 'none' | 'generating' | 'ready' | 'error'
+                referenceImageBase64: null,     // Base64 for API calls (cached)
                 appliedToScenes: [] // Will apply to all scenes if empty
             };
             state.storyboard.characterBible.characters.push(newChar);
@@ -4095,6 +4101,230 @@
                 render();
                 scheduleAutoSave();
                 showToast(`Applied "${templateName}" character template`, 'success');
+            }
+        }
+
+        // ==========================================
+        // CHARACTER PORTRAIT / REFERENCE IMAGE
+        // Generates a portrait on white/transparent background
+        // to use as visual reference for scene generation
+        // ==========================================
+
+        async function generateCharacterPortrait(charId) {
+            const char = state.storyboard.characterBible.characters.find(c => c.id === charId);
+            if (!char) return;
+
+            if (!char.description || char.description.trim().length < 20) {
+                showToast('Please add a detailed character description first (at least 20 characters)', 'error');
+                return;
+            }
+
+            // Update state to show generating
+            char.referenceImageStatus = 'generating';
+            state.storyboard.generatingPortraitCharId = charId;
+            render();
+
+            try {
+                // Build a portrait-specific prompt
+                const portraitPrompt = buildPortraitPrompt(char);
+
+                // Use Gemini (NanoBanana Pro) for best quality portraits
+                const generateFn = functions.httpsCallable('generateCreativeImage');
+                const result = await generateFn({
+                    prompt: portraitPrompt,
+                    model: 'nano-banana-pro', // Gemini - supports reference images
+                    quantity: 1,
+                    aspectRatio: '3:4', // Portrait orientation
+                    quality: 'hd',
+                    negativePrompt: 'background elements, scenery, props, furniture, other people, crowds, text, watermark, blurry, low quality, deformed, bad anatomy, extra limbs'
+                });
+
+                if (result.data.success && result.data.images && result.data.images.length > 0) {
+                    const imageUrl = result.data.images[0].url;
+
+                    // Fetch the image and convert to base64 for later use
+                    const base64Data = await fetchImageAsBase64(imageUrl);
+
+                    char.referenceImageUrl = imageUrl;
+                    char.referenceImageBase64 = base64Data;
+                    char.referenceImageStatus = 'ready';
+
+                    showToast(`Portrait generated for "${char.name}"!`, 'success');
+                    scheduleAutoSave();
+                } else {
+                    throw new Error(result.data.message || 'No image returned');
+                }
+
+            } catch (error) {
+                console.error('Portrait generation error:', error);
+                char.referenceImageStatus = 'error';
+                showToast(`Failed to generate portrait: ${error.message}`, 'error');
+            } finally {
+                state.storyboard.generatingPortraitCharId = null;
+                render();
+            }
+        }
+
+        function buildPortraitPrompt(char) {
+            // Build an optimized prompt for character portrait generation
+            // Focus on clean white/neutral background, full body or upper body shot
+            const parts = [
+                `Professional studio portrait photograph`,
+                char.description,
+                `Standing pose facing camera`,
+                `Clean pure white background`,
+                `Professional studio lighting with soft shadows`,
+                `High quality, detailed, sharp focus`,
+                `Full body visible from head to feet`,
+                `Neutral expression, confident pose`,
+                `Fashion photography style, catalog quality`
+            ];
+
+            return parts.join('. ');
+        }
+
+        async function fetchImageAsBase64(imageUrl) {
+            try {
+                // For Firebase Storage URLs, we can fetch directly
+                // For other URLs, we might need CORS handling
+                const response = await fetch(imageUrl);
+                const blob = await response.blob();
+
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        // Remove the data URL prefix to get just base64
+                        const base64 = reader.result.split(',')[1];
+                        resolve(base64);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            } catch (error) {
+                console.error('Failed to convert image to base64:', error);
+                return null;
+            }
+        }
+
+        async function uploadCharacterPortrait(charId) {
+            const char = state.storyboard.characterBible.characters.find(c => c.id === charId);
+            if (!char) return;
+
+            // Create a file input dynamically
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/png,image/jpeg,image/webp';
+
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Validate file size (max 5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    showToast('Image must be under 5MB', 'error');
+                    return;
+                }
+
+                char.referenceImageStatus = 'generating';
+                render();
+
+                try {
+                    // Convert to base64
+                    const base64 = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+
+                    // Upload to Firebase Storage
+                    const projectId = state.project.id || 'temp-' + Date.now();
+                    const fileName = `creation-projects/${projectId}/characters/${charId}_${Date.now()}.png`;
+                    const storageRef = firebase.storage().ref(fileName);
+
+                    // Convert base64 back to blob for upload
+                    const byteCharacters = atob(base64);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: file.type });
+
+                    await storageRef.put(blob);
+                    const downloadUrl = await storageRef.getDownloadURL();
+
+                    char.referenceImageUrl = downloadUrl;
+                    char.referenceImageBase64 = base64;
+                    char.referenceImageStatus = 'ready';
+
+                    showToast(`Portrait uploaded for "${char.name}"!`, 'success');
+                    scheduleAutoSave();
+
+                } catch (error) {
+                    console.error('Upload error:', error);
+                    char.referenceImageStatus = 'error';
+                    showToast(`Failed to upload: ${error.message}`, 'error');
+                } finally {
+                    render();
+                }
+            };
+
+            input.click();
+        }
+
+        function removeCharacterPortrait(charId) {
+            const char = state.storyboard.characterBible.characters.find(c => c.id === charId);
+            if (!char) return;
+
+            char.referenceImageUrl = null;
+            char.referenceImageBase64 = null;
+            char.referenceImageStatus = 'none';
+
+            render();
+            scheduleAutoSave();
+            showToast('Portrait removed', 'info');
+        }
+
+        // Get character reference data for scene generation
+        function getCharacterReferenceForScene(sceneId) {
+            if (!state.storyboard.characterBible?.enabled) return null;
+
+            const chars = getCharactersForScene(sceneId);
+            // Find the first character with a reference image
+            const charWithRef = chars.find(c => c.referenceImageBase64 && c.referenceImageStatus === 'ready');
+
+            if (charWithRef) {
+                return {
+                    base64: charWithRef.referenceImageBase64,
+                    mimeType: 'image/png',
+                    characterName: charWithRef.name
+                };
+            }
+
+            return null;
+        }
+
+        // Refresh character portrait base64 from URLs after project load
+        // This avoids storing large base64 data in Firestore
+        async function refreshCharacterPortraitBase64() {
+            if (!state.storyboard.characterBible?.characters) return;
+
+            const characters = state.storyboard.characterBible.characters;
+
+            for (const char of characters) {
+                // If character has a portrait URL but no base64, fetch and convert
+                if (char.referenceImageUrl && char.referenceImageStatus === 'ready' && !char.referenceImageBase64) {
+                    try {
+                        console.log(`[Character Bible] Refreshing base64 for "${char.name}"`);
+                        const base64 = await fetchImageAsBase64(char.referenceImageUrl);
+                        if (base64) {
+                            char.referenceImageBase64 = base64;
+                        }
+                    } catch (error) {
+                        console.warn(`[Character Bible] Failed to refresh base64 for "${char.name}":`, error);
+                    }
+                }
             }
         }
 
@@ -4651,6 +4881,7 @@
                     }
                 } else {
                     // Use NanoBanana (Gemini) - synchronous result
+                    // This model SUPPORTS character reference images!
                     const generateFn = functions.httpsCallable('generateCreativeImage');
 
                     // Map aspect ratio
@@ -4661,20 +4892,41 @@
                         '4:3': '4:3'
                     };
 
-                    const result = await generateFn({
-                        prompt: prompt,
+                    // Get character reference image for this scene (if available)
+                    const characterRef = getCharacterReferenceForScene(sceneId);
+
+                    // Assemble the full prompt using 4-layer architecture
+                    const assembled = assembleScenePrompt(scene);
+                    const fullPrompt = assembled.assembledPrompt || prompt;
+
+                    const requestData = {
+                        prompt: fullPrompt,
                         model: modelId,
                         quantity: 1,
                         aspectRatio: aspectRatioMap[state.platform.aspectRatio] || '16:9',
-                        quality: modelId === 'nanobanana-pro' ? 'hd' : 'basic'
-                    });
+                        quality: modelId === 'nanobanana-pro' ? 'hd' : 'basic',
+                        negativePrompt: assembled.negativePrompt || 'blurry, low quality, watermark, text, deformed'
+                    };
+
+                    // Add character reference image if available
+                    // This enables visual consistency across scenes!
+                    if (characterRef && characterRef.base64) {
+                        requestData.characterReference = {
+                            base64: characterRef.base64,
+                            mimeType: characterRef.mimeType || 'image/png'
+                        };
+                        console.log(`[Scene Generation] Using character reference for "${characterRef.characterName}"`);
+                    }
+
+                    const result = await generateFn(requestData);
 
                     if (result.data.success && result.data.images && result.data.images.length > 0) {
                         storyboardScene.status = 'ready';
                         storyboardScene.imageUrl = result.data.images[0].url;
-                        storyboardScene.prompt = prompt;
+                        storyboardScene.prompt = fullPrompt;
                         storyboardScene.source = 'ai';
-                        showToast(`Image generated! (${modelConfig.name})`, 'success');
+                        storyboardScene.usedCharacterRef = characterRef ? characterRef.characterName : null;
+                        showToast(`Image generated! (${modelConfig.name})${characterRef ? ' with character ref' : ''}`, 'success');
                         scheduleAutoSave();
                     } else {
                         throw new Error(result.data.message || 'No images returned');
@@ -7867,24 +8119,27 @@
             const characters = bible.characters || [];
             const editingChar = characters.find(c => c.id === state.storyboard.editingCharacterId);
             const scenes = state.script.scenes || [];
+            const isGeneratingPortrait = state.storyboard.generatingPortraitCharId === editingChar?.id;
 
             return `
                 <div id="character-bible-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;" onclick="if(event.target.id === 'character-bible-modal') closeCharacterBibleModal()">
-                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 800px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 900px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
                         <!-- Header -->
                         <div style="padding: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <div style="font-size: 1.1rem; font-weight: 700; color: white;">👤 Character Bible</div>
-                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Define consistent character appearances</div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Define consistent character appearances with reference images</div>
                             </div>
                             <button onclick="closeCharacterBibleModal()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">×</button>
                         </div>
 
                         <!-- Content -->
                         <div style="display: flex; flex: 1; overflow: hidden;">
-                            <!-- Character List (Left Panel) -->
-                            <div style="width: 200px; border-right: 1px solid rgba(255,255,255,0.1); padding: 1rem; overflow-y: auto;">
-                                <button onclick="addCharacter()" style="width: 100%; padding: 0.5rem; background: rgba(6, 182, 212, 0.2); border: 1px dashed rgba(6, 182, 212, 0.5); border-radius: 0.5rem; color: #06b6d4; font-size: 0.75rem; cursor: pointer; margin-bottom: 0.75rem;">+ Add Character</button>
+                            <!-- Character List (Left Panel) - Now with thumbnails -->
+                            <div style="width: 220px; border-right: 1px solid rgba(255,255,255,0.1); padding: 1rem; overflow-y: auto;">
+                                <button onclick="addCharacter()" style="width: 100%; padding: 0.6rem; background: rgba(6, 182, 212, 0.2); border: 1px dashed rgba(6, 182, 212, 0.5); border-radius: 0.5rem; color: #06b6d4; font-size: 0.75rem; cursor: pointer; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+                                    <span style="font-size: 1.2rem;">+</span> Add Character
+                                </button>
 
                                 ${characters.length === 0 ? `
                                     <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 0.75rem; padding: 1rem;">
@@ -7892,9 +8147,21 @@
                                     </div>
                                 ` : characters.map(char => `
                                     <div onclick="editCharacter('${char.id}')"
-                                         style="padding: 0.6rem; background: ${state.storyboard.editingCharacterId === char.id ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.editingCharacterId === char.id ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;">
-                                        <div style="color: white; font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${char.name || 'Unnamed'}</div>
-                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.65rem;">${char.appliedToScenes?.length || 0 ? char.appliedToScenes.length + ' scenes' : 'All scenes'}</div>
+                                         style="padding: 0.5rem; background: ${state.storyboard.editingCharacterId === char.id ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.editingCharacterId === char.id ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                                        <!-- Character Thumbnail -->
+                                        <div style="width: 45px; height: 55px; border-radius: 0.35rem; overflow: hidden; flex-shrink: 0; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center;">
+                                            ${char.referenceImageUrl && char.referenceImageStatus === 'ready' ?
+                                                `<img src="${char.referenceImageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` :
+                                                char.referenceImageStatus === 'generating' ?
+                                                `<div class="animate-spin" style="width: 1rem; height: 1rem; border: 2px solid rgba(6,182,212,0.3); border-top-color: #06b6d4; border-radius: 50%;"></div>` :
+                                                `<span style="font-size: 1.5rem; color: rgba(255,255,255,0.3);">👤</span>`
+                                            }
+                                        </div>
+                                        <div style="flex: 1; min-width: 0;">
+                                            <div style="color: white; font-size: 0.75rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${char.name || 'Unnamed'}</div>
+                                            <div style="color: rgba(255,255,255,0.4); font-size: 0.6rem;">${char.appliedToScenes?.length || 0 ? char.appliedToScenes.length + ' scenes' : 'All scenes'}</div>
+                                            ${char.referenceImageStatus === 'ready' ? `<div style="color: #10b981; font-size: 0.55rem;">✓ Portrait</div>` : ''}
+                                        </div>
                                     </div>
                                 `).join('')}
                             </div>
@@ -7902,59 +8169,98 @@
                             <!-- Character Editor (Right Panel) -->
                             <div style="flex: 1; padding: 1rem; overflow-y: auto;">
                                 ${editingChar ? `
-                                    <!-- Character Name -->
-                                    <div style="margin-bottom: 1rem;">
-                                        <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Character Name</label>
-                                        <input type="text"
-                                               value="${editingChar.name || ''}"
-                                               onchange="updateCharacter('${editingChar.id}', 'name', this.value)"
-                                               style="width: 100%; padding: 0.6rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.9rem;">
-                                    </div>
-
-                                    <!-- Quick Templates -->
-                                    <div style="margin-bottom: 1rem;">
-                                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">Quick Templates</div>
-                                        <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                                            <button onclick="applyCharacterTemplate('${editingChar.id}', 'action-hero')" style="padding: 0.3rem 0.6rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Action Hero</button>
-                                            <button onclick="applyCharacterTemplate('${editingChar.id}', 'tech-professional')" style="padding: 0.3rem 0.6rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Tech Pro</button>
-                                            <button onclick="applyCharacterTemplate('${editingChar.id}', 'mysterious-figure')" style="padding: 0.3rem 0.6rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Mysterious</button>
-                                            <button onclick="applyCharacterTemplate('${editingChar.id}', 'narrator')" style="padding: 0.3rem 0.6rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Narrator</button>
+                                    <div style="display: flex; gap: 1.25rem;">
+                                        <!-- Portrait Preview Column -->
+                                        <div style="width: 180px; flex-shrink: 0;">
+                                            <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Reference Portrait</label>
+                                            <div style="width: 180px; height: 220px; border-radius: 0.5rem; overflow: hidden; background: rgba(255,255,255,0.05); border: 2px dashed rgba(255,255,255,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+                                                ${editingChar.referenceImageUrl && editingChar.referenceImageStatus === 'ready' ? `
+                                                    <img src="${editingChar.referenceImageUrl}" style="width: 100%; height: 100%; object-fit: cover;">
+                                                    <button onclick="event.stopPropagation(); removeCharacterPortrait('${editingChar.id}')"
+                                                            style="position: absolute; top: 0.35rem; right: 0.35rem; width: 1.5rem; height: 1.5rem; background: rgba(239, 68, 68, 0.9); border: none; border-radius: 50%; color: white; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
+                                                ` : isGeneratingPortrait ? `
+                                                    <div class="animate-spin" style="width: 2rem; height: 2rem; border: 3px solid rgba(6,182,212,0.3); border-top-color: #06b6d4; border-radius: 50%; margin-bottom: 0.5rem;"></div>
+                                                    <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">Generating...</div>
+                                                ` : `
+                                                    <span style="font-size: 3rem; color: rgba(255,255,255,0.2); margin-bottom: 0.5rem;">👤</span>
+                                                    <div style="color: rgba(255,255,255,0.4); font-size: 0.7rem; text-align: center; padding: 0 0.5rem;">No portrait yet</div>
+                                                `}
+                                            </div>
+                                            <!-- Portrait Action Buttons -->
+                                            <div style="display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem;">
+                                                <button onclick="generateCharacterPortrait('${editingChar.id}')"
+                                                        ${isGeneratingPortrait ? 'disabled' : ''}
+                                                        style="width: 100%; padding: 0.5rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(6, 182, 212, 0.3)); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: ${isGeneratingPortrait ? 'not-allowed' : 'pointer'}; opacity: ${isGeneratingPortrait ? '0.5' : '1'};">
+                                                    🎨 ${editingChar.referenceImageUrl ? 'Regenerate' : 'Generate'} Portrait
+                                                </button>
+                                                <button onclick="uploadCharacterPortrait('${editingChar.id}')"
+                                                        ${isGeneratingPortrait ? 'disabled' : ''}
+                                                        style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: ${isGeneratingPortrait ? 'not-allowed' : 'pointer'}; opacity: ${isGeneratingPortrait ? '0.5' : '1'};">
+                                                    📤 Upload Image
+                                                </button>
+                                            </div>
+                                            <div style="font-size: 0.55rem; color: rgba(255,255,255,0.4); margin-top: 0.5rem; text-align: center;">
+                                                Portrait is used as AI reference<br>for consistent appearance
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    <!-- Character Description -->
-                                    <div style="margin-bottom: 1rem;">
-                                        <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Visual Description</label>
-                                        <textarea id="char-description-${editingChar.id}"
-                                                  placeholder="Describe physical appearance, clothing, distinguishing features..."
-                                                  onchange="updateCharacter('${editingChar.id}', 'description', this.value)"
-                                                  style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: none; height: 140px;">${editingChar.description || ''}</textarea>
-                                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">Be specific: age, build, hair, eyes, clothing colors, accessories</div>
-                                    </div>
+                                        <!-- Character Details Column -->
+                                        <div style="flex: 1;">
+                                            <!-- Character Name -->
+                                            <div style="margin-bottom: 0.75rem;">
+                                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Character Name</label>
+                                                <input type="text"
+                                                       value="${editingChar.name || ''}"
+                                                       onchange="updateCharacter('${editingChar.id}', 'name', this.value)"
+                                                       style="width: 100%; padding: 0.6rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.9rem;">
+                                            </div>
 
-                                    <!-- Scene Assignment -->
-                                    <div style="margin-bottom: 1rem;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                            <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Appears in Scenes</label>
-                                            <button onclick="applyCharacterToAllScenes('${editingChar.id}')" style="padding: 0.25rem 0.5rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.25rem; color: white; font-size: 0.6rem; cursor: pointer;">Apply to All</button>
+                                            <!-- Quick Templates -->
+                                            <div style="margin-bottom: 0.75rem;">
+                                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.35rem;">Quick Templates</div>
+                                                <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                                                    <button onclick="applyCharacterTemplate('${editingChar.id}', 'action-hero')" style="padding: 0.3rem 0.6rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Action Hero</button>
+                                                    <button onclick="applyCharacterTemplate('${editingChar.id}', 'tech-professional')" style="padding: 0.3rem 0.6rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Tech Pro</button>
+                                                    <button onclick="applyCharacterTemplate('${editingChar.id}', 'mysterious-figure')" style="padding: 0.3rem 0.6rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Mysterious</button>
+                                                    <button onclick="applyCharacterTemplate('${editingChar.id}', 'narrator')" style="padding: 0.3rem 0.6rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.25rem; color: white; font-size: 0.65rem; cursor: pointer;">Narrator</button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Character Description -->
+                                            <div style="margin-bottom: 0.75rem;">
+                                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem;">Visual Description</label>
+                                                <textarea id="char-description-${editingChar.id}"
+                                                          placeholder="Describe physical appearance, clothing, distinguishing features..."
+                                                          onchange="updateCharacter('${editingChar.id}', 'description', this.value)"
+                                                          style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: none; height: 100px;">${editingChar.description || ''}</textarea>
+                                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">Be specific: age, build, hair, eyes, clothing colors, accessories</div>
+                                            </div>
+
+                                            <!-- Scene Assignment -->
+                                            <div style="margin-bottom: 0.75rem;">
+                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                                    <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Appears in Scenes</label>
+                                                    <button onclick="applyCharacterToAllScenes('${editingChar.id}')" style="padding: 0.2rem 0.4rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.25rem; color: white; font-size: 0.55rem; cursor: pointer;">Apply to All</button>
+                                                </div>
+                                                <div style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                                                    ${scenes.map((scene, idx) => {
+                                                        const isAssigned = !editingChar.appliedToScenes?.length || editingChar.appliedToScenes.includes(scene.id);
+                                                        return `
+                                                            <button onclick="toggleCharacterInScene('${editingChar.id}', ${scene.id})"
+                                                                    style="padding: 0.3rem 0.5rem; background: ${isAssigned ? 'rgba(6, 182, 212, 0.3)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isAssigned ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255,255,255,0.15)'}; border-radius: 0.35rem; color: white; font-size: 0.65rem; cursor: pointer;">
+                                                                ${idx + 1}
+                                                            </button>
+                                                        `;
+                                                    }).join('')}
+                                                </div>
+                                                <div style="font-size: 0.55rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">${!editingChar.appliedToScenes?.length ? 'Appears in ALL scenes (default)' : 'Click scene numbers to toggle'}</div>
+                                            </div>
+
+                                            <!-- Delete Character -->
+                                            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.75rem; margin-top: 0.75rem;">
+                                                <button onclick="if(confirm('Delete this character?')) deleteCharacter('${editingChar.id}')" style="padding: 0.4rem 0.8rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.5rem; color: #ef4444; font-size: 0.7rem; cursor: pointer;">Delete Character</button>
+                                            </div>
                                         </div>
-                                        <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                                            ${scenes.map((scene, idx) => {
-                                                const isAssigned = !editingChar.appliedToScenes?.length || editingChar.appliedToScenes.includes(scene.id);
-                                                return `
-                                                    <button onclick="toggleCharacterInScene('${editingChar.id}', ${scene.id})"
-                                                            style="padding: 0.35rem 0.6rem; background: ${isAssigned ? 'rgba(6, 182, 212, 0.3)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isAssigned ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255,255,255,0.15)'}; border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: pointer;">
-                                                        ${idx + 1}
-                                                    </button>
-                                                `;
-                                            }).join('')}
-                                        </div>
-                                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.35rem;">${!editingChar.appliedToScenes?.length ? 'Appears in ALL scenes (default)' : 'Click scene numbers to toggle'}</div>
-                                    </div>
-
-                                    <!-- Delete Character -->
-                                    <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; margin-top: 1rem;">
-                                        <button onclick="if(confirm('Delete this character?')) deleteCharacter('${editingChar.id}')" style="padding: 0.5rem 1rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.5rem; color: #ef4444; font-size: 0.75rem; cursor: pointer;">Delete Character</button>
                                     </div>
                                 ` : `
                                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.4);">
@@ -7971,6 +8277,7 @@
                             <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">
                                 ${bible.enabled ? '✅ Character Bible is active' : '⚠️ Enable toggle to apply'}
                                 ${characters.length > 0 ? ' • ' + characters.length + ' character(s)' : ''}
+                                ${characters.filter(c => c.referenceImageStatus === 'ready').length > 0 ? ` • ${characters.filter(c => c.referenceImageStatus === 'ready').length} with portraits` : ''}
                             </div>
                             <div style="display: flex; gap: 0.5rem;">
                                 <button onclick="closeCharacterBibleModal()" style="padding: 0.6rem 1.25rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; cursor: pointer;">Close</button>
