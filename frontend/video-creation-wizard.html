@@ -3828,8 +3828,394 @@
 
         function setGenre(genreId) {
             state.content.genre = genreId;
+
+            // CASCADE: Auto-apply production profile when genre changes
+            if (genreId) {
+                applyGenreProductionProfile(genreId, false); // Don't override manual settings
+            }
+
             render();
             scheduleAutoSave();
+        }
+
+        // ==========================================
+        // GENRE INTELLIGENCE SYSTEM
+        // Cascades production settings from genre selection
+        // ==========================================
+
+        const GENRE_PRODUCTION_PROFILES = {
+            // Documentary genres
+            'documentary-nature': {
+                styleBible: {
+                    style: 'cinematic documentary, National Geographic quality, epic landscapes',
+                    colorGrade: 'rich earth tones, golden highlights, deep greens',
+                    lighting: 'natural golden hour, soft diffused daylight',
+                    atmosphere: 'volumetric fog, dust particles, lens flares',
+                    camera: 'smooth tracking, wide establishing shots, intimate close-ups'
+                },
+                narratorVoice: 'onyx',  // Deep, authoritative
+                audioMood: 'epic',
+                musicCategory: 'cinematic',
+                musicMood: ['epic', 'dramatic', 'contemplative'],
+                technicalSpecs: {
+                    positive: '4K, ultra detailed, shallow DOF, cinematic, natural lighting, epic scale',
+                    negative: 'blurry, low quality, watermark, text, artificial, studio lighting'
+                },
+                animationStyle: 'ken_burns'
+            },
+            'documentary-true-crime': {
+                styleBible: {
+                    style: 'investigative documentary, gritty realism, archive footage aesthetic',
+                    colorGrade: 'desaturated, cool shadows, limited palette',
+                    lighting: 'harsh interview lighting, noir shadows, fluorescent green',
+                    atmosphere: 'grainy, surveillance footage feel, newspaper clippings',
+                    camera: 'static interviews, dramatic zooms, handheld urgency'
+                },
+                narratorVoice: 'echo',  // Serious, measured
+                audioMood: 'tense',
+                musicCategory: 'dramatic',
+                musicMood: ['dark', 'tense', 'mysterious'],
+                technicalSpecs: {
+                    positive: '4K, documentary style, gritty, realistic, cinematic',
+                    negative: 'blurry, colorful, happy, bright, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+            'documentary-social': {
+                styleBible: {
+                    style: 'modern social documentary, intimate portraits, urban landscapes',
+                    colorGrade: 'natural colors, slight desaturation, authentic',
+                    lighting: 'available light, natural environments',
+                    atmosphere: 'candid moments, street photography, real locations',
+                    camera: 'observational, intimate close-ups, environmental wide shots'
+                },
+                narratorVoice: 'nova',  // Warm, engaging
+                audioMood: 'contemplative',
+                musicCategory: 'indie',
+                musicMood: ['contemplative', 'intimate', 'hopeful'],
+                technicalSpecs: {
+                    positive: '4K, documentary, authentic, candid, natural lighting',
+                    negative: 'blurry, artificial, staged, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+            'documentary-historical': {
+                styleBible: {
+                    style: 'historical documentary, archival quality, Ken Burns style',
+                    colorGrade: 'sepia tints, aged film look, period-appropriate colors',
+                    lighting: 'natural period lighting, candlelit interiors',
+                    atmosphere: 'historical texture, parchment, vintage photography',
+                    camera: 'slow zooms on photos, pan across paintings, thoughtful pacing'
+                },
+                narratorVoice: 'fable',  // Storytelling warmth
+                audioMood: 'nostalgic',
+                musicCategory: 'classical',
+                musicMood: ['nostalgic', 'contemplative', 'epic'],
+                technicalSpecs: {
+                    positive: '4K, historical, archival quality, period accurate, cinematic',
+                    negative: 'blurry, modern elements, anachronistic, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+
+            // Cinematic genres
+            'cinematic-thriller': {
+                styleBible: {
+                    style: 'ultra-cinematic photoreal, noir thriller, high contrast',
+                    colorGrade: 'desaturated teal shadows, amber highlights, crushed blacks',
+                    lighting: 'harsh single-source, dramatic rim lights, deep shadows',
+                    atmosphere: 'smoke, rain reflections, wet surfaces, urban grit',
+                    camera: 'slow dolly, low angles, stabilized gimbal, anamorphic lens feel'
+                },
+                narratorVoice: 'onyx',  // Intense, commanding
+                audioMood: 'tense',
+                musicCategory: 'dramatic',
+                musicMood: ['dark', 'tense', 'mysterious'],
+                technicalSpecs: {
+                    positive: '4K, ultra detailed, cinematic, noir, dramatic lighting, anamorphic',
+                    negative: 'blurry, bright, happy, colorful, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+            'cinematic-action': {
+                styleBible: {
+                    style: 'blockbuster action, high energy, dynamic composition',
+                    colorGrade: 'high contrast, orange and teal, saturated',
+                    lighting: 'dramatic backlighting, lens flares, explosions',
+                    atmosphere: 'dust, debris, fire, motion blur',
+                    camera: 'fast dolly, dutch angles, tracking shots, crash zooms'
+                },
+                narratorVoice: 'echo',  // Intense, energetic
+                audioMood: 'energetic',
+                musicCategory: 'electronic',
+                musicMood: ['energetic', 'epic', 'intense'],
+                technicalSpecs: {
+                    positive: '4K, ultra detailed, action, dynamic, cinematic, explosive',
+                    negative: 'blurry, static, calm, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+            'cinematic-drama': {
+                styleBible: {
+                    style: 'prestige drama, Oscar-worthy cinematography, emotional depth',
+                    colorGrade: 'rich but restrained, natural skin tones, dramatic contrast',
+                    lighting: 'motivated lighting, golden hour, intimate practicals',
+                    atmosphere: 'subtle, realistic environments, emotional resonance',
+                    camera: 'elegant slow movements, meaningful compositions, long takes'
+                },
+                narratorVoice: 'nova',  // Emotional, warm
+                audioMood: 'intimate',
+                musicCategory: 'cinematic',
+                musicMood: ['intimate', 'contemplative', 'hopeful'],
+                technicalSpecs: {
+                    positive: '4K, ultra detailed, cinematic, emotional, prestigious, film grain',
+                    negative: 'blurry, amateur, oversaturated, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+
+            // Horror genres
+            'horror-psychological': {
+                styleBible: {
+                    style: 'psychological horror, unsettling, dreamlike quality',
+                    colorGrade: 'desaturated, sickly greens, deep blacks, red accents',
+                    lighting: 'low-key, single source, harsh shadows, flickering',
+                    atmosphere: 'fog, dust motes, decayed textures, uncanny valley',
+                    camera: 'dutch angles, slow creeping push-ins, unstable handheld'
+                },
+                narratorVoice: 'shimmer',  // Ethereal, unsettling
+                audioMood: 'dark',
+                musicCategory: 'dramatic',
+                musicMood: ['dark', 'mysterious', 'tense'],
+                technicalSpecs: {
+                    positive: '4K, horror, unsettling, psychological, dark, atmospheric',
+                    negative: 'blurry, bright, happy, colorful, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+            'horror-supernatural': {
+                styleBible: {
+                    style: 'supernatural horror, otherworldly, gothic atmosphere',
+                    colorGrade: 'cold blues, deep shadows, occasional warm accents',
+                    lighting: 'moonlight, candlelight, unnatural light sources',
+                    atmosphere: 'mist, ancient architecture, supernatural elements',
+                    camera: 'slow reveals, creeping dolly, ominous wide shots'
+                },
+                narratorVoice: 'fable',  // Story-like, mysterious
+                audioMood: 'mysterious',
+                musicCategory: 'dramatic',
+                musicMood: ['dark', 'mysterious', 'epic'],
+                technicalSpecs: {
+                    positive: '4K, supernatural, gothic, atmospheric, dark, cinematic',
+                    negative: 'blurry, modern, bright, happy, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+
+            // Tech & Education
+            'tech-explainer': {
+                styleBible: {
+                    style: 'clean modern, minimal, high-tech aesthetic',
+                    colorGrade: 'cool blues, clean whites, accent neon highlights',
+                    lighting: 'high-key soft lighting, no harsh shadows',
+                    atmosphere: 'clean gradient backgrounds, subtle particle effects',
+                    camera: 'smooth dolly, symmetrical framing, focus pulls'
+                },
+                narratorVoice: 'nova',  // Clear, friendly
+                audioMood: 'professional',
+                musicCategory: 'electronic',
+                musicMood: ['professional', 'energetic', 'contemplative'],
+                technicalSpecs: {
+                    positive: '4K, clean, modern, minimal, high-tech, professional',
+                    negative: 'blurry, cluttered, outdated, watermark, text'
+                },
+                animationStyle: 'ken_burns'
+            },
+            'educational-general': {
+                styleBible: {
+                    style: 'educational, clear visuals, engaging graphics',
+                    colorGrade: 'vibrant but professional, clear contrast',
+                    lighting: 'bright, even lighting, no distracting shadows',
+                    atmosphere: 'clean, organized, professional',
+                    camera: 'steady, clear framing, emphasis on content'
+                },
+                narratorVoice: 'alloy',  // Neutral, clear
+                audioMood: 'professional',
+                musicCategory: 'upbeat',
+                musicMood: ['professional', 'energetic', 'hopeful'],
+                technicalSpecs: {
+                    positive: '4K, educational, clear, engaging, professional',
+                    negative: 'blurry, confusing, cluttered, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+
+            // Lifestyle & Inspirational
+            'lifestyle-wellness': {
+                styleBible: {
+                    style: 'wellness aesthetic, natural beauty, calming visuals',
+                    colorGrade: 'soft pastels, warm earth tones, gentle highlights',
+                    lighting: 'soft natural light, golden hour, diffused',
+                    atmosphere: 'peaceful, nature elements, organic textures',
+                    camera: 'slow gentle movements, intimate framing, breathing room'
+                },
+                narratorVoice: 'shimmer',  // Calm, soothing
+                audioMood: 'contemplative',
+                musicCategory: 'calm',
+                musicMood: ['contemplative', 'intimate', 'peaceful'],
+                technicalSpecs: {
+                    positive: '4K, peaceful, natural, calming, wellness, soft lighting',
+                    negative: 'blurry, harsh, aggressive, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+            'inspirational-motivational': {
+                styleBible: {
+                    style: 'uplifting cinematic, warm and hopeful, epic scale',
+                    colorGrade: 'warm golden tones, soft orange highlights, lifted shadows',
+                    lighting: 'golden hour, backlit subjects, natural lens flares',
+                    atmosphere: 'morning mist, sunbeams, floating particles',
+                    camera: 'rising crane shots, slow push-ins, sweeping wide angles'
+                },
+                narratorVoice: 'onyx',  // Inspiring, powerful
+                audioMood: 'hopeful',
+                musicCategory: 'cinematic',
+                musicMood: ['epic', 'hopeful', 'energetic'],
+                technicalSpecs: {
+                    positive: '4K, inspirational, uplifting, epic, golden hour, cinematic',
+                    negative: 'blurry, dark, depressing, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+
+            // Entertainment
+            'comedy-sketch': {
+                styleBible: {
+                    style: 'bright comedy, exaggerated expressions, visual gags',
+                    colorGrade: 'saturated, warm, high energy colors',
+                    lighting: 'bright even lighting, comedy show feel',
+                    atmosphere: 'fun, energetic, playful environments',
+                    camera: 'quick cuts, reaction shots, comedic timing'
+                },
+                narratorVoice: 'alloy',  // Energetic, fun
+                audioMood: 'energetic',
+                musicCategory: 'upbeat',
+                musicMood: ['energetic', 'playful', 'fun'],
+                technicalSpecs: {
+                    positive: '4K, comedy, bright, fun, energetic, expressive',
+                    negative: 'blurry, dark, serious, watermark'
+                },
+                animationStyle: 'ken_burns'
+            },
+            'gaming-review': {
+                styleBible: {
+                    style: 'gaming aesthetic, neon accents, tech-forward',
+                    colorGrade: 'high contrast, neon highlights, dark backgrounds',
+                    lighting: 'RGB lighting, screen glow, dramatic accents',
+                    atmosphere: 'gaming setup, tech elements, digital effects',
+                    camera: 'dynamic angles, quick cuts, energetic pacing'
+                },
+                narratorVoice: 'echo',  // Energetic, engaging
+                audioMood: 'energetic',
+                musicCategory: 'electronic',
+                musicMood: ['energetic', 'intense', 'electronic'],
+                technicalSpecs: {
+                    positive: '4K, gaming, neon, tech, energetic, modern',
+                    negative: 'blurry, outdated, boring, watermark'
+                },
+                animationStyle: 'ken_burns'
+            }
+        };
+
+        // Apply production profile based on genre
+        function applyGenreProductionProfile(genreId, overrideManual = false) {
+            const profile = GENRE_PRODUCTION_PROFILES[genreId];
+            if (!profile) {
+                console.log(`[Genre Intelligence] No profile found for genre: ${genreId}`);
+                return false;
+            }
+
+            console.log(`[Genre Intelligence] Applying profile for: ${genreId}`);
+            initSceneMemory();
+
+            // 1. Apply Style Bible (only if not manually set or override requested)
+            if (overrideManual || !state.storyboard.styleBible?.style) {
+                state.storyboard.styleBible = {
+                    enabled: true,
+                    ...profile.styleBible
+                };
+                console.log('[Genre Intelligence] Style Bible applied');
+            }
+
+            // 2. Apply Technical Specs
+            if (overrideManual || !state.storyboard.technicalSpecs?.positive) {
+                state.storyboard.technicalSpecs = {
+                    enabled: true,
+                    ...profile.technicalSpecs
+                };
+                console.log('[Genre Intelligence] Technical Specs applied');
+            }
+
+            // 3. Apply Narrator Voice
+            if (overrideManual || !state.animation.narratorVoice || state.animation.narratorVoice === 'nova') {
+                state.animation.narratorVoice = profile.narratorVoice;
+                state.animation.voiceover.voice = profile.narratorVoice;
+                console.log(`[Genre Intelligence] Narrator voice set to: ${profile.narratorVoice}`);
+            }
+
+            // 4. Apply Audio Mood
+            if (overrideManual || !state.assembly.audioMood) {
+                state.assembly.audioMood = profile.audioMood;
+                console.log(`[Genre Intelligence] Audio mood set to: ${profile.audioMood}`);
+            }
+
+            // 5. Store genre profile for music recommendation
+            state.assembly.genreProfile = {
+                musicCategory: profile.musicCategory,
+                musicMoods: profile.musicMood,
+                genreId: genreId
+            };
+
+            // 6. Set default animation style
+            if (!state.animation.defaultAnimationType) {
+                state.animation.defaultAnimationType = profile.animationStyle;
+            }
+
+            return true;
+        }
+
+        // Get profile-based recommendations for current genre
+        function getGenreRecommendations() {
+            const genreId = state.content.genre;
+            if (!genreId) return null;
+
+            const profile = GENRE_PRODUCTION_PROFILES[genreId];
+            if (!profile) return null;
+
+            return {
+                genre: genreId,
+                styleBible: profile.styleBible,
+                narratorVoice: profile.narratorVoice,
+                audioMood: profile.audioMood,
+                musicCategory: profile.musicCategory,
+                musicMoods: profile.musicMood,
+                animationStyle: profile.animationStyle
+            };
+        }
+
+        // Re-apply genre profile with override (for manual re-sync)
+        function resyncWithGenre() {
+            const genreId = state.content.genre;
+            if (!genreId) {
+                showToast('No genre selected. Please select a genre first.', 'warning');
+                return;
+            }
+
+            if (applyGenreProductionProfile(genreId, true)) {
+                render();
+                scheduleAutoSave();
+                showToast(`Production settings synced with "${genreId}" genre`, 'success');
+            }
         }
 
         function setContentFormat(formatId) {
@@ -4610,6 +4996,19 @@
 
                     showToast('Script generated successfully!', 'success');
                     scheduleAutoSave();
+
+                    // ==========================================
+                    // GENRE INTELLIGENCE: Apply production profile
+                    // Ensures Style Bible, Narrator Voice, Audio Mood
+                    // are all set based on the selected genre
+                    // ==========================================
+                    if (state.content.genre) {
+                        const applied = applyGenreProductionProfile(state.content.genre, false);
+                        if (applied) {
+                            console.log('[Script] Genre production profile applied automatically');
+                        }
+                    }
+
                     render();
 
                     // ==========================================
@@ -7859,6 +8258,27 @@
                         </div>
                     </div>
 
+                    <!-- Production Profile Indicator (Genre Intelligence) -->
+                    ${state.content.genre ? `
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(236,72,153,0.1)); border: 1px solid rgba(245,158,11,0.3); border-radius: 0.5rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                <span style="font-size: 0.85rem;">✨</span>
+                                <span style="color: #fbbf24; font-size: 0.75rem; font-weight: 600;">Production Profile Active</span>
+                            </div>
+                            <button onclick="resyncWithGenre()" style="font-size: 0.55rem; padding: 0.2rem 0.4rem; border-radius: 0.25rem; border: 1px solid rgba(245,158,11,0.4); background: transparent; color: #f59e0b; cursor: pointer;">🔄 Re-sync</button>
+                        </div>
+                        <div style="color: rgba(255,255,255,0.6); font-size: 0.6rem; line-height: 1.4;">
+                            Based on <strong style="color: #fbbf24;">${state.content.genre.replace(/-/g, ' ')}</strong> genre:
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem;">
+                                <span style="padding: 0.15rem 0.35rem; background: rgba(139,92,246,0.2); border-radius: 0.2rem; color: #a78bfa;">🎨 Style Bible</span>
+                                <span style="padding: 0.15rem 0.35rem; background: rgba(6,182,212,0.2); border-radius: 0.2rem; color: #22d3ee;">🎙️ ${state.animation.narratorVoice || 'nova'} voice</span>
+                                <span style="padding: 0.15rem 0.35rem; background: rgba(245,158,11,0.2); border-radius: 0.2rem; color: #fbbf24;">🎵 ${state.assembly.audioMood || 'auto'} mood</span>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+
                     <!-- Phase 4: Scene Memory System -->
                     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
@@ -9148,9 +9568,118 @@
             html += renderAnimationStyleGalleryPro(scriptScene.id, animationType, !!voiceoverUrl, animationStatus, storyboardScene);
             html += '</div>';
 
+            // Quick Audio Configuration Panel
+            html += '<div style="margin-top: 1rem; max-width: 640px; margin-left: auto; margin-right: auto; width: 100%;">';
+            html += renderQuickAudioPanel();
+            html += '</div>';
+
             html += '</div>';
             html += '</div>';
 
+            return html;
+        }
+
+        // Quick Audio Configuration Panel for Animation Studio Pro
+        function renderQuickAudioPanel() {
+            const genreProfile = state.assembly.genreProfile || {};
+            const audioMood = state.assembly.audioMood || 'Not set';
+            const musicEnabled = state.assembly.music?.enabled || false;
+            const selectedTrackId = state.assembly.music?.trackId;
+            const musicVolume = state.assembly.music?.volume || 30;
+            const voiceVolume = state.assembly.audioMix?.voiceVolume || 100;
+            const ducking = state.assembly.audioMix?.ducking !== false;
+            const genreId = state.content.genre;
+
+            // Get genre-specific music recommendations
+            const profile = genreId ? GENRE_PRODUCTION_PROFILES[genreId] : null;
+            const recommendedMoods = profile?.musicMood || [];
+            const recommendedCategory = profile?.musicCategory || '';
+
+            let html = '';
+            html += '<div style="background: linear-gradient(135deg, rgba(245,158,11,0.1), rgba(236,72,153,0.1)); border: 1px solid rgba(245,158,11,0.25); border-radius: 0.75rem; padding: 1rem;">';
+
+            // Header with AI badge
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span style="font-size: 1rem;">🎵</span>';
+            html += '<span style="font-size: 0.85rem; font-weight: 600; color: white;">Audio & Music</span>';
+            html += '<span style="font-size: 0.5rem; padding: 0.15rem 0.35rem; background: linear-gradient(135deg, #f59e0b, #ec4899); border-radius: 0.2rem; color: white; font-weight: 600;">AUTO</span>';
+            html += '</div>';
+            html += '<button onclick="goToStep(6)" style="font-size: 0.6rem; padding: 0.25rem 0.5rem; border-radius: 0.25rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: rgba(255,255,255,0.6); cursor: pointer;">Full Editor →</button>';
+            html += '</div>';
+
+            // Genre-based recommendation info
+            if (profile) {
+                html += '<div style="background: rgba(0,0,0,0.2); border-radius: 0.4rem; padding: 0.6rem; margin-bottom: 0.75rem;">';
+                html += '<div style="display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.35rem;">';
+                html += '<span style="font-size: 0.65rem; color: #f59e0b;">✨</span>';
+                html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">Based on your <strong style="color: #f59e0b;">' + genreId.replace(/-/g, ' ') + '</strong> genre:</span>';
+                html += '</div>';
+                html += '<div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">';
+                html += '<span style="font-size: 0.6rem; padding: 0.2rem 0.4rem; background: rgba(245,158,11,0.2); border-radius: 0.2rem; color: #fbbf24;">🎭 ' + audioMood + ' mood</span>';
+                html += '<span style="font-size: 0.6rem; padding: 0.2rem 0.4rem; background: rgba(139,92,246,0.2); border-radius: 0.2rem; color: #a78bfa;">🎵 ' + recommendedCategory + '</span>';
+                recommendedMoods.slice(0, 2).forEach(function(mood) {
+                    html += '<span style="font-size: 0.6rem; padding: 0.2rem 0.4rem; background: rgba(6,182,212,0.2); border-radius: 0.2rem; color: #22d3ee;">' + mood + '</span>';
+                });
+                html += '</div>';
+                html += '</div>';
+            }
+
+            // Quick Controls Grid
+            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">';
+
+            // Music Toggle
+            html += '<div style="background: rgba(0,0,0,0.15); border-radius: 0.4rem; padding: 0.6rem;">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">';
+            html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">🎵 Music</span>';
+            const musicToggleBg = musicEnabled ? '#8b5cf6' : 'rgba(255,255,255,0.2)';
+            const musicTogglePos = musicEnabled ? '15px' : '2px';
+            html += '<label style="position: relative; display: inline-block; width: 32px; height: 18px;">';
+            html += '<input type="checkbox" ' + (musicEnabled ? 'checked' : '') + ' onchange="toggleMusic(this.checked); render();" style="opacity: 0; width: 0; height: 0;">';
+            html += '<span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ' + musicToggleBg + '; transition: 0.2s; border-radius: 18px;">';
+            html += '<span style="position: absolute; height: 14px; width: 14px; left: ' + musicTogglePos + '; bottom: 2px; background-color: white; transition: 0.2s; border-radius: 50%;"></span>';
+            html += '</span>';
+            html += '</label>';
+            html += '</div>';
+            html += '<input type="range" min="0" max="100" value="' + musicVolume + '" onchange="setMusicVolume(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #8b5cf6;" ' + (!musicEnabled ? 'disabled' : '') + '>';
+            html += '<div style="font-size: 0.55rem; color: rgba(255,255,255,0.4); text-align: right; margin-top: 0.2rem;">' + musicVolume + '%</div>';
+            html += '</div>';
+
+            // Voice Volume
+            html += '<div style="background: rgba(0,0,0,0.15); border-radius: 0.4rem; padding: 0.6rem;">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">';
+            html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">🎙️ Voice</span>';
+            html += '<span style="font-size: 0.6rem; color: #06b6d4;">' + voiceVolume + '%</span>';
+            html += '</div>';
+            html += '<input type="range" min="0" max="100" value="' + voiceVolume + '" onchange="setVoiceVolume(this.value)" style="width: 100%; height: 4px; cursor: pointer; accent-color: #06b6d4;">';
+            html += '</div>';
+
+            html += '</div>';
+
+            // Auto-ducking toggle
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.1); border-radius: 0.35rem;">';
+            html += '<div>';
+            html += '<span style="font-size: 0.7rem; color: rgba(255,255,255,0.7);">Auto-Duck</span>';
+            html += '<div style="font-size: 0.55rem; color: rgba(255,255,255,0.4);">Lower music during voiceover</div>';
+            html += '</div>';
+            const duckingBg = ducking ? '#10b981' : 'rgba(255,255,255,0.2)';
+            const duckingPos = ducking ? '15px' : '2px';
+            html += '<label style="position: relative; display: inline-block; width: 32px; height: 18px;">';
+            html += '<input type="checkbox" ' + (ducking ? 'checked' : '') + ' onchange="setAudioDucking(this.checked)" style="opacity: 0; width: 0; height: 0;">';
+            html += '<span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ' + duckingBg + '; transition: 0.2s; border-radius: 18px;">';
+            html += '<span style="position: absolute; height: 14px; width: 14px; left: ' + duckingPos + '; bottom: 2px; background-color: white; transition: 0.2s; border-radius: 50%;"></span>';
+            html += '</span>';
+            html += '</label>';
+            html += '</div>';
+
+            // Sync button
+            if (genreId) {
+                html += '<button onclick="resyncWithGenre()" style="width: 100%; margin-top: 0.75rem; padding: 0.5rem; border-radius: 0.4rem; border: 1px dashed rgba(245,158,11,0.4); background: transparent; color: #fbbf24; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem;">';
+                html += '<span>🔄</span> Re-sync all settings with genre';
+                html += '</button>';
+            }
+
+            html += '</div>';
             return html;
         }
 
