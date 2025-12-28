@@ -4522,6 +4522,7 @@
             const styleReference = state.concept.styleReference;
             const avoidElements = state.concept.avoidElements;
             const production = state.production;
+            const improvedData = state.concept.improvedData; // AI Enhancement data
 
             if (!rawInput && !production.type) {
                 showToast('Please enter a concept idea or select a production type', 'warning');
@@ -4532,7 +4533,7 @@
             render();
 
             try {
-                // Build the concept generation prompt
+                // Build the concept generation prompt with ALL enrichment data
                 const productionContext = production.type ? {
                     type: production.typeConfig?.name || production.type,
                     subType: production.subTypeConfig?.name || production.subType,
@@ -4542,12 +4543,26 @@
                     duration: production.targetDuration
                 } : null;
 
+                // Include AI enhancement data if available
+                const enrichmentData = improvedData ? {
+                    improvedConcept: improvedData.improvedConcept,
+                    hookLine: improvedData.hookLine,
+                    genreFusion: improvedData.genreFusion,
+                    visualSignature: improvedData.visualSignature,
+                    keyElements: improvedData.keyElements || [],
+                    characters: improvedData.characters || [],
+                    worldBuilding: improvedData.worldBuilding,
+                    suggestedMood: improvedData.suggestedMood,
+                    suggestedTone: improvedData.suggestedTone
+                } : null;
+
                 const generateConcepts = firebase.functions().httpsCallable('creationWizardGenerateConcepts');
                 const result = await generateConcepts({
-                    rawInput: rawInput,
+                    rawInput: improvedData?.improvedConcept || rawInput, // Use improved concept if available
                     styleReference: styleReference,
                     avoidElements: avoidElements,
-                    production: productionContext
+                    production: productionContext,
+                    enrichment: enrichmentData // Pass AI enhancement data
                 });
 
                 if (result.data.success && result.data.ideas) {
@@ -8802,7 +8817,19 @@
                     `;
                 });
 
-                html += '</div></div>';
+                html += `
+                        <!-- Generate More Concepts Button -->
+                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <button onclick="generateConceptIdeas()"
+                                    style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px dashed rgba(139, 92, 246, 0.5); background: transparent; color: #a78bfa; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;"
+                                    onmouseover="this.style.background='rgba(139, 92, 246, 0.1)'; this.style.borderStyle='solid';"
+                                    onmouseout="this.style.background='transparent'; this.style.borderStyle='dashed';">
+                                <span>🔄</span>
+                                <span>Generate More Concepts</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
             }
 
             // ==========================================
@@ -9487,6 +9514,14 @@
         function renderScriptGenerationForm() {
             const niche = VIDEO_NICHES[state.content.niche];
             const style = VIDEO_STYLES[state.content.style];
+            const production = state.production;
+            const concept = state.concept;
+            const selectedConcept = concept?.refinedConcept;
+            const improvedData = concept?.improvedData;
+            const characterIntel = state.characterIntelligence;
+
+            // Determine if using new production flow
+            const usingNewFlow = production?.type && selectedConcept;
 
             return `
                 <div class="content-card">
@@ -9494,11 +9529,74 @@
                         <div class="content-card-icon">✨</div>
                         <div>
                             <div class="content-card-title">Generate Your Script</div>
-                            <div class="content-card-subtitle">AI will create a professional video script based on your settings</div>
+                            <div class="content-card-subtitle">AI will create a professional ${usingNewFlow ? 'cinematic' : 'video'} script based on your settings</div>
                         </div>
                     </div>
 
-                    <!-- Summary of selections -->
+                    ${usingNewFlow ? `
+                    <!-- NEW FLOW: Selected Concept Summary -->
+                    <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.1)); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                            <div>
+                                <div style="font-size: 0.7rem; color: rgba(139, 92, 246, 0.8); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Selected Concept</div>
+                                <div style="font-size: 1.1rem; font-weight: 700; color: white;">${selectedConcept.title || 'Untitled Concept'}</div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                ${production?.typeConfig ? `<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(139, 92, 246, 0.3); border-radius: 0.25rem; color: #a78bfa;">${production.typeConfig.icon || '🎬'} ${production.typeConfig.name}</span>` : ''}
+                                ${production?.subTypeConfig ? `<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(236, 72, 153, 0.3); border-radius: 0.25rem; color: #f472b6;">${production.subTypeConfig.name}</span>` : ''}
+                            </div>
+                        </div>
+                        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.5; margin-bottom: 1rem;">
+                            ${selectedConcept.logline || selectedConcept.description || ''}
+                        </div>
+                        ${selectedConcept.uniqueElements?.length > 0 ? `
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem;">
+                            ${selectedConcept.uniqueElements.map(elem => `
+                                <span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.25rem; color: #67e8f9;">${elem}</span>
+                            `).join('')}
+                        </div>
+                        ` : ''}
+                        <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: rgba(255,255,255,0.6);">
+                            ${selectedConcept.mood ? `<span>Mood: <span style="color: #a78bfa;">${selectedConcept.mood}</span></span>` : ''}
+                            ${selectedConcept.tone ? `<span>Tone: <span style="color: #f472b6;">${selectedConcept.tone}</span></span>` : ''}
+                            ${formatDuration(production?.targetDuration || state.platform.targetDuration) ? `<span>Duration: <span style="color: #67e8f9;">${formatDuration(production?.targetDuration || state.platform.targetDuration)}</span></span>` : ''}
+                        </div>
+                    </div>
+
+                    ${improvedData ? `
+                    <!-- AI Enhancement Details -->
+                    <div style="background: rgba(236, 72, 153, 0.1); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">
+                        <div style="font-size: 0.7rem; color: rgba(236, 72, 153, 0.8); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <span>✨</span> AI Enhancement Applied
+                        </div>
+                        ${improvedData.hookLine ? `<div style="font-style: italic; color: rgba(255,255,255,0.9); margin-bottom: 0.5rem;">"${improvedData.hookLine}"</div>` : ''}
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; font-size: 0.7rem; color: rgba(255,255,255,0.7);">
+                            ${improvedData.genreFusion ? `<span><span style="color: #f472b6;">Genre:</span> ${improvedData.genreFusion}</span>` : ''}
+                            ${improvedData.visualSignature ? `<span><span style="color: #8b5cf6;">Visual:</span> ${improvedData.visualSignature.substring(0, 60)}...</span>` : ''}
+                        </div>
+                        ${improvedData.characters?.length > 0 ? `
+                        <div style="margin-top: 0.75rem; font-size: 0.7rem;">
+                            <span style="color: rgba(255,255,255,0.5);">Characters:</span>
+                            <span style="color: rgba(255,255,255,0.8);"> ${improvedData.characters.map(c => c.archetype).join(', ')}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ` : ''}
+
+                    ${characterIntel?.suggestedCount > 0 ? `
+                    <!-- Character Intelligence Summary -->
+                    <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 0.75rem; padding: 0.75rem 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.7);">
+                            <span style="color: #67e8f9;">👥 Character Intelligence:</span>
+                            ${characterIntel.suggestedCount} characters • ${characterIntel.narrationMode || 'voiceover'} mode
+                        </div>
+                        <button onclick="goToStep(2)" style="font-size: 0.65rem; padding: 0.25rem 0.5rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.25rem; color: #67e8f9; cursor: pointer;">
+                            Edit
+                        </button>
+                    </div>
+                    ` : ''}
+                    ` : `
+                    <!-- LEGACY FLOW: Basic config summary -->
                     <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">
                         <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Your video configuration:</div>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
@@ -9510,7 +9608,7 @@
                         </div>
                     </div>
 
-                    <!-- Topic (editable) -->
+                    <!-- Topic (editable) - Only show for legacy flow -->
                     <div style="margin-bottom: 1.5rem;">
                         <label style="display: block; font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
                             Video Topic
@@ -9522,6 +9620,10 @@
                                placeholder="e.g., 5 Morning Habits That Changed My Life"
                                style="width: 100%;">
                     </div>
+                    `}
+
+                    <!-- Hidden input to store topic for new flow (populated from selected concept) -->
+                    ${usingNewFlow ? `<input type="hidden" id="script-topic" value="${selectedConcept.title}: ${selectedConcept.logline || selectedConcept.description || ''}">` : ''}
 
                     <!-- Tone selector -->
                     <div style="margin-bottom: 1.5rem;">
