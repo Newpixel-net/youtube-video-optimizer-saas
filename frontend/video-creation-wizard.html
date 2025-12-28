@@ -3498,6 +3498,9 @@
                     // Calculate max reached step based on completed data
                     state.maxReachedStep = calculateMaxReachedStep();
 
+                    // CRITICAL: Navigate to the appropriate step
+                    state.currentStep = state.maxReachedStep;
+
                     showToast('Project loaded', 'success');
                 }
             } catch (error) {

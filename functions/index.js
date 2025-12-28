@@ -23049,62 +23049,98 @@ exports.creationWizardSaveProject = functions.https.onCall(async (data, context)
   try {
     const now = admin.firestore.FieldValue.serverTimestamp();
 
-    // Prepare the project document
+    // Prepare the project document - SAVE COMPLETE STATE
     const projectDoc = {
       userId: uid,
       type: 'creation', // Distinguish from video-to-shorts wizard
       name: projectData.name || 'Untitled Video',
       status: projectData.status || 'draft',
 
-      // Platform configuration
-      platform: {
-        selected: projectData.platform?.selected || null,
-        aspectRatio: projectData.platform?.aspectRatio || '16:9',
-        targetDuration: projectData.platform?.targetDuration || 60,
-        preset: projectData.platform?.preset || null
-      },
+      // Platform configuration - complete
+      platform: projectData.platform ? {
+        selected: projectData.platform.selected || null,
+        aspectRatio: projectData.platform.aspectRatio || '16:9',
+        targetDuration: projectData.platform.targetDuration || 60,
+        preset: projectData.platform.preset || null
+      } : null,
 
-      // Content configuration
-      content: {
-        niche: projectData.content?.niche || null,
-        subniche: projectData.content?.subniche || null,
-        style: projectData.content?.style || null,
-        topic: projectData.content?.topic || ''
-      },
+      // Content configuration - complete with all fields
+      content: projectData.content ? {
+        niche: projectData.content.niche || null,
+        subniche: projectData.content.subniche || null,
+        style: projectData.content.style || null,
+        topic: projectData.content.topic || '',
+        genre: projectData.content.genre || null,
+        pacing: projectData.content.pacing || null,
+        voiceCharacter: projectData.content.voiceCharacter || null,
+        productionMode: projectData.content.productionMode || null,
+        targetAudience: projectData.content.targetAudience || null,
+        targetAudienceCustom: projectData.content.targetAudienceCustom || null,
+        narrativePreset: projectData.content.narrativePreset || null,
+        mood: projectData.content.mood || null,
+        storyArc: projectData.content.storyArc || null,
+        emotionalJourney: projectData.content.emotionalJourney || null
+      } : null,
 
-      // Script data (Phase 2)
-      script: {
-        text: projectData.script?.text || '',
-        scenes: projectData.script?.scenes || [],
-        generatedAt: projectData.script?.generatedAt || null
-      },
+      // Script data - complete
+      script: projectData.script ? {
+        text: projectData.script.text || '',
+        scenes: projectData.script.scenes || [],
+        generatedAt: projectData.script.generatedAt || null,
+        fullScript: projectData.script.fullScript || null,
+        metadata: projectData.script.metadata || null
+      } : null,
 
-      // Storyboard data (Phase 3)
-      storyboard: {
-        scenes: projectData.storyboard?.scenes || []
-      },
+      // Storyboard data - complete
+      storyboard: projectData.storyboard ? {
+        scenes: projectData.storyboard.scenes || [],
+        visualStyle: projectData.storyboard.visualStyle || null,
+        selectedAspectRatio: projectData.storyboard.selectedAspectRatio || null
+      } : null,
 
-      // Animation data (Phase 4)
-      animation: {
-        engine: projectData.animation?.engine || 'runpod', // 'runpod' or 'veo'
-        scenes: projectData.animation?.scenes || []
-      },
+      // Animation data - complete
+      animation: projectData.animation ? {
+        engine: projectData.animation.engine || 'runpod',
+        scenes: projectData.animation.scenes || [],
+        selectedEngine: projectData.animation.selectedEngine || null,
+        floatingPreview: projectData.animation.floatingPreview || null
+      } : null,
 
-      // Assembly data (Phase 5)
-      assembly: {
-        status: projectData.assembly?.status || 'pending',
-        musicUrl: projectData.assembly?.musicUrl || null,
-        musicVolume: projectData.assembly?.musicVolume || 0.3,
-        captionStyle: projectData.assembly?.captionStyle || null,
-        transitions: projectData.assembly?.transitions || 'crossfade'
-      },
+      // Assembly data - complete with all audio/caption settings
+      assembly: projectData.assembly ? {
+        status: projectData.assembly.status || 'pending',
+        sceneOrder: projectData.assembly.sceneOrder || [],
+        transitions: projectData.assembly.transitions || {},
+        defaultTransition: projectData.assembly.defaultTransition || 'fade',
+        // Music settings
+        music: projectData.assembly.music || { enabled: false, trackId: null, volume: 30, fadeIn: 2, fadeOut: 3 },
+        musicLibrary: projectData.assembly.musicLibrary || [],
+        // Caption settings
+        captions: projectData.assembly.captions || null,
+        // Audio mix
+        audioMix: projectData.assembly.audioMix || null,
+        // Audio intelligence
+        audioMood: projectData.assembly.audioMood || null,
+        voiceProfile: projectData.assembly.voiceProfile || null,
+        transitionSound: projectData.assembly.transitionSound || null,
+        ambienceLayer: projectData.assembly.ambienceLayer || null,
+        audioProfile: projectData.assembly.audioProfile || null,
+        // Beat sync
+        beatSync: projectData.assembly.beatSync || null,
+        beatSyncApplied: projectData.assembly.beatSyncApplied || false,
+        // Assembly presets
+        assemblyPreset: projectData.assembly.assemblyPreset || null,
+        pacingProfile: projectData.assembly.pacingProfile || null,
+        bRollStrategy: projectData.assembly.bRollStrategy || null
+      } : null,
 
-      // Export data (Phase 6)
-      export: {
-        status: projectData.export?.status || 'pending',
-        outputUrl: projectData.export?.outputUrl || null,
-        settings: projectData.export?.settings || {}
-      },
+      // Export data - complete
+      export: projectData.export ? {
+        status: projectData.export.status || 'pending',
+        outputUrl: projectData.export.outputUrl || null,
+        settings: projectData.export.settings || {},
+        showModal: false // Don't persist modal state
+      } : null,
 
       updatedAt: now
     };
