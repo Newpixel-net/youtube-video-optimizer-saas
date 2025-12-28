@@ -7406,22 +7406,37 @@
             const animatedScenes = animationScenes.filter(s => s.videoUrl).length;
             const stockVideoScenes = storyboardScenes.filter(s => s.source === 'stock-video' && s.videoUrl).length;
 
-            // A scene is ready if it has voiceover AND (animated OR stock-video OR image)
+            // A scene is ready if it has visual AND (voiceover OR doesn't need narration)
             const readyScenes = storyboardScenes.filter(sb => {
                 const anim = animationScenes.find(a => a.sceneId === sb.sceneId);
+                const script = scriptScenes.find(s => s.id === sb.sceneId);
                 const hasVoiceover = anim && anim.voiceoverUrl;
                 const hasVisual = (anim && anim.videoUrl) || (sb.source === 'stock-video' && sb.videoUrl) || sb.imageUrl;
-                return hasVoiceover && hasVisual;
+                const hasNarrationText = script && script.narration && script.narration.trim() !== '';
+                const requiresVoiceover = script && script.hasNarration !== false && hasNarrationText;
+                return hasVisual && (hasVoiceover || !requiresVoiceover);
             }).length;
 
             // Check if all scenes are ready for assembly
+            // Scenes are ready if they have visual content AND either:
+            // 1. Have voiceover (for narrated scenes)
+            // 2. Don't require voiceover (music-only/cinematic scenes with no narration)
             const allScenesReady = storyboardScenes.every(storyboardScene => {
                 const animScene = animationScenes.find(a => a.sceneId === storyboardScene.sceneId) || {};
+                const scriptScene = scriptScenes.find(s => s.id === storyboardScene.sceneId) || {};
+
                 const hasVoiceover = !!animScene.voiceoverUrl;
                 const hasAnimatedVideo = !!animScene.videoUrl;
                 const hasStockVideo = storyboardScene.source === 'stock-video' && storyboardScene.videoUrl;
                 const hasImage = !!storyboardScene.imageUrl;
-                return hasVoiceover && (hasAnimatedVideo || hasStockVideo || hasImage);
+                const hasVisual = hasAnimatedVideo || hasStockVideo || hasImage;
+
+                // Check if scene requires narration
+                const hasNarrationText = scriptScene.narration && scriptScene.narration.trim() !== '';
+                const requiresVoiceover = scriptScene.hasNarration !== false && hasNarrationText;
+
+                // Scene is ready if: has visual AND (has voiceover OR doesn't need one)
+                return hasVisual && (hasVoiceover || !requiresVoiceover);
             });
 
             // FULL-SCREEN SPLIT-PANEL LAYOUT
@@ -7877,7 +7892,7 @@
             var voiceoverStatus = animScene.voiceoverStatus || 'idle';
             var animationStatus = animScene.animationStatus || 'idle';
             var animationType = animScene.animationType || 'ken_burns';
-            var narration = scriptScene.narration || 'No narration available';
+            var narration = scriptScene.narration || '';  // Empty if no narration, not a default string
 
             var html = '';
             html += '<div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: rgba(10,10,20,0.5);">';
