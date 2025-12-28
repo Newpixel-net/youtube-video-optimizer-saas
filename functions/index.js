@@ -23320,7 +23320,11 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     tone = 'engaging',
     pacing = 'medium', // 'fast' | 'medium' | 'slow' - controls visual breathing room
     contentDepth = 'standard', // 'minimal' | 'standard' | 'detailed' | 'comprehensive' - content richness
-    additionalInstructions = ''
+    additionalInstructions = '',
+    // Phase 2: Hollywood Production Mode
+    productionMode = 'standard', // 'standard' | 'documentary' | 'thriller' | 'inspirational' | 'story' | 'cinematic'
+    // Video Model Configuration (for scene duration optimization)
+    videoModel = { duration: '6s', resolution: '1080p' }
   } = config;
 
   if (!topic || topic.trim().length < 3) {
@@ -23367,15 +23371,116 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
 
     const depthSettings = contentDepthConfig[contentDepth] || contentDepthConfig.standard;
 
-    // === SMART TIMING CALCULATION ===
-    // Pacing determines how much of each scene is narration vs visual-only breathing room
-    const pacingConfig = {
-      fast: { narrationRatio: 0.90, avgSceneDuration: 8, wordsPerSecond: 2.8 },
-      medium: { narrationRatio: 0.85, avgSceneDuration: 12, wordsPerSecond: 2.5 },
-      slow: { narrationRatio: 0.75, avgSceneDuration: 18, wordsPerSecond: 2.2 }
+    // === HOLLYWOOD PRODUCTION MODES ===
+    // Cinematic templates for professional-quality video storytelling
+    const productionModes = {
+      standard: {
+        name: 'Standard',
+        description: 'Clean, professional content',
+        narrativeStyle: 'straightforward informative narration',
+        visualApproach: 'clean compositions with good lighting',
+        emotionalArc: 'neutral to mildly engaging',
+        openingStyle: 'direct hook with value proposition',
+        closingStyle: 'clear call-to-action',
+        cameraDirections: [],
+        musicMood: 'upbeat corporate',
+        specialInstructions: ''
+      },
+      documentary: {
+        name: 'Documentary',
+        description: 'Ken Burns style - educational, authoritative, visually rich',
+        narrativeStyle: 'authoritative narrator voice, like David Attenborough or Morgan Freeman. Use present tense for immediacy. Include moments of wonder and discovery.',
+        visualApproach: 'Ken Burns effect on historical images, slow zooms on details, wide establishing shots, intimate close-ups. Think National Geographic or BBC Earth.',
+        emotionalArc: 'curiosity → discovery → understanding → appreciation',
+        openingStyle: 'Start with a powerful image and a thought-provoking observation. No greeting - dive straight into the subject.',
+        closingStyle: 'End with broader implications or a reflective thought that lingers',
+        cameraDirections: ['Zoom in', 'Pan left', 'Pan right', 'Static shot'],
+        musicMood: 'ambient orchestral, contemplative',
+        specialInstructions: 'Use specific details and numbers. Reference real places, people, or events. Include "moments of pause" where visuals speak alone.'
+      },
+      thriller: {
+        name: 'Thriller/Mystery',
+        description: 'Suspenseful, revelation-driven, keeps viewers on edge',
+        narrativeStyle: 'mysterious, building tension with each scene. Use short punchy sentences. Strategic pauses. Rhetorical questions that haunt.',
+        visualApproach: 'Dramatic shadows, noir lighting, tight framing that creates claustrophobia. Dutch angles for unease. Slow reveals.',
+        emotionalArc: 'intrigue → tension → escalation → twist → resolution',
+        openingStyle: 'Start mid-mystery. Something is wrong. A question that demands answers.',
+        closingStyle: 'The revelation. But leave one thread hanging - a final question.',
+        cameraDirections: ['Push in', 'Zoom in', 'Static shot', 'Tracking shot'],
+        musicMood: 'tense, pulsing, minimal',
+        specialInstructions: 'Build tension through information withholding. Each scene reveals a piece but raises new questions. Use "But then..." and "What they didn\'t know was..." transitions.'
+      },
+      inspirational: {
+        name: 'Inspirational',
+        description: 'Uplifting, motivational, emotionally resonant',
+        narrativeStyle: 'warm, encouraging, building towards triumph. Use "you" directly - speak to the viewer. Share the struggle before the victory.',
+        visualApproach: 'Golden hour lighting, upward camera angles suggesting aspiration, wide open spaces, people in silhouette against bright backgrounds.',
+        emotionalArc: 'challenge → struggle → breakthrough → triumph → call to action',
+        openingStyle: 'Start with a relatable struggle or universal dream. "You\'ve felt this..." or "Imagine if..."',
+        closingStyle: 'End with empowerment. The viewer should feel capable of anything.',
+        cameraDirections: ['Tilt up', 'Pull out', 'Push in', 'Pedestal up'],
+        musicMood: 'building orchestral, uplifting crescendo',
+        specialInstructions: 'Include a specific transformation story. Use contrast between "before" and "after" states. The protagonist overcomes through their own agency.'
+      },
+      story: {
+        name: 'Story/Narrative',
+        description: 'Character-driven, arc-based storytelling',
+        narrativeStyle: 'storyteller voice with character moments. Use dialogue snippets. Describe actions, not just concepts. "Show don\'t tell."',
+        visualApproach: 'Cinematic compositions like a movie. Character close-ups for emotion, wide shots for context. Visual metaphors that echo themes.',
+        emotionalArc: 'setup → inciting incident → rising action → climax → resolution',
+        openingStyle: 'In media res - start in the middle of action. "The day everything changed started like any other..."',
+        closingStyle: 'The lesson learned. Circle back to the opening with new meaning.',
+        cameraDirections: ['Tracking shot', 'Push in', 'Pull out', 'Pan left', 'Pan right'],
+        musicMood: 'emotional score, thematic',
+        specialInstructions: 'Create a protagonist (can be the viewer, a person, or even a concept). Include a clear antagonist or obstacle. Use the three-act structure within your scene count.'
+      },
+      cinematic: {
+        name: 'Cinematic',
+        description: 'High production value, film-quality storytelling',
+        narrativeStyle: 'sparse, powerful narration. Let visuals carry emotion. Every word is deliberate. Poetic but not pretentious.',
+        visualApproach: 'Movie-quality compositions. Anamorphic style, dramatic lighting contrasts, motivated camera movement. Think Nolan, Villeneuve, Fincher.',
+        emotionalArc: 'immersion → building atmosphere → emotional peak → contemplation',
+        openingStyle: 'A striking visual with minimal or no narration for the first 3 seconds. Sound design matters.',
+        closingStyle: 'Land on a powerful final image. The last frame should be iconic.',
+        cameraDirections: ['Push in', 'Pull out', 'Tracking shot', 'Tilt up', 'Zoom in'],
+        musicMood: 'cinematic score, hans zimmer style',
+        specialInstructions: 'Plan for 30% more visual-only moments than other modes. Use aspect ratio to full effect. Include at least one visual metaphor. Color grade suggestions in visual descriptions (teal/orange, desaturated, high contrast).'
+      }
     };
 
+    const productionSettings = productionModes[productionMode] || productionModes.standard;
+
+    // === VIDEO MODEL-AWARE TIMING ===
+    // Adjust scene structure based on AI video clip duration
+    const clipDuration = videoModel.duration === '10s' ? 10 : 6;
+    const isExtendedClip = clipDuration === 10;
+
+    // === SMART TIMING CALCULATION ===
+    // Pacing determines how much of each scene is narration vs visual-only breathing room
+    // Now optimized for video model clip duration (6s or 10s)
+    const pacingConfig = {
+      fast: {
+        narrationRatio: 0.90,
+        avgSceneDuration: isExtendedClip ? 10 : 6, // Align with clip duration
+        wordsPerSecond: 2.8
+      },
+      medium: {
+        narrationRatio: 0.85,
+        avgSceneDuration: isExtendedClip ? 10 : 8,
+        wordsPerSecond: 2.5
+      },
+      slow: {
+        narrationRatio: 0.70, // More visual breathing room
+        avgSceneDuration: isExtendedClip ? 10 : 6,
+        wordsPerSecond: 2.2
+      }
+    };
+
+    // Cinematic mode gets extra visual breathing room
     const pacingSettings = pacingConfig[pacing] || pacingConfig.medium;
+    if (productionMode === 'cinematic') {
+      pacingSettings.narrationRatio = Math.min(pacingSettings.narrationRatio, 0.70);
+    }
 
     // Calculate optimal number of scenes based on target duration
     const sceneCount = Math.max(4, Math.min(15, Math.round(targetDuration / pacingSettings.avgSceneDuration)));
@@ -23402,97 +23507,155 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
       contentRequirements.push('Weave in storytelling elements - problems, solutions, transformations');
     }
 
-    // Build the prompt for GPT-4o
-    const systemPrompt = `You are an expert video scriptwriter and content creator specializing in ${niche || 'general'} content.
-You create engaging, well-structured scripts optimized for ${platform || 'social media'} in ${aspectRatio || '16:9'} format.
-Your scripts are known for:
-- Strong hooks that grab attention in the first 3 seconds
-- Clear storytelling with emotional resonance
-- Educational value with practical takeaways
-- Compelling calls-to-action that feel natural
+    // Build camera direction guidance for production mode
+    const cameraGuidance = productionSettings.cameraDirections.length > 0
+      ? `\nSuggested camera movements for this style: ${productionSettings.cameraDirections.join(', ')}`
+      : '';
 
-CONTENT DEPTH LEVEL: ${contentDepth.toUpperCase()} - ${depthSettings.description}
+    // Build the prompt for GPT-4o
+    const systemPrompt = `You are a HOLLYWOOD SCREENWRITER and visual director creating ${productionSettings.name.toUpperCase()} style video content.
+Your specialty: ${productionSettings.description}
+
+PRODUCTION STYLE GUIDE:
+- Narrative Voice: ${productionSettings.narrativeStyle}
+- Visual Approach: ${productionSettings.visualApproach}
+- Emotional Arc: ${productionSettings.emotionalArc}
+- Opening: ${productionSettings.openingStyle}
+- Closing: ${productionSettings.closingStyle}
+- Music Mood: ${productionSettings.musicMood}
+${productionSettings.specialInstructions ? `- Special: ${productionSettings.specialInstructions}` : ''}
+${cameraGuidance}
+
+You create scripts for ${platform || 'social media'} in ${aspectRatio || '16:9'} format, specializing in ${niche || 'general'} content.
+
+CONTENT DEPTH: ${contentDepth.toUpperCase()} - ${depthSettings.description}
 You must provide ${depthSettings.requirements}.
+
+VIDEO TECHNOLOGY CONSTRAINT:
+Each scene will be generated as a ${clipDuration}-second AI video clip using Minimax Hailuo.
+Visual descriptions MUST include camera movement directions in [brackets] at the start.
+Example: "[Push in, Zoom in] A figure emerges from shadows..."
 
 CRITICAL TIMING RULE: You MUST write narrations with the EXACT word count specified. This determines video pacing.
 Count your words carefully. Too few words = awkward pauses. Too many words = rushed audio.
 Always return valid JSON exactly matching the requested structure.`;
 
-    const userPrompt = `Create a ${targetDuration}-second video script about: "${topic}"
+    // Build production-specific narrative structure
+    const narrativeStructure = productionMode === 'standard' ? `
+- Scene 1 (HOOK): Surprising fact, provocative question, or bold statement that demands attention
+- Scenes 2-3 (SETUP): Establish the problem, context, or "why this matters"
+- Scenes 4-${sceneCount - 2} (BODY): Main content with clear explanations
+- Scene ${sceneCount - 1} (CLIMAX): Key insight, transformation, or "aha moment"
+- Scene ${sceneCount} (CTA): Natural conclusion with clear call-to-action` : productionMode === 'documentary' ? `
+- Scene 1 (OPENING): A powerful, unexpected observation. No greeting. Dive straight in.
+- Scene 2 (CONTEXT): Pull back to show the bigger picture. Why does this matter?
+- Scenes 3-${sceneCount - 2} (EXPLORATION): Each scene reveals a new facet. Build wonder and understanding.
+- Scene ${sceneCount - 1} (REVELATION): The key insight that changes how we see the subject
+- Scene ${sceneCount} (REFLECTION): Broader implications. Leave viewers thinking.` : productionMode === 'thriller' ? `
+- Scene 1 (HOOK): Something is wrong. A mystery that demands answers.
+- Scene 2 (SETUP): Establish the stakes. What's at risk?
+- Scenes 3-${sceneCount - 2} (ESCALATION): Each scene raises the tension. "But then..." "What they didn't know..."
+- Scene ${sceneCount - 1} (TWIST): The revelation that changes everything
+- Scene ${sceneCount} (RESOLUTION): But leave one thread hanging. A final question.` : productionMode === 'inspirational' ? `
+- Scene 1 (THE STRUGGLE): Start with a relatable challenge. "You've felt this..."
+- Scene 2 (THE BARRIER): What makes this hard? Why do people fail?
+- Scenes 3-${sceneCount - 2} (THE JOURNEY): Show the transformation happening. Small wins building.
+- Scene ${sceneCount - 1} (THE BREAKTHROUGH): The moment of triumph. Victory earned.
+- Scene ${sceneCount} (EMPOWERMENT): You can do this too. The call to action.` : productionMode === 'story' ? `
+- Scene 1 (IN MEDIA RES): Start mid-action. "The day everything changed..."
+- Scene 2 (INCITING INCIDENT): What disrupts the status quo?
+- Scenes 3-${sceneCount - 2} (RISING ACTION): Obstacles, attempts, escalating stakes
+- Scene ${sceneCount - 1} (CLIMAX): The decisive moment. Everything hangs in the balance.
+- Scene ${sceneCount} (RESOLUTION): The lesson. Circle back to the opening with new meaning.` : `
+- Scene 1 (STRIKING IMAGE): Open with a powerful visual. Minimal or no narration for 3 seconds.
+- Scene 2 (ATMOSPHERE): Establish the world. Slow, deliberate pacing.
+- Scenes 3-${sceneCount - 2} (IMMERSION): Each scene deepens the emotional experience. Let visuals breathe.
+- Scene ${sceneCount - 1} (EMOTIONAL PEAK): The most powerful moment. Maximum impact.
+- Scene ${sceneCount} (ICONIC CLOSE): Land on an unforgettable final image.`;
+
+    const userPrompt = `Create a ${targetDuration}-second ${productionSettings.name.toUpperCase()} style video script about: "${topic}"
+
+=== PRODUCTION MODE: ${productionSettings.name.toUpperCase()} ===
+${productionSettings.description}
+Emotional Arc: ${productionSettings.emotionalArc}
 
 === CONFIGURATION ===
 Platform: ${platform || 'YouTube'}
 Aspect Ratio: ${aspectRatio || '16:9'}
-TOTAL VIDEO DURATION: ${targetDuration} seconds (THIS IS THE TARGET LENGTH)
+TOTAL VIDEO DURATION: ${targetDuration} seconds
 Niche: ${niche || 'general'}${subniche ? ` > ${subniche}` : ''}
 Visual Style: ${style || 'modern'}
 Tone: ${tone}
 Pacing: ${pacing} (${pacing === 'fast' ? 'energetic, quick cuts' : pacing === 'slow' ? 'contemplative, visual breathing room' : 'balanced pacing'})
-Content Depth: ${contentDepth.toUpperCase()} - ${depthSettings.description}
+Content Depth: ${contentDepth.toUpperCase()}
 
-=== CRITICAL TIMING BREAKDOWN ===
+=== AI VIDEO TECHNOLOGY ===
+Each scene = ONE ${clipDuration}-second AI video clip (Minimax Hailuo ${videoModel.resolution || '1080p'})
+IMPORTANT: Visual descriptions MUST start with camera movement in [brackets]
+Available movements: Push in, Pull out, Pan left, Pan right, Tilt up, Tilt down, Zoom in, Zoom out, Tracking shot, Static shot
+${productionSettings.cameraDirections.length > 0 ? `Recommended for ${productionSettings.name}: ${productionSettings.cameraDirections.join(', ')}` : ''}
+
+=== TIMING BREAKDOWN ===
 Total Duration: ${targetDuration} seconds
-Number of Scenes: ${sceneCount}
-Each Scene Visual Duration: ${visualDuration} seconds (how long the scene appears)
-Each Scene Narration Duration: ${narrationDuration} seconds (voiceover length)
-Visual-Only Time per Scene: ${visualDuration - narrationDuration} seconds (no voiceover, just visuals)
-Words per Scene: ~${wordsPerScene} words (to fill ${narrationDuration}s at ${pacingSettings.wordsPerSecond} words/sec)
+Number of Scenes: ${sceneCount} (each = ${clipDuration}s AI video clip)
+Narration per Scene: ${narrationDuration} seconds
+Visual-Only Time: ${visualDuration - narrationDuration} seconds per scene
+Words per Scene: ~${wordsPerScene} words
 
 === CONTENT REQUIREMENTS ===
 ${contentRequirements.length > 0 ? contentRequirements.map((req, i) => `${i + 1}. ${req}`).join('\n') : '- Standard content depth'}
+${productionSettings.specialInstructions ? `\nPRODUCTION SPECIAL: ${productionSettings.specialInstructions}` : ''}
 
-=== NARRATIVE STRUCTURE ===
-Your script MUST follow this story arc:
-- Scene 1 (HOOK): Surprising fact, provocative question, or bold statement that demands attention
-- Scenes 2-3 (SETUP): Establish the problem, context, or "why this matters"
-- Scenes 4-${sceneCount - 2} (BODY): Main content with ${depthSettings.includeStats ? 'statistics, ' : ''}${depthSettings.includeExamples ? 'examples, ' : ''}clear explanations
-- Scene ${sceneCount - 1} (CLIMAX): Key insight, transformation, or "aha moment"
-- Scene ${sceneCount} (CTA): Natural conclusion with clear call-to-action
+=== ${productionSettings.name.toUpperCase()} NARRATIVE STRUCTURE ===${narrativeStructure}
 
 === REQUIREMENTS ===
-1. HOOK (Scene 1): Grab attention immediately - surprising fact, question, or bold statement
-2. Create EXACTLY ${sceneCount} scenes that build a compelling narrative
-3. EACH SCENE NARRATION MUST BE ~${wordsPerScene} WORDS (±5 words) - COUNT CAREFULLY!
+1. OPENING: ${productionSettings.openingStyle}
+2. Create EXACTLY ${sceneCount} scenes following the emotional arc: ${productionSettings.emotionalArc}
+3. EACH SCENE NARRATION: ~${wordsPerScene} WORDS (±5 words) - COUNT CAREFULLY!
 4. Each scene needs:
-   - narration: ~${wordsPerScene} words of voiceover text (COUNT YOUR WORDS!)
-   - visual: Detailed description for AI image generation (composition, subjects, lighting, mood)
-   - visualDuration: ${visualDuration} (total seconds this scene appears)
-   - narrationDuration: ${narrationDuration} (seconds of voiceover)
-5. Make every sentence count - no filler words or vague statements
-6. CTA should be woven into the final scene naturally
-7. Visual descriptions should be specific: composition, subjects, lighting, colors, camera angle
+   - narration: ~${wordsPerScene} words in ${productionSettings.narrativeStyle} voice
+   - visual: Start with [Camera Movement], then detailed ${productionSettings.visualApproach}
+   - visualDuration: ${visualDuration}
+   - narrationDuration: ${narrationDuration}
+   - cameraMovement: Array of 1-3 movements from the available list
+5. CLOSING: ${productionSettings.closingStyle}
+6. Visual descriptions: ${productionSettings.visualApproach}
 
 ${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON:
 {
-  "title": "Compelling video title (50-70 chars)",
-  "hook": "The attention-grabbing first line (this IS scene 1's narration start)",
+  "title": "Compelling ${productionSettings.name} style title (50-70 chars)",
+  "hook": "The attention-grabbing first line",
   "scenes": [
     {
       "id": 1,
-      "narration": "EXACTLY ~${wordsPerScene} words. Count them! This determines timing.",
-      "visual": "Detailed: scene composition, subjects, lighting, colors, mood, camera angle",
+      "narration": "~${wordsPerScene} words in ${productionSettings.narrativeStyle} style",
+      "visual": "[Camera Movement] Detailed ${productionSettings.visualApproach}",
       "visualDuration": ${visualDuration},
       "narrationDuration": ${narrationDuration},
       "wordCount": ${wordsPerScene},
+      "cameraMovement": ["Push in"],
       "transition": "cut|fade|zoom|slide"
     }
   ],
-  "cta": "Call-to-action (integrated into final scene)",
+  "cta": "Call-to-action woven naturally into final scene",
   "totalDuration": ${targetDuration},
   "timing": {
     "sceneCount": ${sceneCount},
     "visualDurationPerScene": ${visualDuration},
     "narrationDurationPerScene": ${narrationDuration},
     "pacing": "${pacing}",
-    "wordsPerScene": ${wordsPerScene}
+    "wordsPerScene": ${wordsPerScene},
+    "clipDuration": ${clipDuration}
   },
+  "productionMode": "${productionMode}",
   "metadata": {
     "targetAudience": "Who this video is for",
     "keyMessage": "The main takeaway",
-    "suggestedMusic": "Type of background music"
+    "suggestedMusic": "${productionSettings.musicMood}",
+    "emotionalArc": "${productionSettings.emotionalArc}"
   }
 }`;
 
@@ -23529,11 +23692,21 @@ Return ONLY valid JSON:
     const defaultVisualDuration = Math.round(targetDuration / script.scenes.length);
     const defaultNarrationDuration = Math.round(defaultVisualDuration * 0.7);
 
-    // Ensure each scene has required fields including timing
+    // Ensure each scene has required fields including timing and camera movements
     script.scenes = script.scenes.map((scene, index) => {
       // Count words in narration to estimate actual duration
       const wordCount = (scene.narration || '').split(/\s+/).filter(w => w.length > 0).length;
       const estimatedNarrationDuration = Math.ceil(wordCount / 2.5); // ~2.5 words per second
+
+      // Extract camera movements from visual description if not provided
+      let cameraMovements = scene.cameraMovement || [];
+      if (cameraMovements.length === 0 && scene.visual) {
+        // Try to extract [Camera Movement] from visual description
+        const bracketMatch = scene.visual.match(/^\[([^\]]+)\]/);
+        if (bracketMatch) {
+          cameraMovements = bracketMatch[1].split(',').map(m => m.trim()).slice(0, 3);
+        }
+      }
 
       return {
         id: scene.id || index + 1,
@@ -23546,6 +23719,8 @@ Return ONLY valid JSON:
         // Keep legacy duration field for backwards compatibility
         duration: scene.visualDuration || scene.duration || defaultVisualDuration,
         wordCount: wordCount,
+        // Camera movements for Minimax AI video generation
+        cameraMovement: cameraMovements,
         transition: scene.transition || 'cut',
         status: 'pending' // For tracking storyboard/animation progress
       };
@@ -23565,7 +23740,10 @@ Return ONLY valid JSON:
       subniche,
       style,
       tone,
-      pacing
+      pacing,
+      contentDepth,
+      productionMode,
+      videoModel
     };
     script.timing = script.timing || {
       sceneCount: script.scenes.length,

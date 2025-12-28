@@ -2919,6 +2919,8 @@
                 tone: 'engaging',         // casual, professional, humorous, serious
                 pacing: 'balanced',       // 'fast' | 'balanced' | 'contemplative' - controls scene timing
                 contentDepth: 'detailed', // 'minimal' | 'standard' | 'detailed' | 'comprehensive' - content richness
+                // Hollywood Production Mode (Phase 2)
+                productionMode: 'standard', // 'standard' | 'documentary' | 'thriller' | 'inspirational' | 'story' | 'cinematic'
                 // Video Generation Model Configuration
                 videoModel: {
                     provider: 'minimax',                    // 'minimax' | 'runpod' (future providers)
@@ -3600,6 +3602,25 @@
             scheduleAutoSave();
         }
 
+        function setProductionMode(mode) {
+            state.content.productionMode = mode;
+
+            // Auto-adjust pacing based on production mode
+            if (mode === 'cinematic') {
+                // Cinematic = slower, more visual breathing room
+                state.content.pacing = 'contemplative';
+            } else if (mode === 'thriller') {
+                // Thriller = medium pacing with strategic pauses
+                state.content.pacing = 'balanced';
+            } else if (mode === 'documentary') {
+                // Documentary = balanced pacing
+                state.content.pacing = 'balanced';
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
         function applyTopicSuggestion(topic) {
             state.content.topic = topic;
             render();
@@ -3649,8 +3670,12 @@
                     style: state.content.style,
                     topic: topic,
                     tone: state.content.tone || 'engaging',
-                    pacing: state.content.pacing || 'medium',
+                    pacing: state.content.pacing || 'balanced',
                     contentDepth: state.content.contentDepth || 'detailed',
+                    // Phase 2: Hollywood Production Mode
+                    productionMode: state.content.productionMode || 'standard',
+                    // Video Model Configuration (for scene timing optimization)
+                    videoModel: state.content.videoModel || { duration: '6s', resolution: '1080p' },
                     additionalInstructions
                 };
 
@@ -5945,6 +5970,52 @@
                 </div>
             `;
 
+            // Hollywood Production Mode Card
+            const productionMode = state.content.productionMode || 'standard';
+            const productionModes = {
+                standard: { icon: '📺', name: 'Standard', desc: 'Clean, professional content', color: '#9ca3af' },
+                documentary: { icon: '🎬', name: 'Documentary', desc: 'Ken Burns style, educational', color: '#3b82f6' },
+                thriller: { icon: '🔮', name: 'Thriller', desc: 'Suspenseful, mystery-driven', color: '#ef4444' },
+                inspirational: { icon: '✨', name: 'Inspirational', desc: 'Uplifting, motivational', color: '#f59e0b' },
+                story: { icon: '📖', name: 'Story', desc: 'Character-driven narrative', color: '#10b981' },
+                cinematic: { icon: '🎥', name: 'Cinematic', desc: 'Film-quality production', color: '#8b5cf6' }
+            };
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎭</div>
+                        <div>
+                            <div class="content-card-title">Production Mode</div>
+                            <div class="content-card-subtitle">Hollywood-style storytelling approach</div>
+                        </div>
+                        <span style="margin-left: auto; font-size: 0.65rem; padding: 0.2rem 0.5rem; background: linear-gradient(135deg, #8b5cf6, #ec4899); border-radius: 1rem; color: white; font-weight: 600;">NEW</span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-top: 0.5rem;">
+                        ${Object.entries(productionModes).map(([id, mode]) => `
+                            <div onclick="setProductionMode('${id}')"
+                                 style="padding: 0.75rem 0.5rem; border-radius: 0.75rem; border: 2px solid ${productionMode === id ? mode.color : 'rgba(255,255,255,0.12)'}; background: ${productionMode === id ? mode.color + '20' : 'rgba(255,255,255,0.03)'}; cursor: pointer; text-align: center; transition: all 0.2s;">
+                                <div style="font-size: 1.25rem; margin-bottom: 0.3rem;">${mode.icon}</div>
+                                <div style="font-weight: 600; color: ${productionMode === id ? mode.color : 'white'}; font-size: 0.75rem;">${mode.name}</div>
+                                <div style="font-size: 0.55rem; color: rgba(255,255,255,0.45); margin-top: 0.15rem; line-height: 1.3;">${mode.desc}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    ${productionMode !== 'standard' ? `
+                    <div style="margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: ${productionModes[productionMode].color}15; border-radius: 0.5rem; border: 1px solid ${productionModes[productionMode].color}30;">
+                        <div style="font-size: 0.7rem; color: ${productionModes[productionMode].color};">
+                            ${productionMode === 'documentary' ? '🎯 Your script will include: authoritative narration, Ken Burns visual style, moments of wonder and discovery' :
+                              productionMode === 'thriller' ? '🎯 Your script will include: tension-building narration, dramatic reveals, mystery-driven structure' :
+                              productionMode === 'inspirational' ? '🎯 Your script will include: motivational arc, transformation story, empowering conclusion' :
+                              productionMode === 'story' ? '🎯 Your script will include: character development, three-act structure, emotional climax' :
+                              '🎯 Your script will include: sparse poetic narration, cinematic visuals, iconic framing'}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+
             // AI Video Model Selection Card
             const videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
             const canUse1080p = videoModel.duration === '6s'; // 1080p only available for 6s
@@ -7858,7 +7929,12 @@
 
             // Camera Movement Selection (for Minimax AI Video)
             var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p' };
-            var sceneCameraMovements = (state.animation.cameraMovements && state.animation.cameraMovements[sceneId]) || [];
+            var manualCameraMovements = (state.animation.cameraMovements && state.animation.cameraMovements[sceneId]) || [];
+            // Get script-generated camera movements if no manual selection
+            var scriptSceneForCamera = state.script.scenes.find(function(s) { return s.id === sceneId; });
+            var scriptCameraMovements = (scriptSceneForCamera && scriptSceneForCamera.cameraMovement) || [];
+            var sceneCameraMovements = manualCameraMovements.length > 0 ? manualCameraMovements : scriptCameraMovements;
+            var hasScriptMovements = manualCameraMovements.length === 0 && scriptCameraMovements.length > 0;
 
             html += '<div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.08);">';
             html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">';
@@ -7866,9 +7942,12 @@
             html += '<span style="font-size: 0.85rem;">🎥</span>';
             html += '<span style="font-size: 0.75rem; font-weight: 600; color: white;">Camera Movement</span>';
             html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(6,182,212,0.2); color: #06b6d4; border-radius: 0.25rem;">Minimax AI</span>';
+            if (hasScriptMovements) {
+                html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(139,92,246,0.2); color: #a78bfa; border-radius: 0.25rem; margin-left: 0.25rem;">AI Suggested</span>';
+            }
             html += '</div>';
             if (sceneCameraMovements.length > 0) {
-                html += '<span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">' + sceneCameraMovements.length + '/3 selected</span>';
+                html += '<span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">' + sceneCameraMovements.length + '/3 ' + (hasScriptMovements ? 'suggested' : 'selected') + '</span>';
             }
             html += '</div>';
 
@@ -7958,11 +8037,17 @@
         // Animate scene with Minimax AI
         async function animateSceneWithMinimax(sceneId) {
             var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p' };
-            var sceneCameraMovements = (state.animation.cameraMovements && state.animation.cameraMovements[sceneId]) || [];
 
             // Get scene data
             var storyboardScene = state.storyboard.scenes.find(function(s) { return s.sceneId === sceneId; });
             var scriptScene = state.script.scenes.find(function(s) { return s.id === sceneId; });
+
+            // Get camera movements: prioritize manual selection, then script-generated, then empty
+            var sceneCameraMovements = (state.animation.cameraMovements && state.animation.cameraMovements[sceneId]) || [];
+            if (sceneCameraMovements.length === 0 && scriptScene && scriptScene.cameraMovement) {
+                // Use camera movements from the AI-generated script
+                sceneCameraMovements = scriptScene.cameraMovement;
+            }
 
             if (!storyboardScene || !storyboardScene.imageUrl) {
                 showToast('No image available for this scene', 'error');
