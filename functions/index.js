@@ -25127,6 +25127,1238 @@ exports.creationWizardGetVisualStyles = functions.https.onCall(async (data, cont
   };
 });
 
+// ============================================================
+// PHASE 3C: MULTI-FORMAT EXPORT INTELLIGENCE
+// Platform optimization, aspect ratios, and series consistency
+// ============================================================
+
+const EXPORT_INTELLIGENCE = {
+  // Platform Profiles - comprehensive specs for each platform
+  platforms: {
+    'youtube-shorts': {
+      name: 'YouTube Shorts',
+      icon: '🎬',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 30, max: 58 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '256MB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'fast',
+      features: ['vertical', 'mobile-first', 'loop-friendly'],
+      titleStyle: 'bold-overlay',
+      captionStyle: 'large-centered',
+      musicVolume: 0.7,
+      algorithm: {
+        retentionFocus: true,
+        loopBonus: true,
+        hashtagLimit: 3
+      }
+    },
+    'youtube-standard': {
+      name: 'YouTube Standard',
+      icon: '📺',
+      aspectRatio: '16:9',
+      maxDuration: 720, // 12 hours technically, but 12 min optimal
+      optimalDuration: { min: 480, max: 900 }, // 8-15 minutes
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '256GB',
+      codec: 'h264',
+      bitrate: { video: '16M', audio: '320k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 30 },
+      pacing: 'balanced',
+      features: ['chapters', 'end-screens', 'cards', 'descriptions'],
+      titleStyle: 'thumbnail-bait',
+      captionStyle: 'standard-bottom',
+      musicVolume: 0.3,
+      algorithm: {
+        watchTimeKey: true,
+        ctrImportant: true,
+        retentionCurve: 'gradual'
+      }
+    },
+    'youtube-longform': {
+      name: 'YouTube Long-form',
+      icon: '🎥',
+      aspectRatio: '16:9',
+      maxDuration: 7200, // 2 hours
+      optimalDuration: { min: 900, max: 2700 }, // 15-45 minutes
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '256GB',
+      codec: 'h264',
+      bitrate: { video: '20M', audio: '320k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 60 },
+      pacing: 'contemplative',
+      features: ['chapters', 'timestamps', 'deep-dive', 'sponsorship-segments'],
+      titleStyle: 'curiosity-gap',
+      captionStyle: 'standard-bottom',
+      musicVolume: 0.2,
+      algorithm: {
+        sessionTimeBonus: true,
+        subscriberConversion: true
+      }
+    },
+    'youtube-premiere': {
+      name: 'YouTube Premiere',
+      icon: '🌟',
+      aspectRatio: '16:9',
+      maxDuration: 7200,
+      optimalDuration: { min: 600, max: 3600 },
+      resolution: { width: 3840, height: 2160 }, // 4K
+      maxFileSize: '256GB',
+      codec: 'h265',
+      bitrate: { video: '45M', audio: '320k' },
+      fps: 60,
+      hookTiming: { start: 0, critical: 30 },
+      pacing: 'cinematic',
+      features: ['live-chat', 'countdown', '4k', 'hdr'],
+      titleStyle: 'event-style',
+      captionStyle: 'cinematic-subtitles',
+      musicVolume: 0.4
+    },
+    'tiktok-quick': {
+      name: 'TikTok Quick',
+      icon: '⚡',
+      aspectRatio: '9:16',
+      maxDuration: 15,
+      optimalDuration: { min: 7, max: 15 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '287MB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 1 },
+      pacing: 'rapid-fire',
+      features: ['trending-sounds', 'duet-friendly', 'stitch-friendly'],
+      titleStyle: 'text-overlay',
+      captionStyle: 'tiktok-style',
+      musicVolume: 0.8,
+      algorithm: {
+        completionRate: true,
+        shareBoost: true,
+        soundTrending: true
+      }
+    },
+    'tiktok-standard': {
+      name: 'TikTok Standard',
+      icon: '🎵',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 21, max: 34 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '287MB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 2 },
+      pacing: 'fast',
+      features: ['trending-sounds', 'effects', 'text-to-speech'],
+      titleStyle: 'text-overlay',
+      captionStyle: 'tiktok-style',
+      musicVolume: 0.75
+    },
+    'tiktok-extended': {
+      name: 'TikTok Extended',
+      icon: '📱',
+      aspectRatio: '9:16',
+      maxDuration: 180, // 3 minutes
+      optimalDuration: { min: 60, max: 120 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '287MB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'balanced',
+      features: ['series', 'storytelling', 'educational'],
+      titleStyle: 'text-overlay',
+      captionStyle: 'tiktok-style',
+      musicVolume: 0.6
+    },
+    'instagram-reels': {
+      name: 'Instagram Reels',
+      icon: '📸',
+      aspectRatio: '9:16',
+      maxDuration: 90,
+      optimalDuration: { min: 15, max: 30 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '4GB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 2 },
+      pacing: 'fast',
+      features: ['audio-sync', 'effects', 'collab'],
+      titleStyle: 'aesthetic-overlay',
+      captionStyle: 'instagram-style',
+      musicVolume: 0.7,
+      algorithm: {
+        saveBoost: true,
+        shareBoost: true,
+        aestheticPriority: true
+      }
+    },
+    'instagram-stories': {
+      name: 'Instagram Stories',
+      icon: '📖',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 5, max: 15 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '4GB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '128k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 1 },
+      pacing: 'rapid-fire',
+      features: ['swipe-up', 'polls', 'questions', 'stickers'],
+      titleStyle: 'sticker-overlay',
+      captionStyle: 'story-text',
+      musicVolume: 0.5
+    },
+    'instagram-feed': {
+      name: 'Instagram Feed Video',
+      icon: '🖼️',
+      aspectRatio: '4:5',
+      maxDuration: 60,
+      optimalDuration: { min: 15, max: 45 },
+      resolution: { width: 1080, height: 1350 },
+      maxFileSize: '4GB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'balanced',
+      features: ['carousel-friendly', 'thumbnail-preview'],
+      titleStyle: 'minimal',
+      captionStyle: 'standard-bottom',
+      musicVolume: 0.4
+    },
+    'facebook-reels': {
+      name: 'Facebook Reels',
+      icon: '📘',
+      aspectRatio: '9:16',
+      maxDuration: 90,
+      optimalDuration: { min: 15, max: 60 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '4GB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'balanced',
+      features: ['cross-post-instagram', 'monetization'],
+      titleStyle: 'text-overlay',
+      captionStyle: 'facebook-style',
+      musicVolume: 0.6
+    },
+    'facebook-watch': {
+      name: 'Facebook Watch',
+      icon: '📺',
+      aspectRatio: '16:9',
+      maxDuration: 14400, // 4 hours
+      optimalDuration: { min: 180, max: 600 }, // 3-10 minutes
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '10GB',
+      codec: 'h264',
+      bitrate: { video: '12M', audio: '256k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 10 },
+      pacing: 'balanced',
+      features: ['ad-breaks', 'series', 'episodes'],
+      titleStyle: 'tv-style',
+      captionStyle: 'standard-bottom',
+      musicVolume: 0.3
+    },
+    'linkedin-video': {
+      name: 'LinkedIn Video',
+      icon: '💼',
+      aspectRatio: '16:9',
+      maxDuration: 600, // 10 minutes
+      optimalDuration: { min: 30, max: 120 },
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '5GB',
+      codec: 'h264',
+      bitrate: { video: '10M', audio: '256k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 5 },
+      pacing: 'professional',
+      features: ['native-captions', 'professional-tone'],
+      titleStyle: 'professional',
+      captionStyle: 'accessible-captions',
+      musicVolume: 0.15,
+      algorithm: {
+        dwellTimeKey: true,
+        commentBoost: true
+      }
+    },
+    'twitter-video': {
+      name: 'Twitter/X Video',
+      icon: '🐦',
+      aspectRatio: '16:9',
+      maxDuration: 140, // 2:20
+      optimalDuration: { min: 15, max: 60 },
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '512MB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 3 },
+      pacing: 'fast',
+      features: ['auto-loop', 'muted-default'],
+      titleStyle: 'minimal',
+      captionStyle: 'burned-in',
+      musicVolume: 0.4
+    },
+    'snapchat-spotlight': {
+      name: 'Snapchat Spotlight',
+      icon: '👻',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 10, max: 30 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '1GB',
+      codec: 'h264',
+      bitrate: { video: '6M', audio: '128k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 1 },
+      pacing: 'rapid-fire',
+      features: ['ar-lenses', 'sounds'],
+      titleStyle: 'snap-style',
+      captionStyle: 'snap-text',
+      musicVolume: 0.8
+    },
+    'pinterest-idea': {
+      name: 'Pinterest Idea Pin',
+      icon: '📌',
+      aspectRatio: '9:16',
+      maxDuration: 60,
+      optimalDuration: { min: 15, max: 45 },
+      resolution: { width: 1080, height: 1920 },
+      maxFileSize: '2GB',
+      codec: 'h264',
+      bitrate: { video: '8M', audio: '192k' },
+      fps: 30,
+      hookTiming: { start: 0, critical: 2 },
+      pacing: 'balanced',
+      features: ['multi-page', 'tutorial-friendly', 'save-focused'],
+      titleStyle: 'instructional',
+      captionStyle: 'step-by-step',
+      musicVolume: 0.4
+    },
+    'netflix-episode': {
+      name: 'Netflix-Style Episode',
+      icon: '🎬',
+      aspectRatio: '16:9',
+      maxDuration: 3600, // 60 minutes
+      optimalDuration: { min: 1320, max: 2700 }, // 22-45 minutes
+      resolution: { width: 3840, height: 2160 }, // 4K
+      maxFileSize: '100GB',
+      codec: 'h265',
+      bitrate: { video: '45M', audio: '640k' },
+      fps: 24, // Cinematic
+      hookTiming: { start: 0, critical: 180 }, // 3 minute cold open
+      pacing: 'cinematic',
+      features: ['hdr', 'dolby-atmos', 'chapters', 'skip-intro', 'credits'],
+      titleStyle: 'cinematic-title-card',
+      captionStyle: 'netflix-subtitles',
+      musicVolume: 0.35,
+      structure: {
+        coldOpen: { duration: 180, required: true },
+        titleSequence: { duration: 60, required: true },
+        actBreaks: 4,
+        credits: { duration: 90, required: true }
+      }
+    },
+    'netflix-movie': {
+      name: 'Netflix-Style Movie',
+      icon: '🎥',
+      aspectRatio: '2.39:1', // Cinemascope
+      maxDuration: 10800, // 3 hours
+      optimalDuration: { min: 5400, max: 9000 }, // 90-150 minutes
+      resolution: { width: 4096, height: 1716 }, // 4K Cinemascope
+      maxFileSize: '200GB',
+      codec: 'h265',
+      bitrate: { video: '80M', audio: '768k' },
+      fps: 24,
+      hookTiming: { start: 0, critical: 600 }, // 10 minute setup
+      pacing: 'cinematic',
+      features: ['hdr10+', 'dolby-vision', 'dolby-atmos', '4k-dcp'],
+      titleStyle: 'film-title-sequence',
+      captionStyle: 'film-subtitles',
+      musicVolume: 0.4,
+      structure: {
+        actOne: { percentage: 25 },
+        actTwo: { percentage: 50 },
+        actThree: { percentage: 25 }
+      }
+    },
+    'broadcast-tv': {
+      name: 'Broadcast TV',
+      icon: '📡',
+      aspectRatio: '16:9',
+      maxDuration: 2640, // 44 minutes (1 hour slot minus ads)
+      optimalDuration: { min: 1260, max: 2640 }, // 21-44 minutes
+      resolution: { width: 1920, height: 1080 },
+      maxFileSize: '50GB',
+      codec: 'prores',
+      bitrate: { video: '220M', audio: '1536k' },
+      fps: 30, // 29.97 drop frame
+      hookTiming: { start: 0, critical: 120 },
+      pacing: 'balanced',
+      features: ['ad-breaks', 'act-structure', 'cold-open', 'broadcast-safe'],
+      titleStyle: 'broadcast-bumper',
+      captionStyle: 'cea-608',
+      musicVolume: 0.3,
+      structure: {
+        coldOpen: { duration: 120, required: false },
+        actBreaks: [420, 840, 1260, 1680], // Break points in seconds
+        bumpers: { duration: 5, required: true }
+      }
+    },
+    'documentary-feature': {
+      name: 'Documentary Feature',
+      icon: '🎞️',
+      aspectRatio: '16:9',
+      maxDuration: 7200, // 2 hours
+      optimalDuration: { min: 4800, max: 6600 }, // 80-110 minutes
+      resolution: { width: 3840, height: 2160 },
+      maxFileSize: '150GB',
+      codec: 'h265',
+      bitrate: { video: '50M', audio: '512k' },
+      fps: 24,
+      hookTiming: { start: 0, critical: 300 },
+      pacing: 'contemplative',
+      features: ['archival-footage', 'interviews', 'b-roll-heavy', 'voice-over'],
+      titleStyle: 'documentary-title',
+      captionStyle: 'documentary-subtitles',
+      musicVolume: 0.25
+    }
+  },
+
+  // Aspect Ratio Specifications
+  aspectRatios: {
+    '16:9': {
+      name: 'Landscape (16:9)',
+      ratio: 16/9,
+      width: 1920,
+      height: 1080,
+      use: ['youtube', 'facebook-watch', 'linkedin', 'twitter', 'broadcast'],
+      reframeFrom: {
+        '9:16': 'center-crop-or-letterbox',
+        '1:1': 'pillarbox',
+        '4:5': 'pillarbox',
+        '2.39:1': 'letterbox'
+      }
+    },
+    '9:16': {
+      name: 'Portrait (9:16)',
+      ratio: 9/16,
+      width: 1080,
+      height: 1920,
+      use: ['tiktok', 'instagram-reels', 'youtube-shorts', 'snapchat', 'pinterest'],
+      reframeFrom: {
+        '16:9': 'center-crop-or-pillarbox',
+        '1:1': 'extend-vertical',
+        '4:5': 'extend-top-bottom',
+        '2.39:1': 'pillarbox-heavy'
+      }
+    },
+    '1:1': {
+      name: 'Square (1:1)',
+      ratio: 1,
+      width: 1080,
+      height: 1080,
+      use: ['instagram-feed', 'facebook-feed', 'twitter-square'],
+      reframeFrom: {
+        '16:9': 'center-crop',
+        '9:16': 'center-crop',
+        '4:5': 'crop-top-bottom',
+        '2.39:1': 'center-crop-heavy'
+      }
+    },
+    '4:5': {
+      name: 'Portrait Feed (4:5)',
+      ratio: 4/5,
+      width: 1080,
+      height: 1350,
+      use: ['instagram-feed', 'facebook-feed'],
+      reframeFrom: {
+        '16:9': 'center-crop',
+        '9:16': 'crop-top-bottom',
+        '1:1': 'extend-bottom',
+        '2.39:1': 'center-crop'
+      }
+    },
+    '4:3': {
+      name: 'Classic (4:3)',
+      ratio: 4/3,
+      width: 1440,
+      height: 1080,
+      use: ['retro-style', 'archive-footage'],
+      reframeFrom: {
+        '16:9': 'crop-sides',
+        '9:16': 'letterbox-heavy',
+        '1:1': 'extend-sides'
+      }
+    },
+    '2.39:1': {
+      name: 'Cinemascope (2.39:1)',
+      ratio: 2.39,
+      width: 2560,
+      height: 1072,
+      use: ['film', 'netflix-movie', 'cinematic'],
+      reframeFrom: {
+        '16:9': 'extend-width-or-crop-height',
+        '9:16': 'not-recommended',
+        '1:1': 'not-recommended'
+      }
+    },
+    '2.35:1': {
+      name: 'Widescreen (2.35:1)',
+      ratio: 2.35,
+      width: 2540,
+      height: 1080,
+      use: ['film', 'theatrical'],
+      reframeFrom: {
+        '16:9': 'letterbox-or-crop'
+      }
+    },
+    '21:9': {
+      name: 'Ultra-Wide (21:9)',
+      ratio: 21/9,
+      width: 2560,
+      height: 1080,
+      use: ['gaming', 'ultra-wide-monitors'],
+      reframeFrom: {
+        '16:9': 'extend-sides'
+      }
+    }
+  },
+
+  // Duration Presets by Content Type
+  durationPresets: {
+    'micro-content': {
+      name: 'Micro Content',
+      icon: '⚡',
+      duration: { min: 5, max: 15 },
+      platforms: ['tiktok-quick', 'instagram-stories', 'snapchat-spotlight'],
+      structure: {
+        hook: { duration: 1, required: true },
+        content: { duration: 10, required: true },
+        cta: { duration: 2, required: false }
+      },
+      pacing: 'rapid-fire',
+      sceneCount: { min: 3, max: 8 }
+    },
+    'short-form': {
+      name: 'Short-Form',
+      icon: '🎬',
+      duration: { min: 15, max: 60 },
+      platforms: ['youtube-shorts', 'tiktok-standard', 'instagram-reels'],
+      structure: {
+        hook: { duration: 3, required: true },
+        setup: { duration: 10, required: true },
+        content: { duration: 35, required: true },
+        payoff: { duration: 10, required: true },
+        cta: { duration: 2, required: false }
+      },
+      pacing: 'fast',
+      sceneCount: { min: 6, max: 15 }
+    },
+    'medium-form': {
+      name: 'Medium-Form',
+      icon: '📺',
+      duration: { min: 60, max: 300 },
+      platforms: ['tiktok-extended', 'twitter-video', 'linkedin-video'],
+      structure: {
+        hook: { duration: 10, required: true },
+        intro: { duration: 20, required: true },
+        mainContent: { duration: 200, required: true },
+        conclusion: { duration: 30, required: true },
+        cta: { duration: 10, required: true }
+      },
+      pacing: 'balanced',
+      sceneCount: { min: 10, max: 30 }
+    },
+    'standard-youtube': {
+      name: 'Standard YouTube',
+      icon: '▶️',
+      duration: { min: 480, max: 900 },
+      platforms: ['youtube-standard'],
+      structure: {
+        hook: { duration: 30, required: true },
+        intro: { duration: 30, required: true },
+        chapterOne: { duration: 180, required: true },
+        chapterTwo: { duration: 180, required: true },
+        chapterThree: { duration: 120, required: true },
+        conclusion: { duration: 60, required: true },
+        cta: { duration: 30, required: true }
+      },
+      pacing: 'balanced',
+      sceneCount: { min: 20, max: 50 },
+      features: ['chapters', 'timestamps', 'pattern-interrupt']
+    },
+    'deep-dive': {
+      name: 'Deep Dive',
+      icon: '🔬',
+      duration: { min: 900, max: 2700 },
+      platforms: ['youtube-longform'],
+      structure: {
+        hook: { duration: 60, required: true },
+        overview: { duration: 120, required: true },
+        deepDive: { duration: 1800, required: true },
+        examples: { duration: 300, required: true },
+        conclusion: { duration: 180, required: true },
+        cta: { duration: 60, required: true }
+      },
+      pacing: 'contemplative',
+      sceneCount: { min: 40, max: 100 },
+      features: ['chapters', 'timestamps', 'sponsor-segments']
+    },
+    'tv-episode': {
+      name: 'TV Episode',
+      icon: '📡',
+      duration: { min: 1200, max: 2700 },
+      platforms: ['netflix-episode', 'broadcast-tv'],
+      structure: {
+        coldOpen: { duration: 180, required: true },
+        titleSequence: { duration: 60, required: true },
+        actOne: { duration: 600, required: true },
+        actBreak: { duration: 5, required: false },
+        actTwo: { duration: 600, required: true },
+        actBreak2: { duration: 5, required: false },
+        actThree: { duration: 480, required: true },
+        resolution: { duration: 180, required: true },
+        teaser: { duration: 60, required: false },
+        credits: { duration: 90, required: true }
+      },
+      pacing: 'cinematic',
+      sceneCount: { min: 30, max: 60 }
+    },
+    'feature-film': {
+      name: 'Feature Film',
+      icon: '🎥',
+      duration: { min: 5400, max: 10800 },
+      platforms: ['netflix-movie'],
+      structure: {
+        openingSequence: { duration: 300, required: true },
+        actOne: { percentage: 25, required: true },
+        firstPlotPoint: { duration: 60, required: true },
+        actTwo: { percentage: 50, required: true },
+        midpoint: { duration: 60, required: true },
+        actThree: { percentage: 25, required: true },
+        climax: { duration: 300, required: true },
+        resolution: { duration: 180, required: true },
+        credits: { duration: 300, required: true }
+      },
+      pacing: 'cinematic',
+      sceneCount: { min: 60, max: 150 }
+    },
+    'documentary': {
+      name: 'Documentary',
+      icon: '🎞️',
+      duration: { min: 2400, max: 7200 },
+      platforms: ['documentary-feature', 'youtube-longform'],
+      structure: {
+        opening: { duration: 300, required: true },
+        thesis: { duration: 180, required: true },
+        exploration: { duration: 3600, required: true },
+        counterpoint: { duration: 600, required: false },
+        conclusion: { duration: 300, required: true },
+        callToAction: { duration: 120, required: false },
+        credits: { duration: 180, required: true }
+      },
+      pacing: 'contemplative',
+      sceneCount: { min: 40, max: 120 }
+    }
+  },
+
+  // Series/Episode Consistency Templates
+  seriesTemplates: {
+    'youtube-series': {
+      name: 'YouTube Series',
+      episodeCount: { min: 5, max: 100 },
+      consistency: {
+        intro: { duration: 10, style: 'branded', required: true },
+        outro: { duration: 20, style: 'subscribe-cta', required: true },
+        thumbnailStyle: 'consistent-branding',
+        titleFormat: '[Series Name] - Episode {n}: {title}',
+        chaptersConsistent: true
+      },
+      branding: {
+        logoPlacement: 'corner-watermark',
+        colorScheme: 'from-brand',
+        fontFamily: 'consistent',
+        musicTheme: 'signature-intro'
+      },
+      scheduling: {
+        releasePattern: 'weekly',
+        suggestedDays: ['tuesday', 'thursday', 'saturday']
+      }
+    },
+    'netflix-series': {
+      name: 'Streaming Series',
+      episodeCount: { min: 6, max: 13 },
+      consistency: {
+        titleSequence: { duration: 60, style: 'cinematic', required: true },
+        recap: { duration: 60, style: 'previouslyOn', required: false },
+        teaser: { duration: 60, style: 'nextOn', required: false },
+        credits: { duration: 90, style: 'scrolling', required: true }
+      },
+      branding: {
+        showLogo: 'title-card',
+        episodeTitleCard: true,
+        creditStyle: 'network-style'
+      },
+      narrative: {
+        arcType: 'serialized',
+        cliffhangers: true,
+        characterDevelopment: 'progressive'
+      }
+    },
+    'docuseries': {
+      name: 'Documentary Series',
+      episodeCount: { min: 3, max: 10 },
+      consistency: {
+        intro: { duration: 90, style: 'thematic', required: true },
+        interviewStyle: 'consistent-framing',
+        graphicsPackage: 'unified',
+        archivalTreatment: 'consistent-grade'
+      },
+      branding: {
+        titleTreatment: 'documentary-style',
+        lowerThirds: 'consistent-design',
+        transitionStyle: 'thematic'
+      },
+      narrative: {
+        arcType: 'episodic-with-throughline',
+        interviewSubjects: 'recurring'
+      }
+    },
+    'tiktok-series': {
+      name: 'TikTok Series',
+      episodeCount: { min: 3, max: 20 },
+      consistency: {
+        hook: { style: 'series-branded', required: true },
+        partIndicator: { style: 'Part {n}', required: true },
+        cliffhanger: { required: true }
+      },
+      branding: {
+        soundSignature: 'consistent',
+        captionStyle: 'consistent',
+        visualSignature: 'recognizable-opening'
+      },
+      scheduling: {
+        releasePattern: 'daily-or-bidaily',
+        cliffhangerStrategy: 'engagement-bait'
+      }
+    },
+    'educational-course': {
+      name: 'Educational Course',
+      episodeCount: { min: 5, max: 50 },
+      consistency: {
+        intro: { duration: 15, style: 'lesson-number', required: true },
+        objectives: { duration: 30, style: 'learning-goals', required: true },
+        summary: { duration: 30, style: 'key-takeaways', required: true },
+        nextLesson: { duration: 10, style: 'preview', required: true }
+      },
+      branding: {
+        courseTitle: 'persistent-header',
+        progressIndicator: true,
+        chapterMarkers: true
+      },
+      structure: {
+        moduleGrouping: true,
+        prerequisites: true,
+        quizPoints: 'end-of-lesson'
+      }
+    }
+  },
+
+  // Smart Reframe Rules
+  reframeRules: {
+    'subject-tracking': {
+      description: 'Keep main subject in frame during reframe',
+      priority: 'high',
+      faceDetection: true,
+      safeZone: 0.8
+    },
+    'text-safe': {
+      description: 'Ensure text/graphics remain visible',
+      priority: 'high',
+      textDetection: true,
+      marginBuffer: 0.1
+    },
+    'action-safe': {
+      description: 'Keep action within safe zones',
+      priority: 'medium',
+      motionTracking: true,
+      safeZone: 0.9
+    },
+    'thirds-recompose': {
+      description: 'Recompose using rule of thirds',
+      priority: 'medium',
+      gridAlignment: true
+    },
+    'headroom-adjust': {
+      description: 'Maintain appropriate headroom for subjects',
+      priority: 'medium',
+      headroomRatio: 0.15
+    }
+  },
+
+  // Export Quality Presets
+  qualityPresets: {
+    'web-optimized': {
+      name: 'Web Optimized',
+      resolution: '1080p',
+      bitrate: 'adaptive',
+      codec: 'h264',
+      profile: 'high',
+      preset: 'medium',
+      twoPass: false
+    },
+    'high-quality': {
+      name: 'High Quality',
+      resolution: '1080p',
+      bitrate: 'high',
+      codec: 'h264',
+      profile: 'high',
+      preset: 'slow',
+      twoPass: true
+    },
+    '4k-master': {
+      name: '4K Master',
+      resolution: '2160p',
+      bitrate: 'very-high',
+      codec: 'h265',
+      profile: 'main10',
+      preset: 'slow',
+      twoPass: true,
+      hdr: 'optional'
+    },
+    'broadcast-master': {
+      name: 'Broadcast Master',
+      resolution: '1080i',
+      bitrate: 'broadcast-standard',
+      codec: 'prores',
+      profile: '422-hq',
+      colorSpace: 'rec709',
+      audioChannels: 8
+    },
+    'archive-master': {
+      name: 'Archive Master',
+      resolution: 'native',
+      bitrate: 'lossless',
+      codec: 'prores',
+      profile: '4444',
+      colorSpace: 'native',
+      preserveMetadata: true
+    }
+  }
+};
+
+/**
+ * Get recommended export settings based on content and platform
+ */
+function getExportRecommendations(options = {}) {
+  const {
+    platform,
+    contentType,
+    duration,
+    hasDialogue,
+    genre,
+    targetAudience,
+    seriesInfo
+  } = options;
+
+  const platformProfile = EXPORT_INTELLIGENCE.platforms[platform];
+  const recommendations = {
+    platform: platformProfile,
+    adjustments: [],
+    warnings: []
+  };
+
+  // Duration recommendations
+  if (duration && platformProfile) {
+    const { optimalDuration } = platformProfile;
+    if (duration < optimalDuration.min) {
+      recommendations.adjustments.push({
+        type: 'duration',
+        suggestion: `Consider extending to at least ${optimalDuration.min}s for better ${platform} performance`,
+        priority: 'medium'
+      });
+    } else if (duration > optimalDuration.max) {
+      recommendations.adjustments.push({
+        type: 'duration',
+        suggestion: `Consider trimming to under ${optimalDuration.max}s or splitting into parts`,
+        priority: 'high'
+      });
+    }
+  }
+
+  // Hook timing check
+  if (platformProfile?.hookTiming) {
+    recommendations.hookAdvice = {
+      criticalWindow: platformProfile.hookTiming.critical,
+      message: `Your hook must land within the first ${platformProfile.hookTiming.critical} seconds for ${platformProfile.name}`
+    };
+  }
+
+  // Pacing recommendation
+  if (platformProfile?.pacing) {
+    recommendations.pacingAdvice = {
+      style: platformProfile.pacing,
+      message: getPacingAdvice(platformProfile.pacing)
+    };
+  }
+
+  // Caption requirements
+  if (platformProfile) {
+    recommendations.captionAdvice = {
+      style: platformProfile.captionStyle,
+      required: ['tiktok', 'instagram', 'facebook', 'linkedin'].some(p => platform.includes(p)),
+      message: getCaptionAdvice(platform)
+    };
+  }
+
+  // Series consistency check
+  if (seriesInfo) {
+    const seriesTemplate = EXPORT_INTELLIGENCE.seriesTemplates[seriesInfo.template];
+    if (seriesTemplate) {
+      recommendations.seriesConsistency = {
+        template: seriesTemplate,
+        checks: getSeriesConsistencyChecks(seriesTemplate, seriesInfo)
+      };
+    }
+  }
+
+  return recommendations;
+}
+
+function getPacingAdvice(pacing) {
+  const advice = {
+    'rapid-fire': 'Use quick cuts (0.5-2s), high energy, constant motion. No dead space.',
+    'fast': 'Maintain momentum with 2-4s cuts. Quick transitions. Energetic music.',
+    'balanced': 'Mix of pacing. 3-6s average cuts. Allow breathing room at key moments.',
+    'contemplative': 'Longer shots (5-15s). Let scenes breathe. Atmospheric pacing.',
+    'cinematic': 'Film-style pacing. Motivated cuts only. Let emotion build.',
+    'professional': 'Clear, measured pacing. Emphasis on clarity over energy.'
+  };
+  return advice[pacing] || 'Standard pacing recommended';
+}
+
+function getCaptionAdvice(platform) {
+  if (platform.includes('tiktok') || platform.includes('instagram')) {
+    return 'Large, centered captions essential. 85%+ of viewers watch without sound.';
+  } else if (platform.includes('linkedin')) {
+    return 'Professional captions required. Accessibility-focused formatting.';
+  } else if (platform.includes('youtube')) {
+    return 'Optional but recommended. Use YouTube auto-captions or upload SRT.';
+  } else if (platform.includes('netflix')) {
+    return 'Multiple language subtitle tracks required. Follow Netflix Timed Text Style Guide.';
+  }
+  return 'Captions recommended for accessibility';
+}
+
+function getSeriesConsistencyChecks(template, seriesInfo) {
+  const checks = [];
+
+  if (template.consistency.intro) {
+    checks.push({
+      element: 'intro',
+      required: template.consistency.intro.required,
+      expectedDuration: template.consistency.intro.duration,
+      status: 'pending'
+    });
+  }
+
+  if (template.consistency.outro) {
+    checks.push({
+      element: 'outro',
+      required: template.consistency.outro.required,
+      expectedDuration: template.consistency.outro.duration,
+      status: 'pending'
+    });
+  }
+
+  if (template.branding) {
+    checks.push({
+      element: 'branding',
+      required: true,
+      elements: Object.keys(template.branding),
+      status: 'pending'
+    });
+  }
+
+  return checks;
+}
+
+/**
+ * Generate multi-platform export package
+ */
+function generateExportPackage(options = {}) {
+  const { primaryPlatform, additionalPlatforms = [], content, seriesInfo } = options;
+
+  const exportPackage = {
+    primary: null,
+    variants: [],
+    assets: [],
+    metadata: {}
+  };
+
+  // Primary platform export
+  const primaryProfile = EXPORT_INTELLIGENCE.platforms[primaryPlatform];
+  if (primaryProfile) {
+    exportPackage.primary = {
+      platform: primaryPlatform,
+      profile: primaryProfile,
+      recommendations: getExportRecommendations({
+        platform: primaryPlatform,
+        ...content,
+        seriesInfo
+      })
+    };
+  }
+
+  // Generate variants for additional platforms
+  for (const platform of additionalPlatforms) {
+    const profile = EXPORT_INTELLIGENCE.platforms[platform];
+    if (profile) {
+      const variant = {
+        platform,
+        profile,
+        recommendations: getExportRecommendations({ platform, ...content }),
+        reframeNeeded: profile.aspectRatio !== primaryProfile?.aspectRatio,
+        durationAdjustment: getDurationAdjustment(content.duration, profile)
+      };
+
+      if (variant.reframeNeeded) {
+        variant.reframeStrategy = getReframeStrategy(
+          primaryProfile?.aspectRatio,
+          profile.aspectRatio
+        );
+      }
+
+      exportPackage.variants.push(variant);
+    }
+  }
+
+  // Generate required assets list
+  exportPackage.assets = generateAssetsList(exportPackage);
+
+  return exportPackage;
+}
+
+function getDurationAdjustment(currentDuration, targetProfile) {
+  if (!currentDuration || !targetProfile) return null;
+
+  const { optimalDuration, maxDuration } = targetProfile;
+
+  if (currentDuration > maxDuration) {
+    return {
+      action: 'split',
+      message: `Content exceeds ${targetProfile.name} maximum. Split into ${Math.ceil(currentDuration / maxDuration)} parts.`,
+      partCount: Math.ceil(currentDuration / maxDuration)
+    };
+  } else if (currentDuration > optimalDuration.max) {
+    return {
+      action: 'trim',
+      message: `Consider trimming from ${currentDuration}s to ${optimalDuration.max}s for optimal ${targetProfile.name} performance.`,
+      trimAmount: currentDuration - optimalDuration.max
+    };
+  } else if (currentDuration < optimalDuration.min) {
+    return {
+      action: 'extend-or-micro',
+      message: `Content is ${currentDuration}s. Either extend to ${optimalDuration.min}s or use a micro-content format.`
+    };
+  }
+
+  return { action: 'none', message: 'Duration is optimal for this platform' };
+}
+
+function getReframeStrategy(sourceAspect, targetAspect) {
+  const sourceRatio = EXPORT_INTELLIGENCE.aspectRatios[sourceAspect];
+  const targetRatio = EXPORT_INTELLIGENCE.aspectRatios[targetAspect];
+
+  if (!sourceRatio || !targetRatio) {
+    return { strategy: 'manual', message: 'Manual reframing required' };
+  }
+
+  const reframeInfo = sourceRatio.reframeFrom?.[targetAspect];
+
+  return {
+    strategy: reframeInfo || 'smart-crop',
+    source: sourceAspect,
+    target: targetAspect,
+    rules: EXPORT_INTELLIGENCE.reframeRules,
+    message: `Reframe from ${sourceAspect} to ${targetAspect} using ${reframeInfo || 'smart crop'}`
+  };
+}
+
+function generateAssetsList(exportPackage) {
+  const assets = [];
+
+  // Thumbnail for each platform
+  if (exportPackage.primary) {
+    assets.push({
+      type: 'thumbnail',
+      platform: exportPackage.primary.platform,
+      specs: getThumbnailSpecs(exportPackage.primary.platform)
+    });
+  }
+
+  for (const variant of exportPackage.variants) {
+    assets.push({
+      type: 'thumbnail',
+      platform: variant.platform,
+      specs: getThumbnailSpecs(variant.platform)
+    });
+  }
+
+  // Caption files
+  assets.push({
+    type: 'captions',
+    formats: ['srt', 'vtt'],
+    languages: ['en']
+  });
+
+  return assets;
+}
+
+function getThumbnailSpecs(platform) {
+  const specs = {
+    'youtube-shorts': { width: 1080, height: 1920, format: 'jpg' },
+    'youtube-standard': { width: 1280, height: 720, format: 'jpg' },
+    'youtube-longform': { width: 1280, height: 720, format: 'jpg' },
+    'tiktok-quick': { width: 1080, height: 1920, format: 'jpg' },
+    'tiktok-standard': { width: 1080, height: 1920, format: 'jpg' },
+    'instagram-reels': { width: 1080, height: 1920, format: 'jpg' },
+    'instagram-feed': { width: 1080, height: 1080, format: 'jpg' },
+    'netflix-episode': { width: 1920, height: 1080, format: 'jpg' },
+    'netflix-movie': { width: 1920, height: 1080, format: 'jpg' }
+  };
+
+  return specs[platform] || { width: 1920, height: 1080, format: 'jpg' };
+}
+
+/**
+ * Cloud function to get export intelligence data
+ */
+exports.creationWizardGetExportProfiles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Format platforms for frontend
+  const platforms = Object.entries(EXPORT_INTELLIGENCE.platforms).map(([id, platform]) => ({
+    id,
+    name: platform.name,
+    icon: platform.icon,
+    aspectRatio: platform.aspectRatio,
+    maxDuration: platform.maxDuration,
+    optimalDuration: platform.optimalDuration,
+    pacing: platform.pacing,
+    features: platform.features,
+    hookTiming: platform.hookTiming
+  }));
+
+  // Format aspect ratios
+  const aspectRatios = Object.entries(EXPORT_INTELLIGENCE.aspectRatios).map(([id, ratio]) => ({
+    id,
+    name: ratio.name,
+    ratio: ratio.ratio,
+    width: ratio.width,
+    height: ratio.height,
+    use: ratio.use
+  }));
+
+  // Format duration presets
+  const durationPresets = Object.entries(EXPORT_INTELLIGENCE.durationPresets).map(([id, preset]) => ({
+    id,
+    name: preset.name,
+    icon: preset.icon,
+    duration: preset.duration,
+    platforms: preset.platforms,
+    pacing: preset.pacing,
+    sceneCount: preset.sceneCount
+  }));
+
+  // Format series templates
+  const seriesTemplates = Object.entries(EXPORT_INTELLIGENCE.seriesTemplates).map(([id, template]) => ({
+    id,
+    name: template.name,
+    episodeCount: template.episodeCount,
+    consistency: template.consistency,
+    branding: template.branding
+  }));
+
+  // Format quality presets
+  const qualityPresets = Object.entries(EXPORT_INTELLIGENCE.qualityPresets).map(([id, preset]) => ({
+    id,
+    name: preset.name,
+    resolution: preset.resolution,
+    codec: preset.codec
+  }));
+
+  return {
+    success: true,
+    platforms,
+    aspectRatios,
+    durationPresets,
+    seriesTemplates,
+    qualityPresets
+  };
+});
+
+/**
+ * Cloud function to get export recommendations
+ */
+exports.creationWizardGetExportRecommendations = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { platform, duration, contentType, genre, hasDialogue, seriesInfo } = data;
+
+  const recommendations = getExportRecommendations({
+    platform,
+    duration,
+    contentType,
+    genre,
+    hasDialogue,
+    seriesInfo
+  });
+
+  return {
+    success: true,
+    recommendations
+  };
+});
+
+/**
+ * Cloud function to generate multi-platform export package
+ */
+exports.creationWizardGenerateExportPackage = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { primaryPlatform, additionalPlatforms, content, seriesInfo } = data;
+
+  const exportPackage = generateExportPackage({
+    primaryPlatform,
+    additionalPlatforms,
+    content,
+    seriesInfo
+  });
+
+  return {
+    success: true,
+    exportPackage
+  };
+});
+
 /**
  * creationWizardCheckImageStatus - Check the status of a RunPod image generation job
  */
