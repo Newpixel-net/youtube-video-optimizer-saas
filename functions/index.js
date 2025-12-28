@@ -23588,12 +23588,13 @@ The improved concept should make anyone reading it immediately visualize the vid
  */
 exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { rawInput, styleReference, avoidElements, production } = data;
+  const { rawInput, styleReference, avoidElements, production, enrichment } = data;
 
   console.log('[creationWizardGenerateConcepts] Generating concepts for:', {
     rawInput: rawInput?.substring(0, 100),
     styleReference,
     production: production?.type,
+    hasEnrichment: !!enrichment,
     uid
   });
 
@@ -23619,12 +23620,45 @@ The user mentioned "${styleReference}" - this is for VISUAL STYLE ONLY.
   const avoidList = avoidElements && avoidElements.length > 0 ?
     `\nExplicitly AVOID: ${avoidElements.join(', ')}` : '';
 
+  // Build AI Enhancement context if available
+  let enrichmentContext = '';
+  if (enrichment) {
+    enrichmentContext = `
+=== AI-ENHANCED CONCEPT DATA (USE THIS!) ===
+The user has already developed their idea with AI assistance. Use this enriched data:
+
+ENHANCED CONCEPT: ${enrichment.improvedConcept || rawInput}
+${enrichment.hookLine ? `HOOK LINE: "${enrichment.hookLine}"` : ''}
+${enrichment.genreFusion ? `GENRE FUSION: ${enrichment.genreFusion}` : ''}
+${enrichment.visualSignature ? `VISUAL SIGNATURE: ${enrichment.visualSignature}` : ''}
+${enrichment.suggestedMood ? `MOOD: ${enrichment.suggestedMood}` : ''}
+${enrichment.suggestedTone ? `TONE: ${enrichment.suggestedTone}` : ''}
+${enrichment.keyElements?.length > 0 ? `KEY ELEMENTS TO INCLUDE:\n${enrichment.keyElements.map((e, i) => `  ${i+1}. ${e}`).join('\n')}` : ''}
+${enrichment.characters?.length > 0 ? `
+CHARACTER ARCHETYPES TO USE:
+${enrichment.characters.map((c, i) => `  ${i+1}. ${c.archetype}: ${c.uniqueTwist} (Visual: ${c.visualDescription})`).join('\n')}` : ''}
+${enrichment.worldBuilding ? `
+WORLD-BUILDING:
+  Setting: ${enrichment.worldBuilding.setting}
+  Rules: ${enrichment.worldBuilding.rules}
+  Atmosphere: ${enrichment.worldBuilding.atmosphere}` : ''}
+
+IMPORTANT: Generate concepts that EXPAND on this enriched data, not ignore it.
+Each concept should be a different creative direction but ALL should incorporate:
+- The visual signature and mood
+- At least some of the key elements
+- The character archetypes (can be adapted)
+- The world-building rules
+`;
+  }
+
   const prompt = `You are a Hollywood-grade concept developer. Generate 3 UNIQUE and ORIGINAL video concepts.
 
 USER'S IDEA:
 ${rawInput || 'Create something engaging and original'}
 
 ${productionContext}
+${enrichmentContext}
 ${styleWarning}
 ${avoidList}
 
@@ -23634,6 +23668,8 @@ REQUIREMENTS:
 3. Develop fresh settings that aren't direct copies of existing properties
 4. If style references are mentioned, capture the VISUAL FEEL only
 5. Each concept should have a clear hook that grabs attention
+${enrichment ? `6. INCORPORATE the AI-enhanced data above - don't ignore it!
+7. Each concept should feel connected to the enriched vision while offering unique takes` : ''}
 
 Return EXACTLY this JSON structure:
 {
@@ -23645,12 +23681,14 @@ Return EXACTLY this JSON structure:
       "uniqueElements": ["Element 1", "Element 2", "Element 3"],
       "mood": "Primary mood (e.g., Tense, Uplifting, Mysterious)",
       "tone": "Tone (e.g., Serious, Playful, Dark)",
-      "visualApproach": "How this should look visually"
+      "visualApproach": "How this should look visually",
+      "suggestedCharacters": ["Brief character concepts that fit this story"],
+      "worldSetting": "The world/setting for this concept"
     }
   ]
 }
 
-Generate 3 diverse concepts that offer different creative directions.`;
+Generate 3 diverse concepts that offer different creative directions${enrichment ? ' while staying true to the enriched vision' : ''}.`;
 
   try {
     // Use GPT-4o for concept generation
