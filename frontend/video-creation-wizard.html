@@ -2959,6 +2959,13 @@
                 modifyStyle: null,     // Current style in modify modal
                 // Image generation settings
                 imageModel: 'hidream',  // 'hidream' | 'nanobanana-pro' | 'nanobanana'
+                // Phase 3B: Visual Style settings
+                visualStyle: {
+                    composition: null,      // null = auto from genre
+                    lighting: null,         // null = auto from genre
+                    colorPalette: null,     // null = auto from genre
+                    mood: null              // optional mood override
+                },
                 // Edit with AI state
                 editingScene: null,     // Scene ID being edited
                 editMaskCanvas: null,   // Canvas element for mask
@@ -3636,6 +3643,41 @@
             scheduleAutoSave();
         }
 
+        // Phase 3B: Visual Style Control
+        function setVisualStyle(property, value) {
+            if (!state.storyboard.visualStyle) {
+                state.storyboard.visualStyle = {
+                    composition: null,
+                    lighting: null,
+                    colorPalette: null,
+                    mood: null
+                };
+            }
+
+            // Set value (empty string becomes null for "Auto")
+            state.storyboard.visualStyle[property] = value || null;
+
+            // If mood is set, it can auto-suggest other settings
+            // but we don't override user choices
+
+            render();
+            scheduleAutoSave();
+
+            // Show feedback
+            const propertyNames = {
+                mood: 'Mood',
+                lighting: 'Lighting',
+                colorPalette: 'Color Palette',
+                composition: 'Composition'
+            };
+
+            if (value) {
+                showToast(`${propertyNames[property]} set to ${value}`, 'success');
+            } else {
+                showToast(`${propertyNames[property]} set to auto (genre-based)`, 'info');
+            }
+        }
+
         function applyTopicSuggestion(topic) {
             state.content.topic = topic;
             render();
@@ -4014,7 +4056,16 @@
                         sceneId: sceneId,
                         prompt: prompt,
                         style: state.content.style,
-                        aspectRatio: state.platform.aspectRatio
+                        aspectRatio: state.platform.aspectRatio,
+                        // Phase 3B: Visual Intelligence parameters
+                        genre: state.content.genre || null,
+                        productionMode: state.content.productionMode || 'standard',
+                        mood: state.storyboard.visualStyle?.mood || null,
+                        visualSettings: {
+                            composition: state.storyboard.visualStyle?.composition || null,
+                            lighting: state.storyboard.visualStyle?.lighting || null,
+                            colorPalette: state.storyboard.visualStyle?.colorPalette || null
+                        }
                     });
 
                     if (result.data.success) {
@@ -6644,6 +6695,80 @@
                         </div>
                         <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem; margin-top: 0.5rem;">
                             ${modelConfig.description}
+                        </div>
+                    </div>
+
+                    <!-- Phase 3B: Visual Style Controls -->
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <div style="color: rgba(255,255,255,0.7); font-size: 0.75rem;">🎬 Visual Style</div>
+                            <span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #f59e0b, #ef4444); border-radius: 0.75rem; color: white; font-weight: 600;">PRO</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                            <!-- Mood Selector -->
+                            <div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Mood</div>
+                                <select onchange="setVisualStyle('mood', this.value)" style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.7rem;">
+                                    <option value="" ${!state.storyboard.visualStyle?.mood ? 'selected' : ''}>Auto</option>
+                                    <option value="epic" ${state.storyboard.visualStyle?.mood === 'epic' ? 'selected' : ''}>🎬 Epic</option>
+                                    <option value="intimate" ${state.storyboard.visualStyle?.mood === 'intimate' ? 'selected' : ''}>💝 Intimate</option>
+                                    <option value="mysterious" ${state.storyboard.visualStyle?.mood === 'mysterious' ? 'selected' : ''}>🔮 Mysterious</option>
+                                    <option value="energetic" ${state.storyboard.visualStyle?.mood === 'energetic' ? 'selected' : ''}>⚡ Energetic</option>
+                                    <option value="contemplative" ${state.storyboard.visualStyle?.mood === 'contemplative' ? 'selected' : ''}>🌙 Contemplative</option>
+                                    <option value="tense" ${state.storyboard.visualStyle?.mood === 'tense' ? 'selected' : ''}>😰 Tense</option>
+                                    <option value="hopeful" ${state.storyboard.visualStyle?.mood === 'hopeful' ? 'selected' : ''}>🌅 Hopeful</option>
+                                    <option value="professional" ${state.storyboard.visualStyle?.mood === 'professional' ? 'selected' : ''}>💼 Professional</option>
+                                    <option value="nostalgic" ${state.storyboard.visualStyle?.mood === 'nostalgic' ? 'selected' : ''}>📷 Nostalgic</option>
+                                    <option value="dark" ${state.storyboard.visualStyle?.mood === 'dark' ? 'selected' : ''}>🌑 Dark</option>
+                                </select>
+                            </div>
+                            <!-- Lighting Selector -->
+                            <div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Lighting</div>
+                                <select onchange="setVisualStyle('lighting', this.value)" style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.7rem;">
+                                    <option value="" ${!state.storyboard.visualStyle?.lighting ? 'selected' : ''}>Auto</option>
+                                    <option value="natural" ${state.storyboard.visualStyle?.lighting === 'natural' ? 'selected' : ''}>☀️ Natural</option>
+                                    <option value="golden-hour" ${state.storyboard.visualStyle?.lighting === 'golden-hour' ? 'selected' : ''}>🌅 Golden Hour</option>
+                                    <option value="blue-hour" ${state.storyboard.visualStyle?.lighting === 'blue-hour' ? 'selected' : ''}>🌙 Blue Hour</option>
+                                    <option value="high-key" ${state.storyboard.visualStyle?.lighting === 'high-key' ? 'selected' : ''}>💡 High Key</option>
+                                    <option value="low-key" ${state.storyboard.visualStyle?.lighting === 'low-key' ? 'selected' : ''}>🌑 Low Key/Noir</option>
+                                    <option value="neon" ${state.storyboard.visualStyle?.lighting === 'neon' ? 'selected' : ''}>💜 Neon</option>
+                                    <option value="silhouette" ${state.storyboard.visualStyle?.lighting === 'silhouette' ? 'selected' : ''}>👤 Silhouette</option>
+                                </select>
+                            </div>
+                            <!-- Color Palette Selector -->
+                            <div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Colors</div>
+                                <select onchange="setVisualStyle('colorPalette', this.value)" style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.7rem;">
+                                    <option value="" ${!state.storyboard.visualStyle?.colorPalette ? 'selected' : ''}>Auto</option>
+                                    <option value="teal-orange" ${state.storyboard.visualStyle?.colorPalette === 'teal-orange' ? 'selected' : ''}>🎬 Teal/Orange</option>
+                                    <option value="warm-tones" ${state.storyboard.visualStyle?.colorPalette === 'warm-tones' ? 'selected' : ''}>🔥 Warm</option>
+                                    <option value="cool-tones" ${state.storyboard.visualStyle?.colorPalette === 'cool-tones' ? 'selected' : ''}>❄️ Cool</option>
+                                    <option value="desaturated" ${state.storyboard.visualStyle?.colorPalette === 'desaturated' ? 'selected' : ''}>🌫️ Desaturated</option>
+                                    <option value="high-saturation" ${state.storyboard.visualStyle?.colorPalette === 'high-saturation' ? 'selected' : ''}>🌈 Vibrant</option>
+                                    <option value="pastel" ${state.storyboard.visualStyle?.colorPalette === 'pastel' ? 'selected' : ''}>🎀 Pastel</option>
+                                    <option value="earth-tones" ${state.storyboard.visualStyle?.colorPalette === 'earth-tones' ? 'selected' : ''}>🌿 Earth</option>
+                                    <option value="noir-bw" ${state.storyboard.visualStyle?.colorPalette === 'noir-bw' ? 'selected' : ''}>⬛ B&W Noir</option>
+                                </select>
+                            </div>
+                            <!-- Composition Selector -->
+                            <div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">Shot</div>
+                                <select onchange="setVisualStyle('composition', this.value)" style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.7rem;">
+                                    <option value="" ${!state.storyboard.visualStyle?.composition ? 'selected' : ''}>Auto</option>
+                                    <option value="wide-establishing" ${state.storyboard.visualStyle?.composition === 'wide-establishing' ? 'selected' : ''}>🏔️ Wide</option>
+                                    <option value="medium-shot" ${state.storyboard.visualStyle?.composition === 'medium-shot' ? 'selected' : ''}>👤 Medium</option>
+                                    <option value="close-up" ${state.storyboard.visualStyle?.composition === 'close-up' ? 'selected' : ''}>😊 Close-up</option>
+                                    <option value="extreme-close-up" ${state.storyboard.visualStyle?.composition === 'extreme-close-up' ? 'selected' : ''}>👁️ Extreme CU</option>
+                                    <option value="low-angle" ${state.storyboard.visualStyle?.composition === 'low-angle' ? 'selected' : ''}>⬆️ Low Angle</option>
+                                    <option value="birds-eye" ${state.storyboard.visualStyle?.composition === 'birds-eye' ? 'selected' : ''}>🦅 Bird's Eye</option>
+                                    <option value="dutch-angle" ${state.storyboard.visualStyle?.composition === 'dutch-angle' ? 'selected' : ''}>📐 Dutch</option>
+                                    <option value="symmetrical" ${state.storyboard.visualStyle?.composition === 'symmetrical' ? 'selected' : ''}>⚖️ Symmetrical</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="color: rgba(255,255,255,0.4); font-size: 0.6rem; margin-top: 0.4rem;">
+                            💡 "Auto" uses genre-appropriate defaults based on your content settings
                         </div>
                     </div>
                 </div>

@@ -24470,14 +24470,504 @@ Return ONLY valid JSON:
   }
 });
 
+// ============================================================
+// PHASE 3B: VISUAL INTELLIGENCE SYSTEM
+// Cinematic compositions, lighting, and color grading
+// ============================================================
+
+/**
+ * VISUAL INTELLIGENCE - Comprehensive visual enhancement system
+ * Maps genres, moods, and production modes to cinematic visual styles
+ */
+const VISUAL_INTELLIGENCE = {
+  // === SHOT COMPOSITION LIBRARY ===
+  compositions: {
+    'wide-establishing': {
+      name: 'Wide Establishing Shot',
+      prompt: 'wide angle establishing shot, expansive view, full environment visible, cinematic scope',
+      useFor: ['opening', 'context', 'scale'],
+      genres: ['documentary-nature', 'documentary-historical', 'cinematic']
+    },
+    'medium-shot': {
+      name: 'Medium Shot',
+      prompt: 'medium shot, waist-up framing, balanced composition, subject clearly visible',
+      useFor: ['dialogue', 'action', 'explanation'],
+      genres: ['educational-tutorial', 'business-testimonial', 'social-storytime']
+    },
+    'close-up': {
+      name: 'Close-Up',
+      prompt: 'close-up shot, face or detail filling frame, intimate framing, emotional connection',
+      useFor: ['emotion', 'detail', 'emphasis'],
+      genres: ['entertainment-drama', 'inspirational', 'documentary-true-crime']
+    },
+    'extreme-close-up': {
+      name: 'Extreme Close-Up',
+      prompt: 'extreme close-up, macro detail, texture visible, dramatic intimacy',
+      useFor: ['tension', 'detail', 'reveal'],
+      genres: ['entertainment-horror', 'documentary-nature', 'educational-science']
+    },
+    'over-the-shoulder': {
+      name: 'Over the Shoulder',
+      prompt: 'over-the-shoulder shot, perspective framing, depth layering, conversational angle',
+      useFor: ['dialogue', 'pov', 'interaction'],
+      genres: ['entertainment-drama', 'business-testimonial', 'documentary-social']
+    },
+    'birds-eye': {
+      name: 'Bird\'s Eye View',
+      prompt: 'birds eye view, top-down perspective, god-like vantage point, pattern visible from above',
+      useFor: ['scale', 'overview', 'drama'],
+      genres: ['documentary-nature', 'cinematic', 'documentary-historical']
+    },
+    'low-angle': {
+      name: 'Low Angle',
+      prompt: 'low angle shot, looking up at subject, powerful imposing presence, heroic framing',
+      useFor: ['power', 'inspiration', 'drama'],
+      genres: ['inspirational', 'business-brand', 'entertainment-drama']
+    },
+    'dutch-angle': {
+      name: 'Dutch Angle',
+      prompt: 'dutch angle, tilted frame, disorienting composition, psychological tension',
+      useFor: ['unease', 'tension', 'chaos'],
+      genres: ['entertainment-horror', 'thriller', 'entertainment-drama']
+    },
+    'symmetrical': {
+      name: 'Symmetrical',
+      prompt: 'perfectly symmetrical composition, centered subject, balanced framing, Wes Anderson style',
+      useFor: ['order', 'beauty', 'emphasis'],
+      genres: ['cinematic', 'business-product', 'educational-explainer']
+    },
+    'rule-of-thirds': {
+      name: 'Rule of Thirds',
+      prompt: 'rule of thirds composition, subject off-center, balanced negative space, professional framing',
+      useFor: ['standard', 'dynamic', 'professional'],
+      genres: ['all']
+    },
+    'leading-lines': {
+      name: 'Leading Lines',
+      prompt: 'leading lines composition, visual path guiding eye to subject, depth perspective, dynamic composition',
+      useFor: ['journey', 'direction', 'depth'],
+      genres: ['documentary-historical', 'inspirational', 'business-brand']
+    },
+    'frame-within-frame': {
+      name: 'Frame Within Frame',
+      prompt: 'frame within frame composition, subject framed by environment, layered depth, cinematic framing',
+      useFor: ['focus', 'isolation', 'art'],
+      genres: ['cinematic', 'entertainment-drama', 'documentary-social']
+    }
+  },
+
+  // === LIGHTING STYLES ===
+  lighting: {
+    'natural': {
+      name: 'Natural Light',
+      prompt: 'natural lighting, soft daylight, realistic illumination, organic light sources',
+      mood: 'authentic, documentary, honest',
+      genres: ['documentary-nature', 'documentary-social', 'educational-tutorial']
+    },
+    'golden-hour': {
+      name: 'Golden Hour',
+      prompt: 'golden hour lighting, warm orange sunset glow, magical hour, romantic light',
+      mood: 'warm, hopeful, beautiful',
+      genres: ['inspirational', 'documentary-nature', 'business-brand']
+    },
+    'blue-hour': {
+      name: 'Blue Hour',
+      prompt: 'blue hour lighting, cool twilight tones, contemplative atmosphere, pre-dawn or post-sunset',
+      mood: 'melancholy, thoughtful, peaceful',
+      genres: ['documentary-historical', 'entertainment-drama', 'cinematic']
+    },
+    'high-key': {
+      name: 'High Key',
+      prompt: 'high key lighting, bright even illumination, minimal shadows, clean professional look',
+      mood: 'clean, optimistic, professional',
+      genres: ['business-product', 'educational-explainer', 'business-testimonial']
+    },
+    'low-key': {
+      name: 'Low Key / Noir',
+      prompt: 'low key lighting, dramatic shadows, high contrast, film noir style, chiaroscuro',
+      mood: 'mysterious, dramatic, intense',
+      genres: ['entertainment-horror', 'thriller', 'documentary-true-crime', 'entertainment-drama']
+    },
+    'rembrandt': {
+      name: 'Rembrandt Lighting',
+      prompt: 'Rembrandt lighting, triangle of light on cheek, classic portrait lighting, dramatic yet natural',
+      mood: 'classic, artistic, dignified',
+      genres: ['documentary-historical', 'business-testimonial', 'cinematic']
+    },
+    'neon': {
+      name: 'Neon / Cyberpunk',
+      prompt: 'neon lighting, vibrant colored lights, cyberpunk aesthetic, electric glow, urban night',
+      mood: 'futuristic, edgy, energetic',
+      genres: ['educational-science', 'social-viral', 'entertainment-comedy']
+    },
+    'silhouette': {
+      name: 'Silhouette',
+      prompt: 'silhouette lighting, backlit subject, dramatic outline, mysterious figure against light',
+      mood: 'dramatic, mysterious, iconic',
+      genres: ['inspirational', 'cinematic', 'documentary-social']
+    },
+    'soft-diffused': {
+      name: 'Soft Diffused',
+      prompt: 'soft diffused lighting, gentle shadows, flattering illumination, dreamy atmosphere',
+      mood: 'gentle, approachable, comforting',
+      genres: ['educational-tutorial', 'business-testimonial', 'inspirational']
+    },
+    'harsh-dramatic': {
+      name: 'Harsh Dramatic',
+      prompt: 'harsh dramatic lighting, strong shadows, high contrast, intense spotlight effect',
+      mood: 'intense, confrontational, powerful',
+      genres: ['entertainment-horror', 'thriller', 'business-brand']
+    }
+  },
+
+  // === COLOR PALETTES ===
+  colorPalettes: {
+    'teal-orange': {
+      name: 'Teal & Orange',
+      prompt: 'teal and orange color grading, complementary colors, cinematic blockbuster look, Hollywood color palette',
+      mood: 'cinematic, dynamic, polished',
+      genres: ['cinematic', 'entertainment-drama', 'business-brand']
+    },
+    'desaturated': {
+      name: 'Desaturated',
+      prompt: 'desaturated color palette, muted tones, subtle colors, understated elegance',
+      mood: 'serious, sophisticated, documentary',
+      genres: ['documentary-historical', 'documentary-true-crime', 'entertainment-drama']
+    },
+    'high-saturation': {
+      name: 'High Saturation',
+      prompt: 'high saturation colors, vibrant vivid palette, eye-catching hues, bold color choices',
+      mood: 'energetic, fun, attention-grabbing',
+      genres: ['social-viral', 'entertainment-comedy', 'educational-explainer']
+    },
+    'warm-tones': {
+      name: 'Warm Tones',
+      prompt: 'warm color palette, orange red yellow tones, cozy inviting atmosphere, sunset colors',
+      mood: 'nostalgic, comforting, friendly',
+      genres: ['inspirational', 'documentary-historical', 'business-testimonial']
+    },
+    'cool-tones': {
+      name: 'Cool Tones',
+      prompt: 'cool color palette, blue green teal tones, calm professional atmosphere, modern feel',
+      mood: 'professional, calm, trustworthy',
+      genres: ['educational-science', 'business-product', 'documentary-social']
+    },
+    'monochromatic': {
+      name: 'Monochromatic',
+      prompt: 'monochromatic color scheme, single color variations, sophisticated unified look, artistic palette',
+      mood: 'artistic, focused, elegant',
+      genres: ['cinematic', 'business-brand', 'documentary-historical']
+    },
+    'noir-bw': {
+      name: 'Noir Black & White',
+      prompt: 'black and white, film noir aesthetic, high contrast monochrome, classic cinema look',
+      mood: 'timeless, dramatic, artistic',
+      genres: ['documentary-historical', 'entertainment-drama', 'documentary-true-crime']
+    },
+    'pastel': {
+      name: 'Pastel',
+      prompt: 'pastel color palette, soft muted colors, gentle aesthetic, light and airy',
+      mood: 'gentle, approachable, modern',
+      genres: ['educational-tutorial', 'business-testimonial', 'inspirational']
+    },
+    'earth-tones': {
+      name: 'Earth Tones',
+      prompt: 'earth tone palette, natural browns greens, organic colors, grounded aesthetic',
+      mood: 'natural, authentic, grounded',
+      genres: ['documentary-nature', 'documentary-social', 'inspirational']
+    },
+    'neon-pop': {
+      name: 'Neon Pop',
+      prompt: 'neon pop colors, electric bright palette, bold contrasting hues, high energy colors',
+      mood: 'exciting, youthful, bold',
+      genres: ['social-viral', 'entertainment-comedy', 'educational-science']
+    }
+  },
+
+  // === MOOD ATMOSPHERES ===
+  moods: {
+    'epic': {
+      prompt: 'epic cinematic atmosphere, grand scale, awe-inspiring, majestic feel',
+      lighting: 'golden-hour',
+      composition: 'wide-establishing',
+      colorPalette: 'teal-orange'
+    },
+    'intimate': {
+      prompt: 'intimate personal atmosphere, close connection, emotional depth, private moment',
+      lighting: 'soft-diffused',
+      composition: 'close-up',
+      colorPalette: 'warm-tones'
+    },
+    'mysterious': {
+      prompt: 'mysterious atmospheric, enigmatic mood, hidden depths, intriguing shadows',
+      lighting: 'low-key',
+      composition: 'frame-within-frame',
+      colorPalette: 'desaturated'
+    },
+    'energetic': {
+      prompt: 'energetic dynamic atmosphere, high energy, exciting motion, vibrant action',
+      lighting: 'neon',
+      composition: 'dutch-angle',
+      colorPalette: 'high-saturation'
+    },
+    'contemplative': {
+      prompt: 'contemplative peaceful atmosphere, thoughtful mood, serene reflection, quiet beauty',
+      lighting: 'blue-hour',
+      composition: 'symmetrical',
+      colorPalette: 'cool-tones'
+    },
+    'tense': {
+      prompt: 'tense suspenseful atmosphere, building dread, uncomfortable anticipation, edge of seat',
+      lighting: 'harsh-dramatic',
+      composition: 'dutch-angle',
+      colorPalette: 'desaturated'
+    },
+    'hopeful': {
+      prompt: 'hopeful optimistic atmosphere, rising possibility, dawn of change, inspirational mood',
+      lighting: 'golden-hour',
+      composition: 'low-angle',
+      colorPalette: 'warm-tones'
+    },
+    'professional': {
+      prompt: 'professional polished atmosphere, clean competent, trustworthy quality, business appropriate',
+      lighting: 'high-key',
+      composition: 'rule-of-thirds',
+      colorPalette: 'cool-tones'
+    },
+    'nostalgic': {
+      prompt: 'nostalgic wistful atmosphere, remembering past, bittersweet memories, time gone by',
+      lighting: 'golden-hour',
+      composition: 'medium-shot',
+      colorPalette: 'warm-tones'
+    },
+    'dark': {
+      prompt: 'dark ominous atmosphere, foreboding shadows, dangerous undertones, threat lurking',
+      lighting: 'low-key',
+      composition: 'extreme-close-up',
+      colorPalette: 'noir-bw'
+    }
+  },
+
+  // === GENRE TO VISUAL MAPPING ===
+  genreVisuals: {
+    'documentary-nature': {
+      defaultComposition: 'wide-establishing',
+      defaultLighting: 'natural',
+      defaultPalette: 'earth-tones',
+      promptModifiers: 'nature documentary style, National Geographic quality, wildlife photography aesthetic, BBC Earth cinematography',
+      negativeModifiers: 'artificial, studio, urban, man-made'
+    },
+    'documentary-true-crime': {
+      defaultComposition: 'close-up',
+      defaultLighting: 'low-key',
+      defaultPalette: 'desaturated',
+      promptModifiers: 'true crime documentary style, investigative mood, evidence aesthetic, Making a Murderer cinematography',
+      negativeModifiers: 'bright, cheerful, colorful, happy'
+    },
+    'documentary-social': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'natural',
+      defaultPalette: 'desaturated',
+      promptModifiers: 'social documentary style, real life aesthetic, authentic journalism, The Social Dilemma cinematography',
+      negativeModifiers: 'staged, fake, advertisement, commercial'
+    },
+    'documentary-historical': {
+      defaultComposition: 'rule-of-thirds',
+      defaultLighting: 'rembrandt',
+      defaultPalette: 'warm-tones',
+      promptModifiers: 'historical documentary style, Ken Burns aesthetic, archival quality, epic history cinematography',
+      negativeModifiers: 'modern, futuristic, contemporary technology'
+    },
+    'educational-explainer': {
+      defaultComposition: 'symmetrical',
+      defaultLighting: 'high-key',
+      defaultPalette: 'high-saturation',
+      promptModifiers: 'explainer video style, Kurzgesagt aesthetic, clear visual metaphor, educational illustration',
+      negativeModifiers: 'confusing, cluttered, dark, unclear'
+    },
+    'educational-tutorial': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'soft-diffused',
+      defaultPalette: 'pastel',
+      promptModifiers: 'tutorial style, hands-on demonstration, clear instructional view, maker aesthetic',
+      negativeModifiers: 'confusing angle, unclear, messy, unprofessional'
+    },
+    'educational-science': {
+      defaultComposition: 'extreme-close-up',
+      defaultLighting: 'high-key',
+      defaultPalette: 'cool-tones',
+      promptModifiers: 'science visualization, Veritasium aesthetic, experimental setup, discovery moment',
+      negativeModifiers: 'abstract, unclear, non-scientific, magical'
+    },
+    'entertainment-comedy': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'high-key',
+      defaultPalette: 'high-saturation',
+      promptModifiers: 'comedy style, sitcom lighting, expressive framing, comedic timing visual',
+      negativeModifiers: 'dark, serious, scary, dramatic'
+    },
+    'entertainment-drama': {
+      defaultComposition: 'close-up',
+      defaultLighting: 'rembrandt',
+      defaultPalette: 'teal-orange',
+      promptModifiers: 'dramatic cinematography, Breaking Bad aesthetic, emotional depth, prestige TV quality',
+      negativeModifiers: 'flat, boring, amateur, sitcom-like'
+    },
+    'entertainment-horror': {
+      defaultComposition: 'dutch-angle',
+      defaultLighting: 'low-key',
+      defaultPalette: 'desaturated',
+      promptModifiers: 'horror cinematography, unsettling framing, dread atmosphere, psychological terror aesthetic',
+      negativeModifiers: 'bright, cheerful, safe, comforting'
+    },
+    'business-brand': {
+      defaultComposition: 'low-angle',
+      defaultLighting: 'golden-hour',
+      defaultPalette: 'teal-orange',
+      promptModifiers: 'brand commercial style, Nike ad aesthetic, aspirational imagery, Apple commercial quality',
+      negativeModifiers: 'cheap, amateur, stock photo, generic'
+    },
+    'business-product': {
+      defaultComposition: 'symmetrical',
+      defaultLighting: 'high-key',
+      defaultPalette: 'cool-tones',
+      promptModifiers: 'product photography, Apple keynote aesthetic, clean showcase, premium product visualization',
+      negativeModifiers: 'messy background, poor lighting, unprofessional, cluttered'
+    },
+    'business-testimonial': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'soft-diffused',
+      defaultPalette: 'warm-tones',
+      promptModifiers: 'testimonial interview style, authentic documentary feel, real person in real environment',
+      negativeModifiers: 'staged, fake, studio backdrop, corporate sterile'
+    },
+    'social-viral': {
+      defaultComposition: 'close-up',
+      defaultLighting: 'neon',
+      defaultPalette: 'neon-pop',
+      promptModifiers: 'viral content style, high impact visual, scroll-stopping image, TikTok aesthetic',
+      negativeModifiers: 'boring, generic, slow, subtle'
+    },
+    'social-storytime': {
+      defaultComposition: 'medium-shot',
+      defaultLighting: 'soft-diffused',
+      defaultPalette: 'warm-tones',
+      promptModifiers: 'storytime aesthetic, engaging visual, personality-driven, relatable imagery',
+      negativeModifiers: 'corporate, impersonal, sterile, distant'
+    },
+    'series-docuseries': {
+      defaultComposition: 'wide-establishing',
+      defaultLighting: 'natural',
+      defaultPalette: 'teal-orange',
+      promptModifiers: 'docuseries cinematography, Drive to Survive aesthetic, episodic visual language, Netflix documentary quality',
+      negativeModifiers: 'amateur, inconsistent, low budget, single-shot'
+    },
+    'cinematic': {
+      defaultComposition: 'leading-lines',
+      defaultLighting: 'golden-hour',
+      defaultPalette: 'teal-orange',
+      promptModifiers: 'cinematic film quality, Christopher Nolan aesthetic, IMAX visual, blockbuster cinematography, anamorphic lens feel',
+      negativeModifiers: 'TV quality, amateur, flat, documentary'
+    },
+    'standard': {
+      defaultComposition: 'rule-of-thirds',
+      defaultLighting: 'natural',
+      defaultPalette: 'cool-tones',
+      promptModifiers: 'professional quality, clean composition, well-lit, broadcast quality',
+      negativeModifiers: 'amateur, blurry, poorly lit, distorted'
+    }
+  }
+};
+
+/**
+ * buildVisualPrompt - Constructs an enhanced visual prompt using Visual Intelligence
+ * @param {string} basePrompt - The original visual description from the script
+ * @param {object} options - { genre, productionMode, mood, visualSettings }
+ * @returns {object} - { enhancedPrompt, negativePrompt, visualMetadata }
+ */
+function buildVisualPrompt(basePrompt, options = {}) {
+  const {
+    genre = null,
+    productionMode = 'standard',
+    mood = null,
+    visualSettings = {},
+    style = 'cinematic'
+  } = options;
+
+  // Get genre visuals or fall back to production mode or standard
+  const genreVisual = VISUAL_INTELLIGENCE.genreVisuals[genre] ||
+                      VISUAL_INTELLIGENCE.genreVisuals[productionMode] ||
+                      VISUAL_INTELLIGENCE.genreVisuals['standard'];
+
+  // Get specific visual components (allow override from visualSettings)
+  const compositionKey = visualSettings.composition || genreVisual.defaultComposition;
+  const lightingKey = visualSettings.lighting || genreVisual.defaultLighting;
+  const paletteKey = visualSettings.colorPalette || genreVisual.defaultPalette;
+
+  const composition = VISUAL_INTELLIGENCE.compositions[compositionKey] || VISUAL_INTELLIGENCE.compositions['rule-of-thirds'];
+  const lighting = VISUAL_INTELLIGENCE.lighting[lightingKey] || VISUAL_INTELLIGENCE.lighting['natural'];
+  const palette = VISUAL_INTELLIGENCE.colorPalettes[paletteKey] || VISUAL_INTELLIGENCE.colorPalettes['cool-tones'];
+
+  // Get mood if specified
+  const moodSettings = mood ? VISUAL_INTELLIGENCE.moods[mood] : null;
+
+  // Build the enhanced prompt
+  const promptParts = [
+    basePrompt,
+    `Composition: ${composition.prompt}`,
+    `Lighting: ${lighting.prompt}`,
+    `Color: ${palette.prompt}`,
+    genreVisual.promptModifiers,
+    moodSettings?.prompt || '',
+    'high quality, detailed, professional, 8K resolution, sharp focus'
+  ].filter(Boolean);
+
+  const enhancedPrompt = promptParts.join('. ');
+
+  // Build negative prompt
+  const negativeParts = [
+    'blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur',
+    genreVisual.negativeModifiers || ''
+  ].filter(Boolean);
+
+  const negativePrompt = negativeParts.join(', ');
+
+  // Return structured result
+  return {
+    enhancedPrompt,
+    negativePrompt,
+    visualMetadata: {
+      genre,
+      productionMode,
+      composition: compositionKey,
+      lighting: lightingKey,
+      colorPalette: paletteKey,
+      mood
+    }
+  };
+}
+
 /**
  * creationWizardGenerateSceneImage - Generate a single scene image using RunPod
  *
  * Uses existing RunPod HiDream integration to generate storyboard images
+ * Now enhanced with Phase 3B Visual Intelligence
  */
 exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { projectId, sceneId, prompt, style, aspectRatio, settings } = data;
+  const {
+    projectId,
+    sceneId,
+    prompt,
+    style,
+    aspectRatio,
+    settings,
+    // Phase 3B: Visual Intelligence parameters
+    genre = null,
+    productionMode = 'standard',
+    mood = null,
+    visualSettings = {}
+  } = data;
 
   if (!prompt || prompt.trim().length < 10) {
     throw new functions.https.HttpsError('invalid-argument', 'Image prompt is required (min 10 chars)');
@@ -24489,26 +24979,17 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
   }
 
   try {
-    // Enhance prompt with style and quality keywords
-    const styleKeywords = {
-      modern: 'modern, sleek, clean design, contemporary',
-      cinematic: 'cinematic, dramatic lighting, film quality, movie still',
-      energetic: 'vibrant, dynamic, energetic, bold colors',
-      documentary: 'realistic, documentary style, natural lighting',
-      retro: 'retro, vintage, nostalgic, classic aesthetic',
-      futuristic: 'futuristic, sci-fi, high-tech, neon',
-      cartoon: 'cartoon style, animated, colorful illustration',
-      elegant: 'elegant, sophisticated, refined, luxury',
-      nature: 'natural, organic, earthy tones, outdoor',
-      dark: 'dark, moody, dramatic shadows, noir'
-    };
+    // Phase 3B: Use Visual Intelligence to build enhanced prompt
+    const visualResult = buildVisualPrompt(prompt, {
+      genre,
+      productionMode,
+      mood,
+      visualSettings,
+      style
+    });
 
-    const styleEnhancement = styleKeywords[style] || styleKeywords.cinematic;
-
-    // Build enhanced prompt
-    const enhancedPrompt = `${prompt}. Style: ${styleEnhancement}. High quality, detailed, professional, 4K resolution.`;
-
-    const negativePrompt = "blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur";
+    const enhancedPrompt = visualResult.enhancedPrompt;
+    const negativePrompt = visualResult.negativePrompt;
 
     // Determine dimensions based on aspect ratio
     const dimensions = {
@@ -24587,6 +25068,8 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
       imageUrl: publicUrl,
       fileName,
       prompt: enhancedPrompt,
+      // Phase 3B: Include visual metadata
+      visualMetadata: visualResult.visualMetadata,
       checkEndpoint: `https://api.runpod.ai/v2/rgq0go2nkcfx4h/status/${jobId}`
     };
 
@@ -24595,6 +25078,53 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate scene image'));
   }
+});
+
+/**
+ * creationWizardGetVisualStyles - Get available Visual Intelligence options
+ * Phase 3B: Exposes compositions, lighting, color palettes for frontend UI
+ */
+exports.creationWizardGetVisualStyles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Build simplified options for frontend
+  const compositions = Object.entries(VISUAL_INTELLIGENCE.compositions).map(([id, comp]) => ({
+    id,
+    name: comp.name,
+    description: comp.useFor.join(', '),
+    genres: comp.genres
+  }));
+
+  const lighting = Object.entries(VISUAL_INTELLIGENCE.lighting).map(([id, light]) => ({
+    id,
+    name: light.name,
+    mood: light.mood,
+    genres: light.genres
+  }));
+
+  const colorPalettes = Object.entries(VISUAL_INTELLIGENCE.colorPalettes).map(([id, palette]) => ({
+    id,
+    name: palette.name,
+    mood: palette.mood,
+    genres: palette.genres
+  }));
+
+  const moods = Object.entries(VISUAL_INTELLIGENCE.moods).map(([id, mood]) => ({
+    id,
+    name: id.charAt(0).toUpperCase() + id.slice(1),
+    lighting: mood.lighting,
+    composition: mood.composition,
+    colorPalette: mood.colorPalette
+  }));
+
+  return {
+    success: true,
+    compositions,
+    lighting,
+    colorPalettes,
+    moods,
+    genreDefaults: VISUAL_INTELLIGENCE.genreVisuals
+  };
 });
 
 /**
