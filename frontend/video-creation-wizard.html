@@ -4256,6 +4256,7 @@
 
                     char.referenceImageUrl = downloadUrl;
                     char.referenceImageBase64 = base64;
+                    char.referenceImageMimeType = file.type; // Store actual MIME type
                     char.referenceImageStatus = 'ready';
 
                     showToast(`Portrait uploaded for "${char.name}"!`, 'success');
@@ -4297,7 +4298,7 @@
             if (charWithRef) {
                 return {
                     base64: charWithRef.referenceImageBase64,
-                    mimeType: 'image/png',
+                    mimeType: charWithRef.referenceImageMimeType || 'image/png', // Use stored or default to PNG
                     characterName: charWithRef.name
                 };
             }
