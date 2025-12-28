@@ -27971,6 +27971,1018 @@ const ASSEMBLY_INTELLIGENCE = {
   }
 };
 
+// =============================================================================
+// PHASE 3F: NARRATIVE STRUCTURE INTELLIGENCE
+// Complete story structure system for professional narrative pacing
+// =============================================================================
+
+const NARRATIVE_STRUCTURE = {
+  // Story Arc Templates - Classic narrative frameworks
+  storyArcs: {
+    'three-act': {
+      name: 'Three-Act Structure',
+      description: 'Classic Hollywood narrative structure',
+      acts: [
+        { name: 'Setup', percentage: 25, purpose: 'Establish world, characters, conflict', energyRange: [0.3, 0.5] },
+        { name: 'Confrontation', percentage: 50, purpose: 'Rising action, complications, midpoint', energyRange: [0.5, 0.9] },
+        { name: 'Resolution', percentage: 25, purpose: 'Climax, falling action, resolution', energyRange: [0.8, 0.4] }
+      ],
+      beats: ['hook', 'inciting-incident', 'plot-point-1', 'midpoint', 'plot-point-2', 'climax', 'resolution'],
+      bestFor: ['film', 'drama', 'documentary', 'brand-story']
+    },
+    'five-act': {
+      name: 'Five-Act Structure',
+      description: 'Shakespearean dramatic structure',
+      acts: [
+        { name: 'Exposition', percentage: 15, purpose: 'Introduction and setup', energyRange: [0.3, 0.4] },
+        { name: 'Rising Action', percentage: 25, purpose: 'Complications develop', energyRange: [0.4, 0.7] },
+        { name: 'Climax', percentage: 20, purpose: 'Peak tension and turning point', energyRange: [0.8, 1.0] },
+        { name: 'Falling Action', percentage: 25, purpose: 'Consequences unfold', energyRange: [0.7, 0.5] },
+        { name: 'Denouement', percentage: 15, purpose: 'Resolution and closure', energyRange: [0.4, 0.3] }
+      ],
+      beats: ['opening', 'complication', 'rising-stakes', 'crisis', 'climax', 'reversal', 'resolution'],
+      bestFor: ['drama', 'thriller', 'epic', 'series']
+    },
+    'heros-journey': {
+      name: "Hero's Journey",
+      description: "Campbell's monomyth structure",
+      acts: [
+        { name: 'Ordinary World', percentage: 8, purpose: 'Establish normal life', energyRange: [0.3, 0.4] },
+        { name: 'Call to Adventure', percentage: 7, purpose: 'Disruption occurs', energyRange: [0.4, 0.6] },
+        { name: 'Refusal of Call', percentage: 5, purpose: 'Initial hesitation', energyRange: [0.4, 0.5] },
+        { name: 'Meeting the Mentor', percentage: 5, purpose: 'Guidance received', energyRange: [0.5, 0.6] },
+        { name: 'Crossing Threshold', percentage: 10, purpose: 'Enter special world', energyRange: [0.6, 0.7] },
+        { name: 'Tests & Allies', percentage: 15, purpose: 'Face challenges', energyRange: [0.6, 0.8] },
+        { name: 'Approach', percentage: 10, purpose: 'Prepare for ordeal', energyRange: [0.7, 0.8] },
+        { name: 'Ordeal', percentage: 10, purpose: 'Central crisis', energyRange: [0.9, 1.0] },
+        { name: 'Reward', percentage: 8, purpose: 'Seize the prize', energyRange: [0.8, 0.7] },
+        { name: 'Road Back', percentage: 7, purpose: 'Return begins', energyRange: [0.6, 0.7] },
+        { name: 'Resurrection', percentage: 10, purpose: 'Final test', energyRange: [0.8, 0.9] },
+        { name: 'Return with Elixir', percentage: 5, purpose: 'Transformation complete', energyRange: [0.5, 0.4] }
+      ],
+      beats: ['ordinary', 'call', 'refusal', 'mentor', 'threshold', 'tests', 'cave', 'ordeal', 'reward', 'road-back', 'resurrection', 'return'],
+      bestFor: ['adventure', 'fantasy', 'inspirational', 'transformation']
+    },
+    'dan-harmon-circle': {
+      name: 'Story Circle',
+      description: "Dan Harmon's simplified hero's journey",
+      acts: [
+        { name: 'Comfort Zone', percentage: 12, purpose: 'Character in comfort', energyRange: [0.3, 0.4] },
+        { name: 'Want Something', percentage: 12, purpose: 'Desire established', energyRange: [0.4, 0.5] },
+        { name: 'Enter Unfamiliar', percentage: 12, purpose: 'Leave comfort zone', energyRange: [0.5, 0.7] },
+        { name: 'Adapt to It', percentage: 14, purpose: 'Learn and struggle', energyRange: [0.6, 0.8] },
+        { name: 'Get What Wanted', percentage: 12, purpose: 'Achieve goal', energyRange: [0.8, 0.9] },
+        { name: 'Pay the Price', percentage: 14, purpose: 'Face consequences', energyRange: [0.7, 0.8] },
+        { name: 'Return to Familiar', percentage: 12, purpose: 'Go back changed', energyRange: [0.5, 0.4] },
+        { name: 'Having Changed', percentage: 12, purpose: 'Show transformation', energyRange: [0.4, 0.5] }
+      ],
+      beats: ['you', 'need', 'go', 'search', 'find', 'take', 'return', 'change'],
+      bestFor: ['tv-series', 'web-series', 'youtube', 'short-film']
+    },
+    'freytags-pyramid': {
+      name: "Freytag's Pyramid",
+      description: 'Classic dramatic tension structure',
+      acts: [
+        { name: 'Exposition', percentage: 15, purpose: 'Background information', energyRange: [0.2, 0.4] },
+        { name: 'Rising Action', percentage: 30, purpose: 'Building tension', energyRange: [0.4, 0.8] },
+        { name: 'Climax', percentage: 10, purpose: 'Peak of tension', energyRange: [0.9, 1.0] },
+        { name: 'Falling Action', percentage: 30, purpose: 'Tension release', energyRange: [0.7, 0.4] },
+        { name: 'Catastrophe', percentage: 15, purpose: 'Final resolution', energyRange: [0.4, 0.3] }
+      ],
+      beats: ['introduction', 'complication', 'climax', 'reversal', 'catastrophe'],
+      bestFor: ['tragedy', 'drama', 'literary']
+    },
+    'kishotenketsu': {
+      name: 'Kishotenketsu',
+      description: 'Four-act structure without conflict (East Asian)',
+      acts: [
+        { name: 'Ki (Introduction)', percentage: 25, purpose: 'Introduce elements', energyRange: [0.3, 0.5] },
+        { name: 'Sho (Development)', percentage: 25, purpose: 'Develop elements', energyRange: [0.5, 0.6] },
+        { name: 'Ten (Twist)', percentage: 25, purpose: 'Unexpected turn', energyRange: [0.7, 0.8] },
+        { name: 'Ketsu (Conclusion)', percentage: 25, purpose: 'Reconcile elements', energyRange: [0.5, 0.4] }
+      ],
+      beats: ['introduction', 'development', 'twist', 'reconciliation'],
+      bestFor: ['anime', 'slice-of-life', 'contemplative', 'artistic']
+    },
+    'inverted-pyramid': {
+      name: 'Inverted Pyramid',
+      description: 'News/journalistic structure - most important first',
+      acts: [
+        { name: 'Lead', percentage: 20, purpose: 'Most important info', energyRange: [0.8, 0.9] },
+        { name: 'Body', percentage: 50, purpose: 'Supporting details', energyRange: [0.6, 0.5] },
+        { name: 'Tail', percentage: 30, purpose: 'Background context', energyRange: [0.4, 0.3] }
+      ],
+      beats: ['hook', 'key-facts', 'details', 'context', 'background'],
+      bestFor: ['news', 'documentary', 'explainer', 'educational']
+    },
+    'youtube-retention': {
+      name: 'YouTube Retention Structure',
+      description: 'Optimized for audience retention metrics',
+      acts: [
+        { name: 'Hook', percentage: 5, purpose: 'Grab attention instantly', energyRange: [0.9, 1.0] },
+        { name: 'Promise', percentage: 5, purpose: 'State value proposition', energyRange: [0.7, 0.8] },
+        { name: 'Setup', percentage: 10, purpose: 'Context and credibility', energyRange: [0.5, 0.6] },
+        { name: 'Content Block 1', percentage: 20, purpose: 'First main point', energyRange: [0.6, 0.8] },
+        { name: 'Pattern Break 1', percentage: 5, purpose: 'Re-engage attention', energyRange: [0.8, 0.9] },
+        { name: 'Content Block 2', percentage: 20, purpose: 'Second main point', energyRange: [0.6, 0.8] },
+        { name: 'Pattern Break 2', percentage: 5, purpose: 'Re-engage attention', energyRange: [0.8, 0.9] },
+        { name: 'Content Block 3', percentage: 15, purpose: 'Third main point', energyRange: [0.7, 0.9] },
+        { name: 'Climax/Reveal', percentage: 10, purpose: 'Biggest payoff', energyRange: [0.9, 1.0] },
+        { name: 'CTA/Outro', percentage: 5, purpose: 'Call to action', energyRange: [0.6, 0.7] }
+      ],
+      beats: ['hook', 'promise', 'setup', 'content-1', 'break-1', 'content-2', 'break-2', 'content-3', 'climax', 'cta'],
+      bestFor: ['youtube', 'educational', 'tutorial', 'listicle']
+    },
+    'tiktok-viral': {
+      name: 'TikTok Viral Structure',
+      description: 'Optimized for short-form viral content',
+      acts: [
+        { name: 'Hook', percentage: 10, purpose: 'Stop the scroll', energyRange: [1.0, 1.0] },
+        { name: 'Setup', percentage: 15, purpose: 'Quick context', energyRange: [0.7, 0.8] },
+        { name: 'Build', percentage: 25, purpose: 'Rising tension/curiosity', energyRange: [0.8, 0.9] },
+        { name: 'Payoff', percentage: 30, purpose: 'The reveal/punchline', energyRange: [0.9, 1.0] },
+        { name: 'Tag', percentage: 20, purpose: 'Reaction/loop point', energyRange: [0.8, 1.0] }
+      ],
+      beats: ['hook', 'setup', 'build', 'payoff', 'tag'],
+      bestFor: ['tiktok', 'reels', 'shorts', 'viral']
+    },
+    'problem-solution': {
+      name: 'Problem-Solution',
+      description: 'Classic marketing/educational structure',
+      acts: [
+        { name: 'Problem', percentage: 30, purpose: 'Establish pain point', energyRange: [0.5, 0.7] },
+        { name: 'Agitation', percentage: 20, purpose: 'Amplify the problem', energyRange: [0.7, 0.8] },
+        { name: 'Solution', percentage: 35, purpose: 'Present the answer', energyRange: [0.6, 0.8] },
+        { name: 'Proof/CTA', percentage: 15, purpose: 'Evidence and action', energyRange: [0.7, 0.9] }
+      ],
+      beats: ['problem', 'agitation', 'solution', 'proof', 'action'],
+      bestFor: ['commercial', 'explainer', 'sales', 'tutorial']
+    },
+    'before-after-bridge': {
+      name: 'Before-After-Bridge',
+      description: 'Transformation-focused narrative',
+      acts: [
+        { name: 'Before', percentage: 30, purpose: 'Current painful state', energyRange: [0.4, 0.5] },
+        { name: 'After', percentage: 30, purpose: 'Desired future state', energyRange: [0.7, 0.9] },
+        { name: 'Bridge', percentage: 40, purpose: 'How to get there', energyRange: [0.6, 0.8] }
+      ],
+      beats: ['current-state', 'future-vision', 'transformation-path', 'action-steps'],
+      bestFor: ['transformation', 'testimonial', 'coaching', 'inspirational']
+    },
+    'documentary-observational': {
+      name: 'Documentary Observational',
+      description: 'Cinéma vérité style structure',
+      acts: [
+        { name: 'Immersion', percentage: 20, purpose: 'Enter the world', energyRange: [0.3, 0.5] },
+        { name: 'Observation', percentage: 35, purpose: 'Witness events unfold', energyRange: [0.4, 0.7] },
+        { name: 'Revelation', percentage: 25, purpose: 'Truth emerges', energyRange: [0.6, 0.8] },
+        { name: 'Reflection', percentage: 20, purpose: 'Meaning and impact', energyRange: [0.5, 0.4] }
+      ],
+      beats: ['entry', 'observation', 'development', 'revelation', 'meaning'],
+      bestFor: ['documentary', 'reality', 'nature', 'portrait']
+    }
+  },
+
+  // Emotional Journey Mapping
+  emotionalJourneys: {
+    'triumph': {
+      name: 'Triumph Arc',
+      description: 'Low to high emotional journey',
+      curve: [0.3, 0.4, 0.5, 0.6, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+      mood: 'hopeful',
+      endFeeling: 'inspired'
+    },
+    'tragedy': {
+      name: 'Tragedy Arc',
+      description: 'High to low emotional journey',
+      curve: [0.7, 0.8, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2],
+      mood: 'melancholic',
+      endFeeling: 'reflective'
+    },
+    'redemption': {
+      name: 'Redemption Arc',
+      description: 'Fall then rise pattern',
+      curve: [0.6, 0.5, 0.4, 0.3, 0.2, 0.3, 0.5, 0.7, 0.8, 0.9],
+      mood: 'hopeful',
+      endFeeling: 'uplifted'
+    },
+    'rags-to-riches': {
+      name: 'Rags to Riches',
+      description: 'Steady climb from bottom',
+      curve: [0.2, 0.3, 0.4, 0.5, 0.6, 0.65, 0.7, 0.8, 0.9, 0.95],
+      mood: 'inspirational',
+      endFeeling: 'satisfied'
+    },
+    'riches-to-rags': {
+      name: 'Riches to Rags',
+      description: 'Decline from prosperity',
+      curve: [0.9, 0.85, 0.8, 0.7, 0.6, 0.5, 0.4, 0.35, 0.3, 0.25],
+      mood: 'cautionary',
+      endFeeling: 'sobered'
+    },
+    'icarus': {
+      name: 'Icarus Arc',
+      description: 'Rise then fall pattern',
+      curve: [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.7, 0.5, 0.3, 0.2],
+      mood: 'cautionary',
+      endFeeling: 'thoughtful'
+    },
+    'oedipus': {
+      name: 'Oedipus Arc',
+      description: 'Fall, rise, then fall',
+      curve: [0.7, 0.5, 0.3, 0.4, 0.6, 0.8, 0.7, 0.5, 0.3, 0.2],
+      mood: 'tragic',
+      endFeeling: 'cathartic'
+    },
+    'cinderella': {
+      name: 'Cinderella Arc',
+      description: 'Rise, fall, rise pattern',
+      curve: [0.3, 0.5, 0.7, 0.8, 0.5, 0.3, 0.5, 0.7, 0.9, 1.0],
+      mood: 'magical',
+      endFeeling: 'delighted'
+    },
+    'thriller': {
+      name: 'Thriller Arc',
+      description: 'Tension building with peaks',
+      curve: [0.5, 0.6, 0.7, 0.6, 0.8, 0.7, 0.9, 0.8, 1.0, 0.6],
+      mood: 'tense',
+      endFeeling: 'relieved'
+    },
+    'mystery': {
+      name: 'Mystery Arc',
+      description: 'Curiosity building to revelation',
+      curve: [0.4, 0.5, 0.6, 0.55, 0.65, 0.7, 0.75, 0.85, 1.0, 0.7],
+      mood: 'curious',
+      endFeeling: 'satisfied'
+    },
+    'comedy': {
+      name: 'Comedy Arc',
+      description: 'Ups and downs with happy ending',
+      curve: [0.6, 0.7, 0.5, 0.8, 0.4, 0.9, 0.5, 0.7, 0.85, 0.95],
+      mood: 'playful',
+      endFeeling: 'joyful'
+    },
+    'horror': {
+      name: 'Horror Arc',
+      description: 'Dread building with shocks',
+      curve: [0.5, 0.6, 0.7, 0.5, 0.8, 0.6, 0.9, 0.7, 1.0, 0.3],
+      mood: 'dread',
+      endFeeling: 'unsettled'
+    },
+    'meditative': {
+      name: 'Meditative Arc',
+      description: 'Calm and contemplative throughout',
+      curve: [0.4, 0.45, 0.5, 0.55, 0.5, 0.55, 0.5, 0.45, 0.5, 0.45],
+      mood: 'peaceful',
+      endFeeling: 'centered'
+    },
+    'educational': {
+      name: 'Educational Arc',
+      description: 'Steady engagement with peaks',
+      curve: [0.7, 0.6, 0.65, 0.7, 0.8, 0.65, 0.7, 0.8, 0.85, 0.9],
+      mood: 'curious',
+      endFeeling: 'enlightened'
+    }
+  },
+
+  // Narrative Beat Types
+  narrativeBeats: {
+    'hook': {
+      name: 'Hook',
+      purpose: 'Capture immediate attention',
+      position: 'opening',
+      duration: { percentage: 3, min: 3, max: 15 },
+      energy: 0.9,
+      techniques: ['question', 'statement', 'visual-shock', 'mystery', 'promise'],
+      transitionIn: 'none',
+      transitionOut: 'cut'
+    },
+    'inciting-incident': {
+      name: 'Inciting Incident',
+      purpose: 'Disrupt the status quo',
+      position: 'act-1',
+      duration: { percentage: 5, min: 10, max: 60 },
+      energy: 0.7,
+      techniques: ['event', 'revelation', 'arrival', 'discovery'],
+      transitionIn: 'dissolve',
+      transitionOut: 'cut'
+    },
+    'plot-point': {
+      name: 'Plot Point',
+      purpose: 'Major story turning point',
+      position: 'act-break',
+      duration: { percentage: 8, min: 15, max: 90 },
+      energy: 0.8,
+      techniques: ['revelation', 'decision', 'confrontation', 'discovery'],
+      transitionIn: 'cut',
+      transitionOut: 'dissolve'
+    },
+    'midpoint': {
+      name: 'Midpoint',
+      purpose: 'Central pivot of the story',
+      position: 'center',
+      duration: { percentage: 10, min: 20, max: 120 },
+      energy: 0.85,
+      techniques: ['revelation', 'reversal', 'commitment', 'false-victory'],
+      transitionIn: 'dissolve',
+      transitionOut: 'fade'
+    },
+    'climax': {
+      name: 'Climax',
+      purpose: 'Peak emotional/narrative moment',
+      position: 'act-3',
+      duration: { percentage: 12, min: 30, max: 180 },
+      energy: 1.0,
+      techniques: ['confrontation', 'revelation', 'sacrifice', 'transformation'],
+      transitionIn: 'cut',
+      transitionOut: 'dissolve'
+    },
+    'resolution': {
+      name: 'Resolution',
+      purpose: 'Tie up loose ends',
+      position: 'ending',
+      duration: { percentage: 8, min: 15, max: 90 },
+      energy: 0.5,
+      techniques: ['new-normal', 'reflection', 'callback', 'future-glimpse'],
+      transitionIn: 'dissolve',
+      transitionOut: 'fade'
+    },
+    'pattern-break': {
+      name: 'Pattern Break',
+      purpose: 'Re-engage wandering attention',
+      position: 'throughout',
+      duration: { percentage: 2, min: 2, max: 10 },
+      energy: 0.85,
+      techniques: ['visual-change', 'tone-shift', 'direct-address', 'humor', 'surprise'],
+      transitionIn: 'cut',
+      transitionOut: 'cut'
+    },
+    'tension-peak': {
+      name: 'Tension Peak',
+      purpose: 'Moment of maximum suspense',
+      position: 'pre-climax',
+      duration: { percentage: 5, min: 10, max: 60 },
+      energy: 0.95,
+      techniques: ['pause', 'escalation', 'countdown', 'confrontation'],
+      transitionIn: 'cut',
+      transitionOut: 'cut'
+    },
+    'relief-moment': {
+      name: 'Relief Moment',
+      purpose: 'Release built-up tension',
+      position: 'post-tension',
+      duration: { percentage: 3, min: 5, max: 30 },
+      energy: 0.4,
+      techniques: ['humor', 'breath', 'beauty-shot', 'quiet-moment'],
+      transitionIn: 'dissolve',
+      transitionOut: 'dissolve'
+    },
+    'callback': {
+      name: 'Callback',
+      purpose: 'Reference earlier moment',
+      position: 'resolution',
+      duration: { percentage: 2, min: 3, max: 15 },
+      energy: 0.6,
+      techniques: ['visual-echo', 'dialogue-repeat', 'motif-return'],
+      transitionIn: 'match-cut',
+      transitionOut: 'dissolve'
+    },
+    'montage': {
+      name: 'Montage',
+      purpose: 'Compress time/show progression',
+      position: 'transition',
+      duration: { percentage: 10, min: 20, max: 120 },
+      energy: 0.7,
+      techniques: ['time-lapse', 'parallel-action', 'training', 'relationship-build'],
+      transitionIn: 'dissolve',
+      transitionOut: 'dissolve'
+    },
+    'revelation': {
+      name: 'Revelation',
+      purpose: 'Major information reveal',
+      position: 'variable',
+      duration: { percentage: 5, min: 10, max: 45 },
+      energy: 0.85,
+      techniques: ['twist', 'discovery', 'confession', 'flashback'],
+      transitionIn: 'cut',
+      transitionOut: 'beat-pause'
+    },
+    'cliffhanger': {
+      name: 'Cliffhanger',
+      purpose: 'Create anticipation for next segment',
+      position: 'episode-end',
+      duration: { percentage: 3, min: 5, max: 20 },
+      energy: 0.9,
+      techniques: ['question', 'danger', 'revelation-partial', 'arrival'],
+      transitionIn: 'cut',
+      transitionOut: 'fade-to-black'
+    }
+  },
+
+  // Genre-Specific Narrative Patterns
+  genrePatterns: {
+    'horror': {
+      arc: 'heros-journey',
+      emotionalJourney: 'horror',
+      requiredBeats: ['hook', 'inciting-incident', 'tension-peak', 'climax', 'relief-moment'],
+      pacing: 'dynamic',
+      tensionStyle: 'building-with-releases',
+      scareIntervals: { min: 45, max: 90 },
+      endingTypes: ['twist', 'ambiguous', 'survivor', 'cycle-continues']
+    },
+    'thriller': {
+      arc: 'five-act',
+      emotionalJourney: 'thriller',
+      requiredBeats: ['hook', 'inciting-incident', 'plot-point', 'tension-peak', 'climax', 'resolution'],
+      pacing: 'escalating',
+      tensionStyle: 'ratcheting',
+      twistPlacement: 0.75,
+      endingTypes: ['reveal', 'confrontation', 'escape', 'sacrifice']
+    },
+    'drama': {
+      arc: 'three-act',
+      emotionalJourney: 'redemption',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'climax', 'resolution'],
+      pacing: 'contemplative',
+      tensionStyle: 'emotional-stakes',
+      characterMoments: 0.4,
+      endingTypes: ['transformation', 'acceptance', 'sacrifice', 'reconciliation']
+    },
+    'comedy': {
+      arc: 'dan-harmon-circle',
+      emotionalJourney: 'comedy',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'climax', 'resolution'],
+      pacing: 'varied',
+      tensionStyle: 'comic-escalation',
+      jokeIntervals: { min: 15, max: 45 },
+      endingTypes: ['happy', 'ironic', 'callback', 'absurd']
+    },
+    'documentary': {
+      arc: 'inverted-pyramid',
+      emotionalJourney: 'educational',
+      requiredBeats: ['hook', 'revelation', 'midpoint', 'climax', 'resolution'],
+      pacing: 'measured',
+      tensionStyle: 'curiosity-building',
+      interviewRatio: 0.4,
+      endingTypes: ['reflection', 'call-to-action', 'update', 'question']
+    },
+    'action': {
+      arc: 'heros-journey',
+      emotionalJourney: 'triumph',
+      requiredBeats: ['hook', 'inciting-incident', 'montage', 'tension-peak', 'climax', 'resolution'],
+      pacing: 'fast',
+      tensionStyle: 'physical-stakes',
+      actionSequenceRatio: 0.4,
+      endingTypes: ['victory', 'sacrifice', 'setup-sequel', 'hero-walk-away']
+    },
+    'romance': {
+      arc: 'three-act',
+      emotionalJourney: 'cinderella',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'revelation', 'climax', 'resolution'],
+      pacing: 'balanced',
+      tensionStyle: 'will-they-wont-they',
+      romanticBeatInterval: 0.2,
+      endingTypes: ['together', 'apart-but-growth', 'reunion', 'sacrifice']
+    },
+    'sci-fi': {
+      arc: 'five-act',
+      emotionalJourney: 'mystery',
+      requiredBeats: ['hook', 'inciting-incident', 'revelation', 'midpoint', 'climax', 'resolution'],
+      pacing: 'dynamic',
+      tensionStyle: 'world-building-mystery',
+      expositionStyle: 'show-dont-tell',
+      endingTypes: ['resolution', 'open-question', 'transformation', 'cycle']
+    },
+    'fantasy': {
+      arc: 'heros-journey',
+      emotionalJourney: 'triumph',
+      requiredBeats: ['hook', 'inciting-incident', 'montage', 'midpoint', 'climax', 'resolution'],
+      pacing: 'epic',
+      tensionStyle: 'quest-stakes',
+      worldBuildingRatio: 0.25,
+      endingTypes: ['victory', 'sacrifice', 'transformation', 'new-beginning']
+    },
+    'tutorial': {
+      arc: 'problem-solution',
+      emotionalJourney: 'educational',
+      requiredBeats: ['hook', 'pattern-break', 'revelation', 'resolution'],
+      pacing: 'instructional',
+      tensionStyle: 'curiosity',
+      stepInterval: 60,
+      endingTypes: ['summary', 'call-to-action', 'next-steps', 'challenge']
+    },
+    'vlog': {
+      arc: 'youtube-retention',
+      emotionalJourney: 'comedy',
+      requiredBeats: ['hook', 'pattern-break', 'climax', 'resolution'],
+      pacing: 'conversational',
+      tensionStyle: 'authenticity',
+      personalMomentRatio: 0.5,
+      endingTypes: ['cta', 'tease', 'callback', 'outro-bit']
+    },
+    'commercial': {
+      arc: 'before-after-bridge',
+      emotionalJourney: 'rags-to-riches',
+      requiredBeats: ['hook', 'revelation', 'climax'],
+      pacing: 'punchy',
+      tensionStyle: 'desire-creation',
+      brandMomentPlacement: 0.7,
+      endingTypes: ['cta', 'brand-reveal', 'tagline', 'offer']
+    },
+    'music-video': {
+      arc: 'kishotenketsu',
+      emotionalJourney: 'triumph',
+      requiredBeats: ['hook', 'midpoint', 'climax'],
+      pacing: 'music-driven',
+      tensionStyle: 'visual-narrative',
+      performanceRatio: 0.6,
+      endingTypes: ['fade', 'callback', 'visual-punctuation', 'loop-point']
+    },
+    'asmr': {
+      arc: 'documentary-observational',
+      emotionalJourney: 'meditative',
+      requiredBeats: ['hook', 'resolution'],
+      pacing: 'slow',
+      tensionStyle: 'relaxation-deepening',
+      triggerInterval: 30,
+      endingTypes: ['fade', 'ambient', 'whispered-outro']
+    }
+  },
+
+  // Tension Curve Patterns
+  tensionCurves: {
+    'steady-build': {
+      name: 'Steady Build',
+      description: 'Continuous tension increase',
+      curve: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.5],
+      bestFor: ['thriller', 'horror', 'action']
+    },
+    'waves': {
+      name: 'Tension Waves',
+      description: 'Build and release cycles',
+      curve: [0.3, 0.5, 0.7, 0.4, 0.6, 0.8, 0.5, 0.7, 0.9, 0.6],
+      bestFor: ['drama', 'romance', 'adventure']
+    },
+    'flat-with-spikes': {
+      name: 'Flat with Spikes',
+      description: 'Calm baseline with sudden peaks',
+      curve: [0.4, 0.4, 0.9, 0.4, 0.4, 0.4, 0.95, 0.4, 0.4, 1.0],
+      bestFor: ['horror', 'mystery', 'thriller']
+    },
+    'escalating-steps': {
+      name: 'Escalating Steps',
+      description: 'Stepped increases in tension',
+      curve: [0.3, 0.3, 0.5, 0.5, 0.5, 0.7, 0.7, 0.7, 0.9, 0.9],
+      bestFor: ['action', 'heist', 'competition']
+    },
+    'slow-burn': {
+      name: 'Slow Burn',
+      description: 'Very gradual build to explosive climax',
+      curve: [0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.55, 0.7, 0.9, 1.0],
+      bestFor: ['psychological', 'drama', 'mystery']
+    },
+    'rollercoaster': {
+      name: 'Rollercoaster',
+      description: 'Extreme ups and downs',
+      curve: [0.5, 0.9, 0.3, 0.8, 0.4, 0.95, 0.3, 0.85, 1.0, 0.5],
+      bestFor: ['comedy', 'adventure', 'animation']
+    },
+    'inverted-u': {
+      name: 'Inverted U',
+      description: 'Build to middle peak then decline',
+      curve: [0.3, 0.5, 0.7, 0.85, 0.95, 1.0, 0.85, 0.7, 0.5, 0.4],
+      bestFor: ['tragedy', 'rise-and-fall', 'cautionary']
+    },
+    'double-peak': {
+      name: 'Double Peak',
+      description: 'Two major tension climaxes',
+      curve: [0.3, 0.5, 0.8, 1.0, 0.5, 0.6, 0.8, 0.95, 1.0, 0.5],
+      bestFor: ['epic', 'series-finale', 'action']
+    }
+  },
+
+  // Scene-Level Structure
+  sceneStructure: {
+    'standard': {
+      name: 'Standard Scene',
+      components: ['setup', 'conflict', 'resolution'],
+      timing: [0.2, 0.6, 0.2]
+    },
+    'action': {
+      name: 'Action Scene',
+      components: ['stakes-reminder', 'action', 'consequence'],
+      timing: [0.1, 0.7, 0.2]
+    },
+    'dialogue': {
+      name: 'Dialogue Scene',
+      components: ['context', 'exchange', 'shift'],
+      timing: [0.15, 0.7, 0.15]
+    },
+    'revelation': {
+      name: 'Revelation Scene',
+      components: ['setup', 'build', 'reveal', 'reaction'],
+      timing: [0.2, 0.3, 0.2, 0.3]
+    },
+    'montage': {
+      name: 'Montage Scene',
+      components: ['establish', 'progression', 'culmination'],
+      timing: [0.1, 0.7, 0.2]
+    },
+    'transition': {
+      name: 'Transition Scene',
+      components: ['exit-previous', 'bridge', 'enter-next'],
+      timing: [0.3, 0.4, 0.3]
+    }
+  },
+
+  // Narrative Presets combining all elements
+  narrativePresets: {
+    'youtube-standard': {
+      name: 'YouTube Standard',
+      arc: 'youtube-retention',
+      emotionalJourney: 'educational',
+      tensionCurve: 'waves',
+      requiredBeats: ['hook', 'pattern-break', 'climax', 'resolution'],
+      patternBreakInterval: 45,
+      hookDuration: 5,
+      endingStyle: 'cta'
+    },
+    'tiktok-viral': {
+      name: 'TikTok Viral',
+      arc: 'tiktok-viral',
+      emotionalJourney: 'comedy',
+      tensionCurve: 'steady-build',
+      requiredBeats: ['hook', 'payoff'],
+      hookDuration: 1,
+      payoffPlacement: 0.8,
+      endingStyle: 'loop'
+    },
+    'cinematic-short': {
+      name: 'Cinematic Short Film',
+      arc: 'three-act',
+      emotionalJourney: 'redemption',
+      tensionCurve: 'slow-burn',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'climax', 'resolution'],
+      characterDevelopment: 0.3,
+      endingStyle: 'emotional-resolution'
+    },
+    'documentary-feature': {
+      name: 'Documentary Feature',
+      arc: 'documentary-observational',
+      emotionalJourney: 'mystery',
+      tensionCurve: 'escalating-steps',
+      requiredBeats: ['hook', 'revelation', 'midpoint', 'revelation', 'climax', 'resolution'],
+      interviewRatio: 0.4,
+      endingStyle: 'reflection'
+    },
+    'series-episode': {
+      name: 'Series Episode',
+      arc: 'dan-harmon-circle',
+      emotionalJourney: 'cinderella',
+      tensionCurve: 'double-peak',
+      requiredBeats: ['hook', 'inciting-incident', 'midpoint', 'climax', 'cliffhanger'],
+      serialElements: true,
+      endingStyle: 'cliffhanger'
+    },
+    'commercial-spot': {
+      name: 'Commercial Spot',
+      arc: 'problem-solution',
+      emotionalJourney: 'rags-to-riches',
+      tensionCurve: 'steady-build',
+      requiredBeats: ['hook', 'revelation', 'climax'],
+      brandMoment: 0.8,
+      endingStyle: 'cta'
+    },
+    'music-video-narrative': {
+      name: 'Music Video (Narrative)',
+      arc: 'kishotenketsu',
+      emotionalJourney: 'triumph',
+      tensionCurve: 'waves',
+      requiredBeats: ['hook', 'midpoint', 'climax'],
+      performanceRatio: 0.6,
+      endingStyle: 'visual-punctuation'
+    },
+    'thriller-short': {
+      name: 'Thriller Short',
+      arc: 'five-act',
+      emotionalJourney: 'thriller',
+      tensionCurve: 'slow-burn',
+      requiredBeats: ['hook', 'inciting-incident', 'tension-peak', 'revelation', 'climax'],
+      twistPlacement: 0.75,
+      endingStyle: 'twist'
+    },
+    'horror-short': {
+      name: 'Horror Short',
+      arc: 'freytags-pyramid',
+      emotionalJourney: 'horror',
+      tensionCurve: 'flat-with-spikes',
+      requiredBeats: ['hook', 'tension-peak', 'climax', 'relief-moment'],
+      scareIntervals: 45,
+      endingStyle: 'ambiguous'
+    },
+    'inspirational': {
+      name: 'Inspirational Story',
+      arc: 'heros-journey',
+      emotionalJourney: 'triumph',
+      tensionCurve: 'escalating-steps',
+      requiredBeats: ['hook', 'inciting-incident', 'montage', 'climax', 'resolution'],
+      emotionalPeaks: 3,
+      endingStyle: 'uplifting'
+    }
+  }
+};
+
+/**
+ * Build narrative structure for a project
+ */
+function buildNarrativeStructure(options = {}) {
+  const {
+    genre,
+    duration,
+    platform,
+    preset,
+    sceneCount,
+    mood,
+    customArc
+  } = options;
+
+  // Get narrative preset or build from genre
+  let narrativeConfig;
+  if (preset && NARRATIVE_STRUCTURE.narrativePresets[preset]) {
+    narrativeConfig = NARRATIVE_STRUCTURE.narrativePresets[preset];
+  } else {
+    // Build from genre pattern
+    const genrePattern = NARRATIVE_STRUCTURE.genrePatterns[genre] ||
+                         NARRATIVE_STRUCTURE.genrePatterns['drama'];
+    narrativeConfig = {
+      arc: genrePattern.arc,
+      emotionalJourney: genrePattern.emotionalJourney,
+      tensionCurve: 'waves',
+      requiredBeats: genrePattern.requiredBeats,
+      pacing: genrePattern.pacing
+    };
+  }
+
+  // Get story arc
+  const storyArc = customArc || NARRATIVE_STRUCTURE.storyArcs[narrativeConfig.arc] ||
+                   NARRATIVE_STRUCTURE.storyArcs['three-act'];
+
+  // Get emotional journey
+  const emotionalJourney = NARRATIVE_STRUCTURE.emotionalJourneys[narrativeConfig.emotionalJourney] ||
+                           NARRATIVE_STRUCTURE.emotionalJourneys['triumph'];
+
+  // Get tension curve
+  const tensionCurve = NARRATIVE_STRUCTURE.tensionCurves[narrativeConfig.tensionCurve] ||
+                       NARRATIVE_STRUCTURE.tensionCurves['waves'];
+
+  // Calculate act timings
+  const acts = storyArc.acts.map((act, index) => {
+    const startPercentage = storyArc.acts.slice(0, index)
+      .reduce((sum, a) => sum + a.percentage, 0);
+    const startTime = (startPercentage / 100) * duration;
+    const actDuration = (act.percentage / 100) * duration;
+
+    return {
+      name: act.name,
+      startTime,
+      endTime: startTime + actDuration,
+      duration: actDuration,
+      purpose: act.purpose,
+      energyRange: act.energyRange,
+      percentage: act.percentage
+    };
+  });
+
+  // Map required beats to timeline
+  const beatTimings = narrativeConfig.requiredBeats.map(beatId => {
+    const beat = NARRATIVE_STRUCTURE.narrativeBeats[beatId];
+    if (!beat) return null;
+
+    // Calculate position based on beat type
+    let position;
+    switch (beat.position) {
+      case 'opening':
+        position = 0;
+        break;
+      case 'act-1':
+        position = 0.15;
+        break;
+      case 'center':
+        position = 0.5;
+        break;
+      case 'act-break':
+        position = 0.25;
+        break;
+      case 'pre-climax':
+        position = 0.75;
+        break;
+      case 'act-3':
+        position = 0.85;
+        break;
+      case 'ending':
+        position = 0.92;
+        break;
+      default:
+        position = 0.5;
+    }
+
+    const beatDuration = Math.min(
+      beat.duration.max,
+      Math.max(beat.duration.min, (beat.duration.percentage / 100) * duration)
+    );
+
+    return {
+      id: beatId,
+      name: beat.name,
+      purpose: beat.purpose,
+      startTime: position * duration,
+      duration: beatDuration,
+      energy: beat.energy,
+      techniques: beat.techniques,
+      transitionIn: beat.transitionIn,
+      transitionOut: beat.transitionOut
+    };
+  }).filter(Boolean);
+
+  // Generate emotional curve mapped to timeline
+  const emotionalCurve = emotionalJourney.curve.map((value, index) => ({
+    position: index / (emotionalJourney.curve.length - 1),
+    time: (index / (emotionalJourney.curve.length - 1)) * duration,
+    energy: value,
+    mood: emotionalJourney.mood
+  }));
+
+  // Generate tension curve mapped to timeline
+  const tensionPoints = tensionCurve.curve.map((value, index) => ({
+    position: index / (tensionCurve.curve.length - 1),
+    time: (index / (tensionCurve.curve.length - 1)) * duration,
+    tension: value
+  }));
+
+  // Calculate scene assignments to acts
+  const sceneAssignments = [];
+  if (sceneCount > 0) {
+    let sceneIndex = 0;
+    acts.forEach(act => {
+      const scenesInAct = Math.round((act.percentage / 100) * sceneCount);
+      for (let i = 0; i < scenesInAct && sceneIndex < sceneCount; i++) {
+        sceneAssignments.push({
+          sceneIndex,
+          act: act.name,
+          suggestedEnergy: (act.energyRange[0] + act.energyRange[1]) / 2,
+          purpose: act.purpose
+        });
+        sceneIndex++;
+      }
+    });
+    // Assign remaining scenes to last act
+    while (sceneIndex < sceneCount) {
+      const lastAct = acts[acts.length - 1];
+      sceneAssignments.push({
+        sceneIndex,
+        act: lastAct.name,
+        suggestedEnergy: lastAct.energyRange[1],
+        purpose: lastAct.purpose
+      });
+      sceneIndex++;
+    }
+  }
+
+  return {
+    structure: {
+      arc: storyArc.name,
+      arcId: narrativeConfig.arc,
+      description: storyArc.description
+    },
+    acts,
+    beats: beatTimings,
+    emotionalJourney: {
+      type: emotionalJourney.name,
+      mood: emotionalJourney.mood,
+      endFeeling: emotionalJourney.endFeeling,
+      curve: emotionalCurve
+    },
+    tension: {
+      type: tensionCurve.name,
+      description: tensionCurve.description,
+      curve: tensionPoints
+    },
+    sceneAssignments,
+    recommendations: {
+      hookDuration: narrativeConfig.hookDuration || 5,
+      patternBreakInterval: narrativeConfig.patternBreakInterval || 60,
+      endingStyle: narrativeConfig.endingStyle || 'resolution',
+      pacing: narrativeConfig.pacing || 'balanced'
+    }
+  };
+}
+
+/**
+ * Get narrative beat suggestions for a specific scene
+ */
+function getSceneBeatSuggestion(options = {}) {
+  const { sceneIndex, totalScenes, genre, currentEnergy, duration } = options;
+
+  const position = sceneIndex / (totalScenes - 1);
+  const genrePattern = NARRATIVE_STRUCTURE.genrePatterns[genre] ||
+                       NARRATIVE_STRUCTURE.genrePatterns['drama'];
+
+  // Determine most likely beat based on position
+  let suggestedBeat = 'standard';
+  let suggestedEnergy = 0.5;
+  let purpose = '';
+
+  if (position === 0) {
+    suggestedBeat = 'hook';
+    suggestedEnergy = 0.9;
+    purpose = 'Capture immediate attention';
+  } else if (position < 0.15) {
+    suggestedBeat = 'inciting-incident';
+    suggestedEnergy = 0.7;
+    purpose = 'Establish the central conflict';
+  } else if (position >= 0.45 && position <= 0.55) {
+    suggestedBeat = 'midpoint';
+    suggestedEnergy = 0.85;
+    purpose = 'Central turning point';
+  } else if (position >= 0.8 && position < 0.9) {
+    suggestedBeat = 'climax';
+    suggestedEnergy = 1.0;
+    purpose = 'Peak emotional moment';
+  } else if (position >= 0.9) {
+    suggestedBeat = 'resolution';
+    suggestedEnergy = 0.5;
+    purpose = 'Conclude and resolve';
+  } else if (position % 0.25 < 0.05) {
+    suggestedBeat = 'plot-point';
+    suggestedEnergy = 0.8;
+    purpose = 'Major story development';
+  }
+
+  const beat = NARRATIVE_STRUCTURE.narrativeBeats[suggestedBeat];
+
+  return {
+    beat: suggestedBeat,
+    name: beat?.name || 'Scene',
+    energy: suggestedEnergy,
+    purpose,
+    techniques: beat?.techniques || [],
+    transitionIn: beat?.transitionIn || 'cut',
+    transitionOut: beat?.transitionOut || 'cut',
+    sceneDuration: calculateSceneDurationForBeat(suggestedBeat, duration)
+  };
+}
+
+/**
+ * Calculate appropriate scene duration for a narrative beat
+ */
+function calculateSceneDurationForBeat(beatType, totalDuration) {
+  const beat = NARRATIVE_STRUCTURE.narrativeBeats[beatType];
+  if (!beat) return 5;
+
+  const targetDuration = (beat.duration.percentage / 100) * totalDuration;
+  return Math.min(beat.duration.max, Math.max(beat.duration.min, targetDuration));
+}
+
+/**
+ * Get emotional journey recommendation based on genre and mood
+ */
+function getEmotionalJourneyRecommendation(options = {}) {
+  const { genre, mood, targetFeeling } = options;
+
+  const genrePattern = NARRATIVE_STRUCTURE.genrePatterns[genre];
+  let recommendedJourney = 'triumph';
+
+  if (genrePattern) {
+    recommendedJourney = genrePattern.emotionalJourney;
+  } else if (mood) {
+    // Match mood to journey
+    const moodToJourney = {
+      'epic': 'triumph',
+      'dark': 'tragedy',
+      'hopeful': 'redemption',
+      'mysterious': 'mystery',
+      'tense': 'thriller',
+      'playful': 'comedy',
+      'peaceful': 'meditative'
+    };
+    recommendedJourney = moodToJourney[mood] || 'triumph';
+  }
+
+  const journey = NARRATIVE_STRUCTURE.emotionalJourneys[recommendedJourney];
+
+  return {
+    type: recommendedJourney,
+    name: journey.name,
+    description: journey.description,
+    mood: journey.mood,
+    endFeeling: journey.endFeeling,
+    curve: journey.curve,
+    alternatives: Object.keys(NARRATIVE_STRUCTURE.emotionalJourneys)
+      .filter(j => j !== recommendedJourney)
+      .slice(0, 3)
+  };
+}
+
 /**
  * Get recommended transition for scene change
  */
@@ -28357,6 +29369,223 @@ exports.creationWizardGetTransitionRecommendation = functions.https.onCall(async
   return {
     success: true,
     recommendation
+  };
+});
+
+// =============================================================================
+// PHASE 3F: NARRATIVE STRUCTURE CLOUD FUNCTIONS
+// =============================================================================
+
+/**
+ * creationWizardGetNarrativeProfiles - Get all available narrative structures
+ */
+exports.creationWizardGetNarrativeProfiles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Get story arcs
+  const storyArcs = Object.entries(NARRATIVE_STRUCTURE.storyArcs).map(([id, arc]) => ({
+    id,
+    name: arc.name,
+    description: arc.description,
+    actCount: arc.acts.length,
+    bestFor: arc.bestFor
+  }));
+
+  // Get emotional journeys
+  const emotionalJourneys = Object.entries(NARRATIVE_STRUCTURE.emotionalJourneys).map(([id, journey]) => ({
+    id,
+    name: journey.name,
+    description: journey.description,
+    mood: journey.mood,
+    endFeeling: journey.endFeeling
+  }));
+
+  // Get tension curves
+  const tensionCurves = Object.entries(NARRATIVE_STRUCTURE.tensionCurves).map(([id, curve]) => ({
+    id,
+    name: curve.name,
+    description: curve.description,
+    bestFor: curve.bestFor
+  }));
+
+  // Get narrative beats
+  const narrativeBeats = Object.entries(NARRATIVE_STRUCTURE.narrativeBeats).map(([id, beat]) => ({
+    id,
+    name: beat.name,
+    purpose: beat.purpose,
+    position: beat.position,
+    energy: beat.energy
+  }));
+
+  // Get presets
+  const presets = Object.entries(NARRATIVE_STRUCTURE.narrativePresets).map(([id, preset]) => ({
+    id,
+    name: preset.name,
+    arc: preset.arc,
+    emotionalJourney: preset.emotionalJourney,
+    endingStyle: preset.endingStyle
+  }));
+
+  // Get genre patterns
+  const genrePatterns = Object.entries(NARRATIVE_STRUCTURE.genrePatterns).map(([id, pattern]) => ({
+    id,
+    arc: pattern.arc,
+    emotionalJourney: pattern.emotionalJourney,
+    pacing: pattern.pacing,
+    requiredBeats: pattern.requiredBeats
+  }));
+
+  return {
+    success: true,
+    profiles: {
+      storyArcs,
+      emotionalJourneys,
+      tensionCurves,
+      narrativeBeats,
+      presets,
+      genrePatterns
+    }
+  };
+});
+
+/**
+ * creationWizardBuildNarrativeStructure - Build complete narrative structure for a project
+ */
+exports.creationWizardBuildNarrativeStructure = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, duration, platform, preset, sceneCount, mood, customArc } = data;
+
+  const structure = buildNarrativeStructure({
+    genre,
+    duration: duration || 120,
+    platform,
+    preset,
+    sceneCount: sceneCount || 10,
+    mood,
+    customArc
+  });
+
+  return {
+    success: true,
+    structure
+  };
+});
+
+/**
+ * creationWizardGetSceneBeatSuggestion - Get narrative beat suggestion for a specific scene
+ */
+exports.creationWizardGetSceneBeatSuggestion = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { sceneIndex, totalScenes, genre, currentEnergy, duration } = data;
+
+  const suggestion = getSceneBeatSuggestion({
+    sceneIndex: sceneIndex || 0,
+    totalScenes: totalScenes || 10,
+    genre: genre || 'drama',
+    currentEnergy,
+    duration: duration || 120
+  });
+
+  return {
+    success: true,
+    suggestion
+  };
+});
+
+/**
+ * creationWizardGetEmotionalJourney - Get emotional journey recommendation
+ */
+exports.creationWizardGetEmotionalJourney = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, mood, targetFeeling } = data;
+
+  const recommendation = getEmotionalJourneyRecommendation({
+    genre,
+    mood,
+    targetFeeling
+  });
+
+  return {
+    success: true,
+    recommendation
+  };
+});
+
+/**
+ * creationWizardAnalyzeNarrativePacing - Analyze and optimize narrative pacing for scenes
+ */
+exports.creationWizardAnalyzeNarrativePacing = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { scenes, genre, preset, targetDuration } = data;
+
+  if (!scenes || !Array.isArray(scenes)) {
+    return { success: false, error: 'Scenes array is required' };
+  }
+
+  // Build narrative structure
+  const structure = buildNarrativeStructure({
+    genre: genre || 'drama',
+    duration: targetDuration || scenes.reduce((sum, s) => sum + (s.duration || 5), 0),
+    preset,
+    sceneCount: scenes.length
+  });
+
+  // Analyze each scene against the structure
+  const analysis = scenes.map((scene, index) => {
+    const assignment = structure.sceneAssignments[index];
+    const beatSuggestion = getSceneBeatSuggestion({
+      sceneIndex: index,
+      totalScenes: scenes.length,
+      genre: genre || 'drama',
+      duration: targetDuration
+    });
+
+    // Calculate how well scene aligns with structure
+    const currentDuration = scene.duration || 5;
+    const suggestedDuration = beatSuggestion.sceneDuration;
+    const durationAlignment = 1 - Math.abs(currentDuration - suggestedDuration) / suggestedDuration;
+
+    return {
+      sceneIndex: index,
+      sceneId: scene.id,
+      currentDuration,
+      act: assignment?.act,
+      suggestedBeat: beatSuggestion.beat,
+      beatName: beatSuggestion.name,
+      suggestedEnergy: beatSuggestion.energy,
+      suggestedDuration,
+      purpose: beatSuggestion.purpose,
+      techniques: beatSuggestion.techniques,
+      transitionIn: beatSuggestion.transitionIn,
+      transitionOut: beatSuggestion.transitionOut,
+      alignment: {
+        duration: Math.round(durationAlignment * 100),
+        overall: Math.round(durationAlignment * 100)
+      },
+      suggestions: durationAlignment < 0.7 ? [
+        `Consider adjusting duration to ~${Math.round(suggestedDuration)}s for better pacing`
+      ] : []
+    };
+  });
+
+  return {
+    success: true,
+    structure: {
+      arc: structure.structure.arc,
+      emotionalJourney: structure.emotionalJourney.type,
+      acts: structure.acts.map(a => ({ name: a.name, percentage: a.percentage }))
+    },
+    analysis,
+    overallRecommendations: {
+      hookDuration: structure.recommendations.hookDuration,
+      patternBreakInterval: structure.recommendations.patternBreakInterval,
+      endingStyle: structure.recommendations.endingStyle,
+      pacing: structure.recommendations.pacing
+    }
   };
 });
 

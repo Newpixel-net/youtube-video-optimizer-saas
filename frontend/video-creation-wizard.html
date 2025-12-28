@@ -6177,6 +6177,118 @@
                 </div>
             `;
 
+            // Phase 3F: Narrative Structure Intelligence Card
+            const narrativePreset = state.content.narrativePreset || '';
+            const storyArc = state.content.storyArc || '';
+            const emotionalJourney = state.content.emotionalJourney || '';
+            const tensionCurve = state.content.tensionCurve || '';
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">📖</div>
+                        <div>
+                            <div class="content-card-title">Narrative Structure</div>
+                            <div class="content-card-subtitle">Professional story architecture for your content</div>
+                        </div>
+                        <span style="margin-left: auto; font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 0.2rem; color: white; font-weight: 600;">AI</span>
+                    </div>
+
+                    <!-- Narrative Preset -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Narrative Preset</div>
+                        <select onchange="setNarrativePreset(this.value)" style="width: 100%; padding: 0.6rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.8rem; cursor: pointer;">
+                            <option value="">Auto (from genre)</option>
+                            <option value="youtube-standard" ${narrativePreset === 'youtube-standard' ? 'selected' : ''}>📺 YouTube Standard</option>
+                            <option value="tiktok-viral" ${narrativePreset === 'tiktok-viral' ? 'selected' : ''}>⚡ TikTok Viral</option>
+                            <option value="cinematic-short" ${narrativePreset === 'cinematic-short' ? 'selected' : ''}>🎬 Cinematic Short</option>
+                            <option value="documentary-feature" ${narrativePreset === 'documentary-feature' ? 'selected' : ''}>📽️ Documentary</option>
+                            <option value="series-episode" ${narrativePreset === 'series-episode' ? 'selected' : ''}>📺 Series Episode</option>
+                            <option value="commercial-spot" ${narrativePreset === 'commercial-spot' ? 'selected' : ''}>📢 Commercial/Ad</option>
+                            <option value="music-video-narrative" ${narrativePreset === 'music-video-narrative' ? 'selected' : ''}>🎵 Music Video</option>
+                            <option value="thriller-short" ${narrativePreset === 'thriller-short' ? 'selected' : ''}>😰 Thriller</option>
+                            <option value="horror-short" ${narrativePreset === 'horror-short' ? 'selected' : ''}>👻 Horror</option>
+                            <option value="inspirational" ${narrativePreset === 'inspirational' ? 'selected' : ''}>🌟 Inspirational</option>
+                        </select>
+                    </div>
+
+                    <!-- Story Arc -->
+                    <div style="margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Story Arc</div>
+                        <select onchange="setStoryArc(this.value)" style="width: 100%; padding: 0.6rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.8rem; cursor: pointer;">
+                            <option value="">Auto (from preset)</option>
+                            <option value="three-act" ${storyArc === 'three-act' ? 'selected' : ''}>🎬 Three-Act (Hollywood)</option>
+                            <option value="five-act" ${storyArc === 'five-act' ? 'selected' : ''}>🎭 Five-Act (Shakespeare)</option>
+                            <option value="heros-journey" ${storyArc === 'heros-journey' ? 'selected' : ''}>⚔️ Hero's Journey</option>
+                            <option value="dan-harmon-circle" ${storyArc === 'dan-harmon-circle' ? 'selected' : ''}>🔄 Story Circle (Dan Harmon)</option>
+                            <option value="freytags-pyramid" ${storyArc === 'freytags-pyramid' ? 'selected' : ''}>📐 Freytag's Pyramid</option>
+                            <option value="kishotenketsu" ${storyArc === 'kishotenketsu' ? 'selected' : ''}>🎌 Kishotenketsu (East Asian)</option>
+                            <option value="youtube-retention" ${storyArc === 'youtube-retention' ? 'selected' : ''}>📈 YouTube Retention</option>
+                            <option value="tiktok-viral" ${storyArc === 'tiktok-viral' ? 'selected' : ''}>⚡ TikTok Viral</option>
+                            <option value="problem-solution" ${storyArc === 'problem-solution' ? 'selected' : ''}>💡 Problem-Solution</option>
+                            <option value="before-after-bridge" ${storyArc === 'before-after-bridge' ? 'selected' : ''}>🌉 Before-After-Bridge</option>
+                            <option value="inverted-pyramid" ${storyArc === 'inverted-pyramid' ? 'selected' : ''}>📰 Inverted Pyramid (News)</option>
+                            <option value="documentary-observational" ${storyArc === 'documentary-observational' ? 'selected' : ''}>🎥 Documentary Observational</option>
+                        </select>
+                    </div>
+
+                    <!-- Emotional Journey & Tension (side by side) -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Emotional Arc</div>
+                            <select onchange="setEmotionalJourney(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">
+                                <option value="">Auto</option>
+                                <option value="triumph" ${emotionalJourney === 'triumph' ? 'selected' : ''}>🏆 Triumph</option>
+                                <option value="redemption" ${emotionalJourney === 'redemption' ? 'selected' : ''}>💫 Redemption</option>
+                                <option value="cinderella" ${emotionalJourney === 'cinderella' ? 'selected' : ''}>✨ Cinderella</option>
+                                <option value="tragedy" ${emotionalJourney === 'tragedy' ? 'selected' : ''}>💔 Tragedy</option>
+                                <option value="thriller" ${emotionalJourney === 'thriller' ? 'selected' : ''}>😰 Thriller</option>
+                                <option value="mystery" ${emotionalJourney === 'mystery' ? 'selected' : ''}>🔍 Mystery</option>
+                                <option value="comedy" ${emotionalJourney === 'comedy' ? 'selected' : ''}>😄 Comedy</option>
+                                <option value="horror" ${emotionalJourney === 'horror' ? 'selected' : ''}>👻 Horror</option>
+                                <option value="educational" ${emotionalJourney === 'educational' ? 'selected' : ''}>📚 Educational</option>
+                                <option value="meditative" ${emotionalJourney === 'meditative' ? 'selected' : ''}>🧘 Meditative</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Tension Style</div>
+                            <select onchange="setTensionCurve(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem; cursor: pointer;">
+                                <option value="">Auto</option>
+                                <option value="steady-build" ${tensionCurve === 'steady-build' ? 'selected' : ''}>📈 Steady Build</option>
+                                <option value="waves" ${tensionCurve === 'waves' ? 'selected' : ''}>🌊 Waves</option>
+                                <option value="slow-burn" ${tensionCurve === 'slow-burn' ? 'selected' : ''}>🔥 Slow Burn</option>
+                                <option value="flat-with-spikes" ${tensionCurve === 'flat-with-spikes' ? 'selected' : ''}>⚡ Spikes</option>
+                                <option value="escalating-steps" ${tensionCurve === 'escalating-steps' ? 'selected' : ''}>🪜 Steps</option>
+                                <option value="rollercoaster" ${tensionCurve === 'rollercoaster' ? 'selected' : ''}>🎢 Rollercoaster</option>
+                                <option value="double-peak" ${tensionCurve === 'double-peak' ? 'selected' : ''}>⛰️⛰️ Double Peak</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    ${narrativePreset ? `
+                    <div style="margin-top: 0.75rem; padding: 0.6rem; background: rgba(139,92,246,0.1); border-radius: 0.5rem; border: 1px solid rgba(139,92,246,0.2);">
+                        <div style="font-size: 0.65rem; color: #a78bfa;">
+                            ${narrativePreset === 'youtube-standard' ? '💡 Hook in 5s, pattern breaks every 45-60s, strong CTA ending' :
+                              narrativePreset === 'tiktok-viral' ? '💡 Stop the scroll immediately, build to payoff at 80%, loop-worthy ending' :
+                              narrativePreset === 'cinematic-short' ? '💡 Character development focus, slow-burn tension, emotional resolution' :
+                              narrativePreset === 'documentary-feature' ? '💡 Evidence-based reveals, interview integration, reflective ending' :
+                              narrativePreset === 'series-episode' ? '💡 Cliffhanger ending, serial elements, double-peak tension' :
+                              narrativePreset === 'commercial-spot' ? '💡 Brand reveal at 80%, problem-solution arc, strong CTA' :
+                              narrativePreset === 'thriller-short' ? '💡 Twist at 75%, ratcheting tension, revelation climax' :
+                              narrativePreset === 'horror-short' ? '💡 Scares every 45s, flat-with-spikes tension, ambiguous ending' :
+                              narrativePreset === 'inspirational' ? '💡 Transformation arc, escalating emotional peaks, uplifting ending' :
+                              '💡 Optimized narrative structure applied'}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <button onclick="analyzeNarrativePacing()" style="width: 100%; margin-top: 0.75rem; padding: 0.65rem; background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(6,182,212,0.2)); border: 1px solid rgba(139,92,246,0.4); border-radius: 0.5rem; color: white; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;"
+                            onmouseenter="this.style.background='linear-gradient(135deg, rgba(139,92,246,0.3), rgba(6,182,212,0.3))'"
+                            onmouseleave="this.style.background='linear-gradient(135deg, rgba(139,92,246,0.2), rgba(6,182,212,0.2))'">
+                        <span>✨</span> Analyze & Optimize Narrative
+                    </button>
+                </div>
+            `;
+
             // AI Video Model Selection Card
             const videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
             const canUse1080p = videoModel.duration === '6s'; // 1080p only available for 6s
@@ -11226,6 +11338,187 @@
         function calculateTotalDuration() {
             const scenes = state.script.scenes || [];
             return scenes.reduce((total, scene) => total + (scene.duration || 5), 0);
+        }
+
+        // Phase 3F: Narrative Structure Intelligence Functions
+        function setNarrativePreset(preset) {
+            state.content.narrativePreset = preset || null;
+
+            const presetNames = {
+                'youtube-standard': 'YouTube Standard - Hook-driven with pattern breaks',
+                'tiktok-viral': 'TikTok Viral - Rapid hook, payoff at 80%',
+                'cinematic-short': 'Cinematic Short - Character-focused drama',
+                'documentary-feature': 'Documentary - Evidence-based structure',
+                'series-episode': 'Series Episode - Cliffhanger ending',
+                'commercial-spot': 'Commercial - Problem-solution with CTA',
+                'music-video-narrative': 'Music Video - Beat-synced narrative',
+                'thriller-short': 'Thriller - Twist-driven tension',
+                'horror-short': 'Horror - Scare-paced structure',
+                'inspirational': 'Inspirational - Transformation arc'
+            };
+
+            if (preset) {
+                showToast(`Narrative preset: ${presetNames[preset] || preset}`, 'success');
+            } else {
+                showToast('Narrative preset: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setStoryArc(arc) {
+            state.content.storyArc = arc || null;
+
+            const arcNames = {
+                'three-act': 'Three-Act Structure (Hollywood)',
+                'five-act': 'Five-Act Structure (Shakespeare)',
+                'heros-journey': "Hero's Journey (Campbell)",
+                'dan-harmon-circle': 'Story Circle (Dan Harmon)',
+                'freytags-pyramid': "Freytag's Pyramid",
+                'kishotenketsu': 'Kishotenketsu (East Asian)',
+                'youtube-retention': 'YouTube Retention Structure',
+                'tiktok-viral': 'TikTok Viral Structure',
+                'problem-solution': 'Problem-Solution',
+                'before-after-bridge': 'Before-After-Bridge',
+                'inverted-pyramid': 'Inverted Pyramid (News)',
+                'documentary-observational': 'Documentary Observational'
+            };
+
+            if (arc) {
+                showToast(`Story arc: ${arcNames[arc] || arc}`, 'success');
+            } else {
+                showToast('Story arc: Auto (from preset)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setEmotionalJourney(journey) {
+            state.content.emotionalJourney = journey || null;
+
+            const journeyNames = {
+                'triumph': 'Triumph - Low to high emotional arc',
+                'redemption': 'Redemption - Fall then rise',
+                'cinderella': 'Cinderella - Rise, fall, rise pattern',
+                'tragedy': 'Tragedy - High to low arc',
+                'thriller': 'Thriller - Tension with peaks',
+                'mystery': 'Mystery - Curiosity building',
+                'comedy': 'Comedy - Ups and downs, happy ending',
+                'horror': 'Horror - Dread building with shocks',
+                'educational': 'Educational - Steady engagement',
+                'meditative': 'Meditative - Calm throughout'
+            };
+
+            if (journey) {
+                showToast(`Emotional arc: ${journeyNames[journey] || journey}`, 'success');
+            } else {
+                showToast('Emotional arc: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setTensionCurve(curve) {
+            state.content.tensionCurve = curve || null;
+
+            const curveNames = {
+                'steady-build': 'Steady Build - Continuous increase',
+                'waves': 'Waves - Build and release cycles',
+                'slow-burn': 'Slow Burn - Gradual to explosive',
+                'flat-with-spikes': 'Spikes - Calm with sudden peaks',
+                'escalating-steps': 'Steps - Stepped increases',
+                'rollercoaster': 'Rollercoaster - Extreme ups/downs',
+                'double-peak': 'Double Peak - Two climaxes'
+            };
+
+            if (curve) {
+                showToast(`Tension style: ${curveNames[curve] || curve}`, 'success');
+            } else {
+                showToast('Tension style: Auto (from preset)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        async function analyzeNarrativePacing() {
+            const scenes = state.script.scenes || [];
+            if (scenes.length === 0) {
+                showToast('Generate a script first to analyze narrative pacing', 'info');
+                return;
+            }
+
+            showToast('Analyzing narrative structure...', 'info');
+
+            try {
+                const functions = firebase.functions();
+                const analyzePacing = functions.httpsCallable('creationWizardAnalyzeNarrativePacing');
+                const result = await analyzePacing({
+                    scenes: scenes.map(s => ({ id: s.id, duration: s.duration || 5 })),
+                    genre: state.content.genre,
+                    preset: state.content.narrativePreset,
+                    targetDuration: calculateTotalDuration()
+                });
+
+                if (result.data.success) {
+                    const { structure, analysis, overallRecommendations } = result.data;
+
+                    // Store the analysis for display
+                    state.content.narrativeAnalysis = {
+                        structure,
+                        analysis,
+                        recommendations: overallRecommendations
+                    };
+
+                    // Apply the recommended structure if not already set
+                    if (!state.content.storyArc && structure.arc) {
+                        state.content.storyArc = structure.arc;
+                    }
+                    if (!state.content.emotionalJourney && structure.emotionalJourney) {
+                        state.content.emotionalJourney = structure.emotionalJourney;
+                    }
+
+                    // Show summary
+                    const suggestions = analysis.filter(a => a.suggestions && a.suggestions.length > 0);
+                    if (suggestions.length > 0) {
+                        showToast(`Analyzed! ${suggestions.length} scenes have pacing suggestions`, 'success');
+                    } else {
+                        showToast(`Perfect! All ${scenes.length} scenes align with ${structure.arc} structure`, 'success');
+                    }
+
+                    render();
+                } else {
+                    showToast('Analysis complete - using current structure', 'info');
+                }
+            } catch (error) {
+                console.error('Failed to analyze narrative:', error);
+                showToast('Could not analyze narrative structure', 'error');
+            }
+        }
+
+        async function getNarrativeRecommendationsForProject() {
+            try {
+                const functions = firebase.functions();
+                const buildStructure = functions.httpsCallable('creationWizardBuildNarrativeStructure');
+                const result = await buildStructure({
+                    genre: state.content.genre,
+                    duration: calculateTotalDuration(),
+                    platform: state.export?.platform || 'youtube',
+                    preset: state.content.narrativePreset,
+                    sceneCount: (state.script.scenes || []).length,
+                    mood: state.assembly.audioMood || state.storyboard.visualStyle?.mood
+                });
+
+                if (result.data.success) {
+                    return result.data.structure;
+                }
+            } catch (error) {
+                console.error('Failed to get narrative recommendations:', error);
+            }
+            return null;
         }
 
         // Helper functions to update preview settings
