@@ -282,22 +282,40 @@
             });
         }
 
-        setBackgroundMusic(url, volume = 0.3) {
+        async setBackgroundMusic(url, volume = 0.3) {
+            // Stop any existing music
             if (this.musicElement) {
                 this.musicElement.pause();
                 this.musicElement = null;
             }
 
             if (url) {
-                this.musicElement = new Audio(url);
-                this.musicElement.loop = true;
-                this.musicElement.volume = volume;
-                this.musicVolume = volume;
+                return new Promise((resolve, reject) => {
+                    this.musicElement = new Audio(url);
+                    this.musicElement.loop = true;
+                    this.musicElement.volume = volume;
+                    this.musicVolume = volume;
 
-                if (this.isPlaying) {
-                    this.musicElement.currentTime = this.currentTime;
-                    this.musicElement.play().catch(() => {});
-                }
+                    // Wait for audio to be ready to play
+                    this.musicElement.addEventListener('canplaythrough', () => {
+                        console.log('[PreviewEngine] Music loaded and ready:', url.substring(0, 50));
+                        if (this.isPlaying) {
+                            this.musicElement.currentTime = this.currentTime;
+                            this.musicElement.play().catch(e => {
+                                console.warn('[PreviewEngine] Music autoplay blocked:', e.message);
+                            });
+                        }
+                        resolve();
+                    }, { once: true });
+
+                    this.musicElement.addEventListener('error', (e) => {
+                        console.error('[PreviewEngine] Music load error:', e);
+                        reject(new Error('Failed to load music'));
+                    }, { once: true });
+
+                    // Start loading the audio
+                    this.musicElement.load();
+                });
             }
         }
 
@@ -14890,22 +14908,22 @@
             updatePreviewTransitions();
         }
 
-        function toggleMusic(enabled) {
+        async function toggleMusic(enabled) {
             state.assembly.music.enabled = enabled;
             saveProject();
-            // Update preview music
-            updatePreviewMusic();
+            // Update preview music - AWAIT to prevent race condition with render()
+            await updatePreviewMusic();
             render();
         }
 
-        function selectMusicTrack(trackId) {
+        async function selectMusicTrack(trackId) {
             state.assembly.music.trackId = trackId;
             if (trackId && trackId !== 'none') {
                 state.assembly.music.enabled = true;
             }
             saveProject();
-            // Update preview music
-            updatePreviewMusic();
+            // Update preview music - AWAIT to prevent race condition with render()
+            await updatePreviewMusic();
             render();
         }
 
@@ -14913,7 +14931,8 @@
             state.assembly.music.volume = parseInt(volume);
             saveProject();
             // Update preview music volume
-            if (previewEngine) {
+            if (previewEngine && previewEngine.musicElement) {
+                previewEngine.musicElement.volume = volume / 100;
                 previewEngine.musicVolume = volume / 100;
             }
         }
@@ -15055,7 +15074,7 @@
             }
         }
 
-        function applySmartAudioRecommendations() {
+        async function applySmartAudioRecommendations() {
             const audioProfile = state.assembly.audioProfile;
             if (!audioProfile) {
                 showToast('No audio recommendations available. Analyze content first.', 'error');
@@ -15138,6 +15157,10 @@
             }
 
             scheduleAutoSave();
+
+            // CRITICAL: Update preview music BEFORE render to avoid race condition
+            await updatePreviewMusic();
+
             render();
             showToast('Smart Audio recommendations applied!', 'success');
         }
