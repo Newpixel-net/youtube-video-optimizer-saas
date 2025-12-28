@@ -26359,6 +26359,934 @@ exports.creationWizardGenerateExportPackage = functions.https.onCall(async (data
   };
 });
 
+// ============================================================
+// PHASE 3D: AUDIO INTELLIGENCE SYSTEM
+// Music scoring, sound design, and dynamic mixing
+// ============================================================
+
+const AUDIO_INTELLIGENCE = {
+  // Music Scoring Engine - Genre and mood-based music selection
+  musicScoring: {
+    // Genre-to-music style mapping
+    genreMusic: {
+      'documentary-nature': {
+        primaryStyle: 'ambient-orchestral',
+        secondaryStyle: 'world-music',
+        tempo: { min: 60, max: 90 },
+        energy: 'low-medium',
+        instruments: ['strings', 'piano', 'flute', 'ambient-pads'],
+        avoid: ['heavy-drums', 'electronic-beats', 'distortion'],
+        reference: 'Planet Earth, Our Planet soundtracks'
+      },
+      'documentary-historical': {
+        primaryStyle: 'cinematic-orchestral',
+        secondaryStyle: 'period-appropriate',
+        tempo: { min: 70, max: 110 },
+        energy: 'medium',
+        instruments: ['full-orchestra', 'piano', 'choir'],
+        avoid: ['modern-synths', 'trap-beats'],
+        reference: 'Ken Burns documentaries, The Crown'
+      },
+      'documentary-crime': {
+        primaryStyle: 'dark-ambient',
+        secondaryStyle: 'tension-underscore',
+        tempo: { min: 50, max: 80 },
+        energy: 'low-tension',
+        instruments: ['low-strings', 'synth-drones', 'prepared-piano'],
+        avoid: ['upbeat', 'major-key', 'cheerful'],
+        reference: 'Making a Murderer, The Jinx'
+      },
+      'documentary-social': {
+        primaryStyle: 'indie-acoustic',
+        secondaryStyle: 'emotional-piano',
+        tempo: { min: 70, max: 100 },
+        energy: 'medium-emotional',
+        instruments: ['acoustic-guitar', 'piano', 'strings', 'ambient'],
+        avoid: ['aggressive', 'heavy'],
+        reference: '13th, Won\'t You Be My Neighbor'
+      },
+      'educational-explainer': {
+        primaryStyle: 'upbeat-corporate',
+        secondaryStyle: 'tech-minimal',
+        tempo: { min: 100, max: 130 },
+        energy: 'medium-high',
+        instruments: ['synth', 'light-percussion', 'piano', 'ukulele'],
+        avoid: ['dark', 'heavy', 'distracting'],
+        reference: 'Kurzgesagt, TED-Ed'
+      },
+      'educational-tutorial': {
+        primaryStyle: 'lo-fi-chill',
+        secondaryStyle: 'ambient-focus',
+        tempo: { min: 70, max: 95 },
+        energy: 'low-background',
+        instruments: ['lo-fi-keys', 'soft-drums', 'ambient-pads'],
+        avoid: ['lyrics', 'dramatic', 'distracting'],
+        reference: 'Focus music, study beats'
+      },
+      'entertainment-comedy': {
+        primaryStyle: 'playful-quirky',
+        secondaryStyle: 'upbeat-fun',
+        tempo: { min: 110, max: 140 },
+        energy: 'high',
+        instruments: ['pizzicato-strings', 'woodwinds', 'xylophone', 'bouncy-synth'],
+        avoid: ['serious', 'dark', 'slow'],
+        reference: 'The Office, Parks and Rec'
+      },
+      'entertainment-drama': {
+        primaryStyle: 'emotional-orchestral',
+        secondaryStyle: 'piano-driven',
+        tempo: { min: 60, max: 100 },
+        energy: 'medium-emotional',
+        instruments: ['strings', 'piano', 'cello', 'subtle-choir'],
+        avoid: ['upbeat', 'quirky', 'electronic'],
+        reference: 'This Is Us, Breaking Bad'
+      },
+      'entertainment-action': {
+        primaryStyle: 'epic-hybrid',
+        secondaryStyle: 'electronic-orchestral',
+        tempo: { min: 120, max: 160 },
+        energy: 'high-intense',
+        instruments: ['brass', 'percussion', 'synth-bass', 'electric-guitar'],
+        avoid: ['soft', 'ambient', 'slow'],
+        reference: 'Mission Impossible, John Wick'
+      },
+      'entertainment-horror': {
+        primaryStyle: 'dark-atmospheric',
+        secondaryStyle: 'dissonant-tension',
+        tempo: { min: 40, max: 80 },
+        energy: 'tension-building',
+        instruments: ['low-drones', 'dissonant-strings', 'prepared-piano', 'reversed-sounds'],
+        avoid: ['major-key', 'upbeat', 'cheerful'],
+        reference: 'Hereditary, The Conjuring'
+      },
+      'entertainment-romance': {
+        primaryStyle: 'romantic-orchestral',
+        secondaryStyle: 'indie-love',
+        tempo: { min: 60, max: 100 },
+        energy: 'soft-emotional',
+        instruments: ['strings', 'piano', 'acoustic-guitar', 'soft-vocals'],
+        avoid: ['aggressive', 'dark', 'electronic'],
+        reference: 'The Notebook, La La Land'
+      },
+      'marketing-product': {
+        primaryStyle: 'modern-corporate',
+        secondaryStyle: 'upbeat-inspiring',
+        tempo: { min: 100, max: 130 },
+        energy: 'medium-high',
+        instruments: ['synth', 'claps', 'piano', 'light-strings'],
+        avoid: ['dark', 'slow', 'complex'],
+        reference: 'Apple keynotes, premium brand ads'
+      },
+      'marketing-brand': {
+        primaryStyle: 'emotional-uplifting',
+        secondaryStyle: 'cinematic-inspiring',
+        tempo: { min: 80, max: 120 },
+        energy: 'building-to-high',
+        instruments: ['piano', 'strings', 'drums-build', 'choir'],
+        avoid: ['generic', 'stock-sounding'],
+        reference: 'Nike, Google Year in Search'
+      },
+      'marketing-social': {
+        primaryStyle: 'trending-pop',
+        secondaryStyle: 'viral-hooks',
+        tempo: { min: 100, max: 140 },
+        energy: 'high-catchy',
+        instruments: ['synth-bass', 'trap-hats', 'catchy-melody'],
+        avoid: ['slow', 'complex', 'dated'],
+        reference: 'TikTok trending sounds'
+      },
+      'cinematic': {
+        primaryStyle: 'epic-orchestral',
+        secondaryStyle: 'hans-zimmer-style',
+        tempo: { min: 60, max: 140 },
+        energy: 'dynamic-range',
+        instruments: ['full-orchestra', 'choir', 'percussion', 'brass', 'synth-hybrid'],
+        avoid: ['thin', 'cheap', 'stock-sounding'],
+        reference: 'Inception, Interstellar, Gladiator'
+      },
+      'vlog-lifestyle': {
+        primaryStyle: 'indie-chill',
+        secondaryStyle: 'acoustic-happy',
+        tempo: { min: 90, max: 120 },
+        energy: 'medium-positive',
+        instruments: ['acoustic-guitar', 'ukulele', 'light-percussion', 'whistling'],
+        avoid: ['heavy', 'dark', 'complex'],
+        reference: 'Casey Neistat style vlogs'
+      },
+      'gaming': {
+        primaryStyle: 'electronic-energetic',
+        secondaryStyle: 'chiptune-hybrid',
+        tempo: { min: 120, max: 160 },
+        energy: 'high-constant',
+        instruments: ['synth', 'electronic-drums', 'bass', '8-bit-elements'],
+        avoid: ['slow', 'acoustic', 'orchestral'],
+        reference: 'Twitch streams, gaming montages'
+      },
+      'fitness': {
+        primaryStyle: 'edm-workout',
+        secondaryStyle: 'hip-hop-energy',
+        tempo: { min: 120, max: 150 },
+        energy: 'high-driving',
+        instruments: ['heavy-bass', 'synth', 'claps', 'build-ups'],
+        avoid: ['slow', 'ambient', 'soft'],
+        reference: 'Workout playlists, Nike Training'
+      }
+    },
+
+    // Mood-to-music mapping (links to Visual Intelligence moods)
+    moodMusic: {
+      'epic': {
+        style: 'epic-orchestral-hybrid',
+        tempo: { min: 90, max: 140 },
+        energy: 'high-building',
+        dynamics: 'wide-range',
+        elements: ['brass-fanfares', 'timpani', 'choir', 'synth-layers'],
+        buildPattern: 'gradual-crescendo'
+      },
+      'intimate': {
+        style: 'minimal-emotional',
+        tempo: { min: 60, max: 85 },
+        energy: 'low-gentle',
+        dynamics: 'soft-consistent',
+        elements: ['solo-piano', 'soft-strings', 'ambient-pads'],
+        buildPattern: 'subtle-swells'
+      },
+      'mysterious': {
+        style: 'dark-ambient-tension',
+        tempo: { min: 50, max: 80 },
+        energy: 'low-unsettling',
+        dynamics: 'quiet-with-stings',
+        elements: ['drones', 'reversed-sounds', 'sparse-piano', 'low-strings'],
+        buildPattern: 'tension-hold'
+      },
+      'energetic': {
+        style: 'upbeat-driving',
+        tempo: { min: 120, max: 150 },
+        energy: 'high-constant',
+        dynamics: 'loud-punchy',
+        elements: ['driving-drums', 'synth-bass', 'brass-stabs'],
+        buildPattern: 'verse-chorus'
+      },
+      'contemplative': {
+        style: 'ambient-reflective',
+        tempo: { min: 55, max: 75 },
+        energy: 'very-low',
+        dynamics: 'soft-flowing',
+        elements: ['ambient-textures', 'soft-piano', 'gentle-pads'],
+        buildPattern: 'static-evolving'
+      },
+      'tense': {
+        style: 'suspense-thriller',
+        tempo: { min: 70, max: 100 },
+        energy: 'medium-anxious',
+        dynamics: 'building-pressure',
+        elements: ['staccato-strings', 'ticking', 'low-pulse', 'dissonance'],
+        buildPattern: 'escalating'
+      },
+      'hopeful': {
+        style: 'uplifting-inspiring',
+        tempo: { min: 80, max: 110 },
+        energy: 'medium-rising',
+        dynamics: 'building-to-bright',
+        elements: ['major-keys', 'strings-swell', 'piano', 'light-percussion'],
+        buildPattern: 'dawn-chorus'
+      },
+      'professional': {
+        style: 'corporate-clean',
+        tempo: { min: 90, max: 115 },
+        energy: 'medium-steady',
+        dynamics: 'consistent-polished',
+        elements: ['clean-synth', 'light-percussion', 'piano-accents'],
+        buildPattern: 'structured'
+      },
+      'nostalgic': {
+        style: 'vintage-warm',
+        tempo: { min: 70, max: 100 },
+        energy: 'medium-wistful',
+        dynamics: 'warm-soft',
+        elements: ['vinyl-texture', 'retro-keys', 'warm-strings', 'music-box'],
+        buildPattern: 'memory-waves'
+      },
+      'dark': {
+        style: 'ominous-heavy',
+        tempo: { min: 50, max: 90 },
+        energy: 'low-heavy',
+        dynamics: 'rumbling-powerful',
+        elements: ['sub-bass', 'distorted-elements', 'industrial', 'dark-choir'],
+        buildPattern: 'doom-build'
+      }
+    },
+
+    // Tempo categories
+    tempoCategories: {
+      'very-slow': { bpm: { min: 40, max: 60 }, use: ['ambient', 'horror', 'meditation'] },
+      'slow': { bpm: { min: 60, max: 80 }, use: ['emotional', 'documentary', 'romance'] },
+      'medium-slow': { bpm: { min: 80, max: 100 }, use: ['narrative', 'corporate', 'drama'] },
+      'medium': { bpm: { min: 100, max: 120 }, use: ['explainer', 'marketing', 'lifestyle'] },
+      'medium-fast': { bpm: { min: 120, max: 140 }, use: ['action', 'sports', 'gaming'] },
+      'fast': { bpm: { min: 140, max: 160 }, use: ['workout', 'edm', 'high-energy'] },
+      'very-fast': { bpm: { min: 160, max: 200 }, use: ['extreme-sports', 'drum-and-bass'] }
+    },
+
+    // Energy levels
+    energyLevels: {
+      'minimal': { volume: 0.15, presence: 'background', dynamics: 'flat' },
+      'low': { volume: 0.25, presence: 'underscore', dynamics: 'subtle' },
+      'medium-low': { volume: 0.35, presence: 'supporting', dynamics: 'gentle' },
+      'medium': { volume: 0.45, presence: 'balanced', dynamics: 'moderate' },
+      'medium-high': { volume: 0.55, presence: 'prominent', dynamics: 'active' },
+      'high': { volume: 0.65, presence: 'driving', dynamics: 'punchy' },
+      'intense': { volume: 0.75, presence: 'dominant', dynamics: 'powerful' }
+    }
+  },
+
+  // Sound Design Library
+  soundDesign: {
+    // Ambient backgrounds per setting
+    ambience: {
+      'nature-forest': {
+        layers: ['birds-distant', 'leaves-rustle', 'wind-gentle', 'creek-subtle'],
+        volume: 0.2,
+        stereoWidth: 'wide'
+      },
+      'nature-ocean': {
+        layers: ['waves-crashing', 'seagulls-distant', 'wind-coastal'],
+        volume: 0.25,
+        stereoWidth: 'wide'
+      },
+      'nature-rain': {
+        layers: ['rain-steady', 'thunder-distant', 'drips'],
+        volume: 0.3,
+        stereoWidth: 'full'
+      },
+      'nature-night': {
+        layers: ['crickets', 'owl-distant', 'wind-night'],
+        volume: 0.15,
+        stereoWidth: 'wide'
+      },
+      'urban-city': {
+        layers: ['traffic-distant', 'people-murmur', 'city-hum'],
+        volume: 0.2,
+        stereoWidth: 'medium'
+      },
+      'urban-cafe': {
+        layers: ['coffee-shop-ambience', 'cups-clinking', 'murmur-conversations'],
+        volume: 0.15,
+        stereoWidth: 'medium'
+      },
+      'urban-office': {
+        layers: ['office-hum', 'keyboard-distant', 'hvac'],
+        volume: 0.1,
+        stereoWidth: 'narrow'
+      },
+      'indoor-room': {
+        layers: ['room-tone', 'clock-ticking', 'hvac-subtle'],
+        volume: 0.08,
+        stereoWidth: 'narrow'
+      },
+      'space-scifi': {
+        layers: ['ship-hum', 'electronic-beeps', 'air-systems'],
+        volume: 0.15,
+        stereoWidth: 'surround'
+      },
+      'historical-medieval': {
+        layers: ['fire-crackling', 'distant-crowd', 'wind-stone'],
+        volume: 0.2,
+        stereoWidth: 'wide'
+      }
+    },
+
+    // Transition sounds
+    transitions: {
+      'whoosh-soft': { duration: 0.5, energy: 'low', use: ['cuts', 'gentle-transitions'] },
+      'whoosh-medium': { duration: 0.4, energy: 'medium', use: ['standard-transitions'] },
+      'whoosh-hard': { duration: 0.3, energy: 'high', use: ['fast-cuts', 'action'] },
+      'swoosh-magical': { duration: 0.6, energy: 'medium', use: ['fantasy', 'reveal'] },
+      'glitch': { duration: 0.2, energy: 'high', use: ['tech', 'modern', 'error'] },
+      'tape-stop': { duration: 0.4, energy: 'medium', use: ['retro', 'comedy', 'pause'] },
+      'reverse-cymbal': { duration: 1.5, energy: 'building', use: ['builds', 'transitions'] },
+      'sub-drop': { duration: 0.8, energy: 'impact', use: ['reveals', 'statements'] },
+      'paper-flip': { duration: 0.3, energy: 'low', use: ['text', 'pages', 'chapters'] },
+      'camera-shutter': { duration: 0.2, energy: 'low', use: ['photo-reveals', 'memories'] }
+    },
+
+    // Impact and hit sounds
+    impacts: {
+      'hit-deep': { power: 'high', frequency: 'low', use: ['major-reveals', 'statements'] },
+      'hit-punchy': { power: 'medium', frequency: 'mid', use: ['text-hits', 'beats'] },
+      'hit-bright': { power: 'medium', frequency: 'high', use: ['accents', 'highlights'] },
+      'boom-cinematic': { power: 'very-high', frequency: 'sub', use: ['trailers', 'epic'] },
+      'slam': { power: 'high', frequency: 'mid-low', use: ['action', 'emphasis'] },
+      'snap': { power: 'low', frequency: 'high', use: ['quick-cuts', 'beats'] },
+      'thud': { power: 'medium', frequency: 'low', use: ['grounded', 'solid'] }
+    },
+
+    // Risers and stingers
+    risersStingers: {
+      'riser-tension': { duration: 3, type: 'build', mood: 'anxious' },
+      'riser-epic': { duration: 4, type: 'build', mood: 'exciting' },
+      'riser-horror': { duration: 5, type: 'build', mood: 'dread' },
+      'stinger-reveal': { duration: 1, type: 'accent', mood: 'dramatic' },
+      'stinger-comedy': { duration: 0.5, type: 'accent', mood: 'funny' },
+      'stinger-horror': { duration: 1.5, type: 'accent', mood: 'scary' },
+      'drone-tension': { duration: 'loop', type: 'sustain', mood: 'uneasy' },
+      'swell-emotional': { duration: 3, type: 'build-release', mood: 'moving' }
+    },
+
+    // UI and notification sounds
+    uiSounds: {
+      'notification-positive': { duration: 0.3, mood: 'success' },
+      'notification-negative': { duration: 0.4, mood: 'error' },
+      'click-soft': { duration: 0.1, mood: 'neutral' },
+      'pop-playful': { duration: 0.15, mood: 'fun' },
+      'ding': { duration: 0.2, mood: 'attention' },
+      'typing': { duration: 0.05, mood: 'activity' }
+    }
+  },
+
+  // Dynamic Mixing System
+  dynamicMixing: {
+    // Voice-to-music balance presets
+    voiceMixPresets: {
+      'dialogue-focus': {
+        voiceVolume: 1.0,
+        musicVolume: 0.15,
+        musicDucking: 0.6,
+        duckingAttack: 100,
+        duckingRelease: 500
+      },
+      'narration-standard': {
+        voiceVolume: 1.0,
+        musicVolume: 0.25,
+        musicDucking: 0.5,
+        duckingAttack: 150,
+        duckingRelease: 600
+      },
+      'voice-with-music': {
+        voiceVolume: 0.95,
+        musicVolume: 0.35,
+        musicDucking: 0.4,
+        duckingAttack: 200,
+        duckingRelease: 800
+      },
+      'music-emphasis': {
+        voiceVolume: 0.85,
+        musicVolume: 0.5,
+        musicDucking: 0.3,
+        duckingAttack: 250,
+        duckingRelease: 1000
+      },
+      'music-only': {
+        voiceVolume: 0,
+        musicVolume: 0.7,
+        musicDucking: 0,
+        duckingAttack: 0,
+        duckingRelease: 0
+      }
+    },
+
+    // Scene energy to audio mapping
+    sceneEnergyMapping: {
+      'very-low': { musicEnergy: 'minimal', sfxPresence: 'subtle', ambienceLevel: 'prominent' },
+      'low': { musicEnergy: 'low', sfxPresence: 'occasional', ambienceLevel: 'present' },
+      'medium': { musicEnergy: 'medium', sfxPresence: 'balanced', ambienceLevel: 'supporting' },
+      'high': { musicEnergy: 'high', sfxPresence: 'active', ambienceLevel: 'minimal' },
+      'climax': { musicEnergy: 'intense', sfxPresence: 'impactful', ambienceLevel: 'none' }
+    },
+
+    // Fade presets
+    fadePresets: {
+      'quick-fade': { in: 200, out: 200 },
+      'standard-fade': { in: 500, out: 500 },
+      'slow-fade': { in: 1000, out: 1000 },
+      'cinematic-fade': { in: 2000, out: 2000 },
+      'crossfade-short': { duration: 500, curve: 'equal-power' },
+      'crossfade-long': { duration: 1500, curve: 'equal-power' }
+    },
+
+    // Master output presets
+    masterPresets: {
+      'broadcast': {
+        targetLoudness: -24,
+        truePeak: -2,
+        dynamicRange: 'controlled'
+      },
+      'streaming': {
+        targetLoudness: -14,
+        truePeak: -1,
+        dynamicRange: 'moderate'
+      },
+      'social-media': {
+        targetLoudness: -14,
+        truePeak: -1,
+        dynamicRange: 'punchy'
+      },
+      'cinematic': {
+        targetLoudness: -27,
+        truePeak: -3,
+        dynamicRange: 'wide'
+      }
+    }
+  },
+
+  // Voice Enhancement Profiles
+  voiceEnhancement: {
+    profiles: {
+      'narrator-warm': {
+        eq: { lowCut: 80, lowShelf: { freq: 200, gain: 2 }, presence: { freq: 3000, gain: 3 }, air: { freq: 12000, gain: 2 } },
+        compression: { threshold: -18, ratio: 3, attack: 10, release: 100 },
+        deEss: { frequency: 6000, threshold: -20 },
+        reverb: { type: 'room', mix: 0.05 }
+      },
+      'narrator-authoritative': {
+        eq: { lowCut: 60, lowShelf: { freq: 150, gain: 3 }, presence: { freq: 2500, gain: 4 }, air: { freq: 10000, gain: 1 } },
+        compression: { threshold: -15, ratio: 4, attack: 5, release: 80 },
+        deEss: { frequency: 5500, threshold: -18 },
+        reverb: { type: 'none', mix: 0 }
+      },
+      'narrator-intimate': {
+        eq: { lowCut: 100, lowShelf: { freq: 250, gain: 1 }, presence: { freq: 4000, gain: 2 }, air: { freq: 14000, gain: 3 } },
+        compression: { threshold: -20, ratio: 2.5, attack: 15, release: 150 },
+        deEss: { frequency: 6500, threshold: -22 },
+        reverb: { type: 'small-room', mix: 0.08 }
+      },
+      'narrator-energetic': {
+        eq: { lowCut: 100, lowShelf: { freq: 180, gain: 1 }, presence: { freq: 3500, gain: 5 }, air: { freq: 11000, gain: 2 } },
+        compression: { threshold: -12, ratio: 5, attack: 3, release: 50 },
+        deEss: { frequency: 5000, threshold: -16 },
+        reverb: { type: 'none', mix: 0 }
+      },
+      'documentary': {
+        eq: { lowCut: 80, lowShelf: { freq: 200, gain: 1 }, presence: { freq: 3000, gain: 2 }, air: { freq: 12000, gain: 2 } },
+        compression: { threshold: -16, ratio: 3, attack: 10, release: 100 },
+        deEss: { frequency: 6000, threshold: -20 },
+        reverb: { type: 'natural', mix: 0.03 }
+      },
+      'podcast': {
+        eq: { lowCut: 90, lowShelf: { freq: 180, gain: 2 }, presence: { freq: 2800, gain: 3 }, air: { freq: 10000, gain: 1 } },
+        compression: { threshold: -18, ratio: 3.5, attack: 8, release: 120 },
+        deEss: { frequency: 5500, threshold: -18 },
+        reverb: { type: 'none', mix: 0 }
+      },
+      'cinematic-trailer': {
+        eq: { lowCut: 60, lowShelf: { freq: 120, gain: 4 }, presence: { freq: 2000, gain: 3 }, air: { freq: 8000, gain: 2 } },
+        compression: { threshold: -10, ratio: 6, attack: 2, release: 40 },
+        deEss: { frequency: 5000, threshold: -15 },
+        reverb: { type: 'large-hall', mix: 0.15 }
+      }
+    },
+
+    // Voice style to profile mapping
+    styleToProfile: {
+      'professional': 'narrator-authoritative',
+      'friendly': 'narrator-warm',
+      'casual': 'narrator-intimate',
+      'excited': 'narrator-energetic',
+      'documentary': 'documentary',
+      'storytelling': 'narrator-warm',
+      'dramatic': 'cinematic-trailer'
+    }
+  },
+
+  // Audio Mood Presets (linked to Visual Intelligence)
+  audioMoodPresets: {
+    'epic': {
+      music: { style: 'epic-orchestral-hybrid', energy: 'high', tempo: 'variable' },
+      sfx: { impacts: true, risers: true, whooshes: 'hard' },
+      voice: { profile: 'cinematic-trailer', reverb: 'large' },
+      mixing: { musicVolume: 0.5, voiceDucking: 0.4, masterPreset: 'cinematic' }
+    },
+    'intimate': {
+      music: { style: 'minimal-piano', energy: 'low', tempo: 'slow' },
+      sfx: { impacts: false, risers: false, whooshes: 'soft' },
+      voice: { profile: 'narrator-intimate', reverb: 'small-room' },
+      mixing: { musicVolume: 0.2, voiceDucking: 0.6, masterPreset: 'streaming' }
+    },
+    'mysterious': {
+      music: { style: 'dark-ambient', energy: 'low', tempo: 'very-slow' },
+      sfx: { impacts: 'occasional', risers: 'tension', whooshes: 'swoosh-magical' },
+      voice: { profile: 'narrator-warm', reverb: 'none' },
+      mixing: { musicVolume: 0.3, voiceDucking: 0.5, masterPreset: 'streaming' }
+    },
+    'energetic': {
+      music: { style: 'upbeat-driving', energy: 'high', tempo: 'fast' },
+      sfx: { impacts: true, risers: false, whooshes: 'hard' },
+      voice: { profile: 'narrator-energetic', reverb: 'none' },
+      mixing: { musicVolume: 0.45, voiceDucking: 0.35, masterPreset: 'social-media' }
+    },
+    'contemplative': {
+      music: { style: 'ambient-reflective', energy: 'minimal', tempo: 'very-slow' },
+      sfx: { impacts: false, risers: false, whooshes: false },
+      voice: { profile: 'narrator-warm', reverb: 'natural' },
+      mixing: { musicVolume: 0.15, voiceDucking: 0.65, masterPreset: 'streaming' }
+    },
+    'tense': {
+      music: { style: 'suspense-underscore', energy: 'building', tempo: 'medium' },
+      sfx: { impacts: 'stingers', risers: 'tension', whooshes: false },
+      voice: { profile: 'narrator-authoritative', reverb: 'none' },
+      mixing: { musicVolume: 0.35, voiceDucking: 0.45, masterPreset: 'streaming' }
+    },
+    'hopeful': {
+      music: { style: 'uplifting-inspiring', energy: 'building', tempo: 'medium' },
+      sfx: { impacts: 'soft', risers: 'swell-emotional', whooshes: 'soft' },
+      voice: { profile: 'narrator-warm', reverb: 'small-room' },
+      mixing: { musicVolume: 0.35, voiceDucking: 0.5, masterPreset: 'streaming' }
+    },
+    'professional': {
+      music: { style: 'corporate-clean', energy: 'medium', tempo: 'medium' },
+      sfx: { impacts: 'subtle', risers: false, whooshes: 'soft' },
+      voice: { profile: 'narrator-authoritative', reverb: 'none' },
+      mixing: { musicVolume: 0.25, voiceDucking: 0.55, masterPreset: 'streaming' }
+    },
+    'nostalgic': {
+      music: { style: 'vintage-warm', energy: 'medium-low', tempo: 'medium-slow' },
+      sfx: { impacts: false, risers: false, whooshes: 'tape-stop' },
+      voice: { profile: 'narrator-warm', reverb: 'small-room' },
+      mixing: { musicVolume: 0.3, voiceDucking: 0.5, masterPreset: 'streaming' }
+    },
+    'dark': {
+      music: { style: 'ominous-heavy', energy: 'low-heavy', tempo: 'slow' },
+      sfx: { impacts: 'deep', risers: 'horror', whooshes: false },
+      voice: { profile: 'narrator-authoritative', reverb: 'large-hall' },
+      mixing: { musicVolume: 0.4, voiceDucking: 0.4, masterPreset: 'cinematic' }
+    }
+  },
+
+  // Genre to complete audio treatment
+  genreAudioTreatment: {
+    'documentary-nature': {
+      musicProfile: 'documentary-nature',
+      defaultAmbience: 'nature-forest',
+      voiceProfile: 'documentary',
+      transitionSound: 'whoosh-soft',
+      moodDefault: 'contemplative'
+    },
+    'documentary-crime': {
+      musicProfile: 'documentary-crime',
+      defaultAmbience: 'indoor-room',
+      voiceProfile: 'narrator-authoritative',
+      transitionSound: 'whoosh-medium',
+      moodDefault: 'tense'
+    },
+    'educational-explainer': {
+      musicProfile: 'educational-explainer',
+      defaultAmbience: null,
+      voiceProfile: 'narrator-energetic',
+      transitionSound: 'whoosh-medium',
+      moodDefault: 'professional'
+    },
+    'entertainment-action': {
+      musicProfile: 'entertainment-action',
+      defaultAmbience: null,
+      voiceProfile: 'cinematic-trailer',
+      transitionSound: 'whoosh-hard',
+      moodDefault: 'epic'
+    },
+    'entertainment-horror': {
+      musicProfile: 'entertainment-horror',
+      defaultAmbience: 'nature-night',
+      voiceProfile: 'narrator-warm',
+      transitionSound: 'swoosh-magical',
+      moodDefault: 'dark'
+    },
+    'marketing-brand': {
+      musicProfile: 'marketing-brand',
+      defaultAmbience: null,
+      voiceProfile: 'narrator-warm',
+      transitionSound: 'whoosh-medium',
+      moodDefault: 'hopeful'
+    },
+    'cinematic': {
+      musicProfile: 'cinematic',
+      defaultAmbience: null,
+      voiceProfile: 'cinematic-trailer',
+      transitionSound: 'whoosh-hard',
+      moodDefault: 'epic'
+    }
+  }
+};
+
+/**
+ * Get audio recommendations based on genre and mood
+ */
+function getAudioRecommendations(options = {}) {
+  const { genre, mood, productionMode, sceneEnergy, hasVoiceover } = options;
+
+  const recommendations = {
+    music: null,
+    sfx: null,
+    voice: null,
+    mixing: null,
+    ambience: null
+  };
+
+  // Get genre-based music
+  const genreMusic = AUDIO_INTELLIGENCE.musicScoring.genreMusic[genre];
+  if (genreMusic) {
+    recommendations.music = {
+      style: genreMusic.primaryStyle,
+      alternativeStyle: genreMusic.secondaryStyle,
+      tempo: genreMusic.tempo,
+      energy: genreMusic.energy,
+      instruments: genreMusic.instruments,
+      avoid: genreMusic.avoid,
+      reference: genreMusic.reference
+    };
+  }
+
+  // Get mood-based audio preset
+  const moodPreset = AUDIO_INTELLIGENCE.audioMoodPresets[mood];
+  if (moodPreset) {
+    recommendations.sfx = moodPreset.sfx;
+    recommendations.mixing = moodPreset.mixing;
+
+    // Override music style with mood if more specific
+    if (moodPreset.music) {
+      recommendations.music = {
+        ...recommendations.music,
+        ...moodPreset.music
+      };
+    }
+  }
+
+  // Get voice profile
+  if (hasVoiceover) {
+    const genreTreatment = AUDIO_INTELLIGENCE.genreAudioTreatment[genre];
+    if (genreTreatment) {
+      recommendations.voice = AUDIO_INTELLIGENCE.voiceEnhancement.profiles[genreTreatment.voiceProfile];
+    } else if (moodPreset?.voice) {
+      recommendations.voice = AUDIO_INTELLIGENCE.voiceEnhancement.profiles[moodPreset.voice.profile];
+    }
+  }
+
+  // Get ambience
+  const genreTreatment = AUDIO_INTELLIGENCE.genreAudioTreatment[genre];
+  if (genreTreatment?.defaultAmbience) {
+    recommendations.ambience = AUDIO_INTELLIGENCE.soundDesign.ambience[genreTreatment.defaultAmbience];
+  }
+
+  // Adjust for scene energy
+  if (sceneEnergy) {
+    const energyMapping = AUDIO_INTELLIGENCE.dynamicMixing.sceneEnergyMapping[sceneEnergy];
+    if (energyMapping) {
+      recommendations.energyAdjustments = energyMapping;
+    }
+  }
+
+  return recommendations;
+}
+
+/**
+ * Build complete audio treatment for a scene
+ */
+function buildSceneAudioTreatment(options = {}) {
+  const {
+    genre,
+    mood,
+    sceneType,
+    hasVoiceover,
+    sceneEnergy = 'medium',
+    isTransition = false,
+    previousMood = null
+  } = options;
+
+  const treatment = {
+    music: {},
+    sfx: [],
+    voice: {},
+    mixing: {},
+    transitions: {}
+  };
+
+  // Get base recommendations
+  const recommendations = getAudioRecommendations({ genre, mood, sceneEnergy, hasVoiceover });
+
+  // Music settings
+  if (recommendations.music) {
+    const energyLevel = AUDIO_INTELLIGENCE.musicScoring.energyLevels[sceneEnergy] ||
+                        AUDIO_INTELLIGENCE.musicScoring.energyLevels['medium'];
+
+    treatment.music = {
+      ...recommendations.music,
+      volume: energyLevel.volume,
+      presence: energyLevel.presence
+    };
+  }
+
+  // SFX for transitions
+  if (isTransition) {
+    const genreTreatment = AUDIO_INTELLIGENCE.genreAudioTreatment[genre];
+    const transitionSound = genreTreatment?.transitionSound || 'whoosh-soft';
+    treatment.sfx.push({
+      type: 'transition',
+      sound: AUDIO_INTELLIGENCE.soundDesign.transitions[transitionSound],
+      timing: 'on-cut'
+    });
+  }
+
+  // Add mood-based SFX
+  if (recommendations.sfx) {
+    if (recommendations.sfx.risers) {
+      treatment.sfx.push({
+        type: 'riser',
+        sound: AUDIO_INTELLIGENCE.soundDesign.risersStingers[recommendations.sfx.risers] ||
+               AUDIO_INTELLIGENCE.soundDesign.risersStingers['riser-tension'],
+        timing: 'before-climax'
+      });
+    }
+    if (recommendations.sfx.impacts) {
+      treatment.sfx.push({
+        type: 'impact',
+        sound: AUDIO_INTELLIGENCE.soundDesign.impacts['hit-punchy'],
+        timing: 'on-emphasis'
+      });
+    }
+  }
+
+  // Voice settings
+  if (hasVoiceover && recommendations.voice) {
+    treatment.voice = {
+      enhancement: recommendations.voice,
+      mixPreset: AUDIO_INTELLIGENCE.dynamicMixing.voiceMixPresets['narration-standard']
+    };
+  }
+
+  // Mixing settings
+  treatment.mixing = recommendations.mixing ||
+                     AUDIO_INTELLIGENCE.dynamicMixing.voiceMixPresets['narration-standard'];
+
+  // Ambience
+  if (recommendations.ambience) {
+    treatment.ambience = recommendations.ambience;
+  }
+
+  // Handle mood transitions
+  if (previousMood && previousMood !== mood) {
+    treatment.transitions.moodChange = {
+      from: previousMood,
+      to: mood,
+      crossfade: AUDIO_INTELLIGENCE.dynamicMixing.fadePresets['crossfade-long']
+    };
+  }
+
+  return treatment;
+}
+
+/**
+ * Cloud function to get audio intelligence data
+ */
+exports.creationWizardGetAudioProfiles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Format genre music profiles
+  const genreMusic = Object.entries(AUDIO_INTELLIGENCE.musicScoring.genreMusic).map(([id, profile]) => ({
+    id,
+    primaryStyle: profile.primaryStyle,
+    secondaryStyle: profile.secondaryStyle,
+    tempo: profile.tempo,
+    energy: profile.energy,
+    instruments: profile.instruments,
+    reference: profile.reference
+  }));
+
+  // Format mood music profiles
+  const moodMusic = Object.entries(AUDIO_INTELLIGENCE.musicScoring.moodMusic).map(([id, profile]) => ({
+    id,
+    style: profile.style,
+    tempo: profile.tempo,
+    energy: profile.energy,
+    elements: profile.elements
+  }));
+
+  // Format sound design categories
+  const ambience = Object.entries(AUDIO_INTELLIGENCE.soundDesign.ambience).map(([id, amb]) => ({
+    id,
+    layers: amb.layers,
+    volume: amb.volume
+  }));
+
+  const transitions = Object.entries(AUDIO_INTELLIGENCE.soundDesign.transitions).map(([id, trans]) => ({
+    id,
+    duration: trans.duration,
+    energy: trans.energy,
+    use: trans.use
+  }));
+
+  // Format voice profiles
+  const voiceProfiles = Object.entries(AUDIO_INTELLIGENCE.voiceEnhancement.profiles).map(([id, profile]) => ({
+    id,
+    eq: profile.eq,
+    compression: profile.compression
+  }));
+
+  // Format audio mood presets
+  const audioMoods = Object.entries(AUDIO_INTELLIGENCE.audioMoodPresets).map(([id, preset]) => ({
+    id,
+    music: preset.music,
+    sfx: preset.sfx,
+    mixing: preset.mixing
+  }));
+
+  return {
+    success: true,
+    genreMusic,
+    moodMusic,
+    ambience,
+    transitions,
+    voiceProfiles,
+    audioMoods,
+    tempoCategories: AUDIO_INTELLIGENCE.musicScoring.tempoCategories,
+    energyLevels: AUDIO_INTELLIGENCE.musicScoring.energyLevels,
+    mixingPresets: AUDIO_INTELLIGENCE.dynamicMixing.voiceMixPresets
+  };
+});
+
+/**
+ * Cloud function to get audio recommendations
+ */
+exports.creationWizardGetAudioRecommendations = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, mood, productionMode, sceneEnergy, hasVoiceover } = data;
+
+  const recommendations = getAudioRecommendations({
+    genre,
+    mood,
+    productionMode,
+    sceneEnergy,
+    hasVoiceover
+  });
+
+  return {
+    success: true,
+    recommendations
+  };
+});
+
+/**
+ * Cloud function to build scene audio treatment
+ */
+exports.creationWizardBuildAudioTreatment = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, mood, sceneType, hasVoiceover, sceneEnergy, isTransition, previousMood } = data;
+
+  const treatment = buildSceneAudioTreatment({
+    genre,
+    mood,
+    sceneType,
+    hasVoiceover,
+    sceneEnergy,
+    isTransition,
+    previousMood
+  });
+
+  return {
+    success: true,
+    treatment
+  };
+});
+
 /**
  * creationWizardCheckImageStatus - Check the status of a RunPod image generation job
  */

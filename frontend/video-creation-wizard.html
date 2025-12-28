@@ -9991,6 +9991,102 @@
             html += '</div>'; // Close music controls
             html += '</div>'; // Close background music section
 
+            // Phase 3D: Audio Intelligence Section
+            html += '<div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px;">🎚️ Audio Intelligence</div>';
+            html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #f59e0b, #ef4444); border-radius: 0.2rem; color: white; font-weight: 600;">AI</span>';
+            html += '</div>';
+
+            // Audio Mood Selector (links to Visual Intelligence)
+            var audioMood = state.assembly.audioMood || state.storyboard.visualStyle?.mood || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Audio Mood</label>';
+            html += '<select onchange="setAudioMood(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from genre)</option>';
+            html += '<option value="epic"' + (audioMood === 'epic' ? ' selected' : '') + '>🎬 Epic</option>';
+            html += '<option value="intimate"' + (audioMood === 'intimate' ? ' selected' : '') + '>💝 Intimate</option>';
+            html += '<option value="mysterious"' + (audioMood === 'mysterious' ? ' selected' : '') + '>🔮 Mysterious</option>';
+            html += '<option value="energetic"' + (audioMood === 'energetic' ? ' selected' : '') + '>⚡ Energetic</option>';
+            html += '<option value="contemplative"' + (audioMood === 'contemplative' ? ' selected' : '') + '>🌙 Contemplative</option>';
+            html += '<option value="tense"' + (audioMood === 'tense' ? ' selected' : '') + '>😰 Tense</option>';
+            html += '<option value="hopeful"' + (audioMood === 'hopeful' ? ' selected' : '') + '>🌅 Hopeful</option>';
+            html += '<option value="professional"' + (audioMood === 'professional' ? ' selected' : '') + '>💼 Professional</option>';
+            html += '<option value="nostalgic"' + (audioMood === 'nostalgic' ? ' selected' : '') + '>📷 Nostalgic</option>';
+            html += '<option value="dark"' + (audioMood === 'dark' ? ' selected' : '') + '>🌑 Dark</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Voice Enhancement Profile
+            var voiceProfile = state.assembly.voiceProfile || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Voice Style</label>';
+            html += '<select onchange="setVoiceProfile(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from genre)</option>';
+            html += '<option value="narrator-warm"' + (voiceProfile === 'narrator-warm' ? ' selected' : '') + '>🎙️ Warm Narrator</option>';
+            html += '<option value="narrator-authoritative"' + (voiceProfile === 'narrator-authoritative' ? ' selected' : '') + '>📢 Authoritative</option>';
+            html += '<option value="narrator-intimate"' + (voiceProfile === 'narrator-intimate' ? ' selected' : '') + '>💭 Intimate</option>';
+            html += '<option value="narrator-energetic"' + (voiceProfile === 'narrator-energetic' ? ' selected' : '') + '>⚡ Energetic</option>';
+            html += '<option value="documentary"' + (voiceProfile === 'documentary' ? ' selected' : '') + '>🎬 Documentary</option>';
+            html += '<option value="cinematic-trailer"' + (voiceProfile === 'cinematic-trailer' ? ' selected' : '') + '>🎥 Cinematic Trailer</option>';
+            html += '<option value="podcast"' + (voiceProfile === 'podcast' ? ' selected' : '') + '>🎧 Podcast</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Transition Sound Style
+            var transitionSound = state.assembly.transitionSound || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Transition Sounds</label>';
+            html += '<select onchange="setTransitionSound(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">None</option>';
+            html += '<option value="whoosh-soft"' + (transitionSound === 'whoosh-soft' ? ' selected' : '') + '>🌊 Soft Whoosh</option>';
+            html += '<option value="whoosh-medium"' + (transitionSound === 'whoosh-medium' ? ' selected' : '') + '>💨 Medium Whoosh</option>';
+            html += '<option value="whoosh-hard"' + (transitionSound === 'whoosh-hard' ? ' selected' : '') + '>⚡ Hard Whoosh</option>';
+            html += '<option value="swoosh-magical"' + (transitionSound === 'swoosh-magical' ? ' selected' : '') + '>✨ Magical Swoosh</option>';
+            html += '<option value="glitch"' + (transitionSound === 'glitch' ? ' selected' : '') + '>🔌 Glitch</option>';
+            html += '<option value="tape-stop"' + (transitionSound === 'tape-stop' ? ' selected' : '') + '>📼 Tape Stop</option>';
+            html += '<option value="sub-drop"' + (transitionSound === 'sub-drop' ? ' selected' : '') + '>💥 Sub Drop</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Ambience Layer
+            var ambienceLayer = state.assembly.ambienceLayer || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Ambience Layer</label>';
+            html += '<select onchange="setAmbienceLayer(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">None</option>';
+            html += '<option value="nature-forest"' + (ambienceLayer === 'nature-forest' ? ' selected' : '') + '>🌲 Forest</option>';
+            html += '<option value="nature-ocean"' + (ambienceLayer === 'nature-ocean' ? ' selected' : '') + '>🌊 Ocean</option>';
+            html += '<option value="nature-rain"' + (ambienceLayer === 'nature-rain' ? ' selected' : '') + '>🌧️ Rain</option>';
+            html += '<option value="nature-night"' + (ambienceLayer === 'nature-night' ? ' selected' : '') + '>🌙 Night</option>';
+            html += '<option value="urban-city"' + (ambienceLayer === 'urban-city' ? ' selected' : '') + '>🏙️ City</option>';
+            html += '<option value="urban-cafe"' + (ambienceLayer === 'urban-cafe' ? ' selected' : '') + '>☕ Café</option>';
+            html += '<option value="urban-office"' + (ambienceLayer === 'urban-office' ? ' selected' : '') + '>🏢 Office</option>';
+            html += '<option value="space-scifi"' + (ambienceLayer === 'space-scifi' ? ' selected' : '') + '>🚀 Space/Sci-Fi</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Audio Intelligence Tip
+            if (audioMood) {
+                var moodTips = {
+                    'epic': 'Orchestral swells, brass fanfares, wide dynamics',
+                    'intimate': 'Soft piano, minimal arrangement, gentle pads',
+                    'mysterious': 'Dark drones, sparse elements, tension holds',
+                    'energetic': 'Driving drums, punchy bass, constant momentum',
+                    'contemplative': 'Ambient textures, slow evolution, space',
+                    'tense': 'Staccato strings, building pressure, dissonance',
+                    'hopeful': 'Uplifting strings, major keys, dawn-like builds',
+                    'professional': 'Clean synths, consistent dynamics, polished',
+                    'nostalgic': 'Warm tones, vinyl texture, retro keys',
+                    'dark': 'Sub bass, industrial elements, ominous choir'
+                };
+                html += '<div style="padding: 0.5rem; background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2); border-radius: 0.4rem; margin-top: 0.5rem;">';
+                html += '<div style="font-size: 0.65rem; color: #a78bfa;">💡 ' + (moodTips[audioMood] || 'Custom audio treatment applied') + '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>'; // Close Audio Intelligence section
+
             return html;
         }
 
@@ -10753,6 +10849,122 @@
                 previewEngine.musicVolume = volume / 100;
             }
             render();
+        }
+
+        // Phase 3D: Audio Intelligence Functions
+        function setAudioMood(mood) {
+            state.assembly.audioMood = mood || null;
+
+            // Show mood-specific feedback
+            const moodNames = {
+                'epic': 'Epic - Orchestral swells & wide dynamics',
+                'intimate': 'Intimate - Soft piano & gentle pads',
+                'mysterious': 'Mysterious - Dark drones & tension',
+                'energetic': 'Energetic - Driving drums & momentum',
+                'contemplative': 'Contemplative - Ambient & reflective',
+                'tense': 'Tense - Building pressure & suspense',
+                'hopeful': 'Hopeful - Uplifting & inspiring',
+                'professional': 'Professional - Clean & polished',
+                'nostalgic': 'Nostalgic - Warm vintage tones',
+                'dark': 'Dark - Ominous & heavy'
+            };
+
+            if (mood) {
+                showToast(`Audio mood: ${moodNames[mood] || mood}`, 'success');
+            } else {
+                showToast('Audio mood: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setVoiceProfile(profile) {
+            state.assembly.voiceProfile = profile || null;
+
+            const profileNames = {
+                'narrator-warm': 'Warm Narrator',
+                'narrator-authoritative': 'Authoritative',
+                'narrator-intimate': 'Intimate',
+                'narrator-energetic': 'Energetic',
+                'documentary': 'Documentary',
+                'cinematic-trailer': 'Cinematic Trailer',
+                'podcast': 'Podcast'
+            };
+
+            if (profile) {
+                showToast(`Voice style: ${profileNames[profile] || profile}`, 'success');
+            } else {
+                showToast('Voice style: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setTransitionSound(sound) {
+            state.assembly.transitionSound = sound || null;
+
+            if (sound) {
+                const soundNames = {
+                    'whoosh-soft': 'Soft Whoosh',
+                    'whoosh-medium': 'Medium Whoosh',
+                    'whoosh-hard': 'Hard Whoosh',
+                    'swoosh-magical': 'Magical Swoosh',
+                    'glitch': 'Glitch',
+                    'tape-stop': 'Tape Stop',
+                    'sub-drop': 'Sub Drop'
+                };
+                showToast(`Transition sound: ${soundNames[sound] || sound}`, 'success');
+            } else {
+                showToast('Transition sounds disabled', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setAmbienceLayer(ambience) {
+            state.assembly.ambienceLayer = ambience || null;
+
+            if (ambience) {
+                const ambienceNames = {
+                    'nature-forest': 'Forest ambience',
+                    'nature-ocean': 'Ocean waves',
+                    'nature-rain': 'Rain sounds',
+                    'nature-night': 'Night atmosphere',
+                    'urban-city': 'City sounds',
+                    'urban-cafe': 'Café ambience',
+                    'urban-office': 'Office atmosphere',
+                    'space-scifi': 'Space/Sci-Fi atmosphere'
+                };
+                showToast(`Ambience: ${ambienceNames[ambience] || ambience}`, 'success');
+            } else {
+                showToast('Ambience layer disabled', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        async function getAudioRecommendationsForProject() {
+            try {
+                const getRecommendations = functions.httpsCallable('creationWizardGetAudioRecommendations');
+                const result = await getRecommendations({
+                    genre: state.content.genre,
+                    mood: state.assembly.audioMood || state.storyboard.visualStyle?.mood,
+                    productionMode: state.content.productionMode,
+                    sceneEnergy: 'medium',
+                    hasVoiceover: true
+                });
+
+                if (result.data.success) {
+                    return result.data.recommendations;
+                }
+            } catch (error) {
+                console.error('Failed to get audio recommendations:', error);
+            }
+            return null;
         }
 
         // Helper functions to update preview settings
