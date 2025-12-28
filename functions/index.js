@@ -24443,6 +24443,148 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
 
     const productionSettings = productionModes[productionMode] || productionModes.standard;
 
+    // ============================================================
+    // CINEMATIC PRODUCTION ARCHITECTURE
+    // This transforms output from "presentation with voiceover" to
+    // "actual film/TV production" with proper scene types and audio
+    // ============================================================
+
+    /**
+     * SCENE TYPES - How each scene functions in a film
+     * Different from production MODE - these are the building blocks
+     */
+    const SCENE_TYPES = {
+      'opening_narration': {
+        description: 'Narrator sets the stage (like Galadriel in LOTR, or Pixar openings)',
+        audioType: 'voiceover',
+        example: 'The world was young then... before the darkness came.',
+        typicalPosition: 'first 1-2 scenes',
+        visualStyle: 'Epic establishing shots, slow camera movements'
+      },
+      'dialogue': {
+        description: 'Characters speak to each other - the heart of drama',
+        audioType: 'character_dialogue',
+        example: '{ speaker: "Maya", line: "We have to go. Now." }, { speaker: "Kai", line: "Not without her." }',
+        typicalPosition: 'throughout, especially mid-story',
+        visualStyle: 'Shot/reverse-shot, close-ups on speakers, reaction shots'
+      },
+      'action': {
+        description: 'Physical action, chase, fight, movement - minimal/no dialogue',
+        audioType: 'sfx_music',
+        example: 'No spoken words - just sound effects and intense music',
+        typicalPosition: 'climax moments, transitions',
+        visualStyle: 'Dynamic camera, quick cuts, wide for scale then tight for impact'
+      },
+      'emotional': {
+        description: 'Character internal moment, reflection, realization',
+        audioType: 'internal_monologue_or_music',
+        example: 'Internal: "What have I done?" or just emotional score',
+        typicalPosition: 'after conflict, before resolution',
+        visualStyle: 'Close-ups, slow motion possible, soft lighting'
+      },
+      'montage': {
+        description: 'Time passage, training sequence, preparation',
+        audioType: 'music_driven',
+        example: 'Energetic music carrying visuals, no dialogue',
+        typicalPosition: 'transitions between acts',
+        visualStyle: 'Quick cuts, varied angles, progression visible'
+      },
+      'revelation': {
+        description: 'Plot twist, discovery, shocking truth revealed',
+        audioType: 'minimal_then_reaction',
+        example: 'Silence... then "It was you all along."',
+        typicalPosition: 'end of act 2, climax',
+        visualStyle: 'Slow push-in, dramatic lighting shift'
+      },
+      'closing_narration': {
+        description: 'Narrator wraps up, reflects on meaning',
+        audioType: 'voiceover',
+        example: 'And so the journey ended... but another was just beginning.',
+        typicalPosition: 'final scene',
+        visualStyle: 'Pull back to wide, sunset/sunrise, cyclical imagery'
+      }
+    };
+
+    /**
+     * CINEMATIC TRANSITIONS - Purpose-driven, not random
+     */
+    const CINEMATIC_TRANSITIONS = {
+      'cut': { purpose: 'Direct continuation, same energy', when: 'Normal scene flow' },
+      'smash_cut': { purpose: 'Shock, contrast, comedic timing', when: 'Sudden tonal shift' },
+      'fade_to_black': { purpose: 'End of chapter, time passage, death', when: 'Major story beat ending' },
+      'fade_from_black': { purpose: 'New beginning, awakening', when: 'After time jump or blackout' },
+      'dissolve': { purpose: 'Time passing, memory, dreamlike transition', when: 'Flashback, passage of time' },
+      'match_cut': { purpose: 'Thematic connection between different scenes', when: 'Showing parallel or contrast' },
+      'wipe': { purpose: 'Scene change with energy, different location', when: 'Adventure, action genre' },
+      'j_cut': { purpose: 'Audio from next scene starts before visual', when: 'Building anticipation' },
+      'l_cut': { purpose: 'Audio from previous scene continues over new visual', when: 'Emotional continuity' }
+    };
+
+    /**
+     * AUDIO LAYER TYPES - What we HEAR in each scene
+     */
+    const AUDIO_LAYER_TYPES = {
+      'voiceover': {
+        description: 'Narrator speaking over visuals',
+        when: 'Opening, closing, transitional moments, documentary sections',
+        ttsRequired: true,
+        speakerType: 'narrator'
+      },
+      'dialogue': {
+        description: 'Characters speaking to each other',
+        when: 'Drama scenes, conflict, character development',
+        ttsRequired: true,
+        speakerType: 'character',
+        format: '{ character: "Name", line: "What they say", emotion: "how they say it" }'
+      },
+      'internal_monologue': {
+        description: 'Character thinking to themselves (audience hears thoughts)',
+        when: 'Emotional moments, decision points, reflection',
+        ttsRequired: true,
+        speakerType: 'character_internal'
+      },
+      'action_sfx': {
+        description: 'No speech - sound effects and music only',
+        when: 'Action sequences, visual storytelling moments',
+        ttsRequired: false,
+        speakerType: 'none'
+      },
+      'music_only': {
+        description: 'Emotional score carries the scene',
+        when: 'Montages, powerful visual moments, endings',
+        ttsRequired: false,
+        speakerType: 'none'
+      }
+    };
+
+    /**
+     * SFX CATEGORIES - Sound effects to suggest
+     */
+    const SFX_CATEGORIES = {
+      'ambient': ['wind', 'rain', 'city_noise', 'forest_sounds', 'ocean_waves', 'crowd_murmur'],
+      'action': ['explosion', 'gunshot', 'sword_clash', 'punch_impact', 'glass_breaking', 'car_crash'],
+      'tension': ['heartbeat', 'clock_ticking', 'door_creak', 'footsteps_approaching', 'breathing_heavy'],
+      'emotional': ['gentle_wind', 'music_box', 'rain_on_window', 'fire_crackling', 'distant_thunder'],
+      'tech': ['computer_beep', 'door_hiss', 'engine_hum', 'electricity_crackle', 'alarm_blaring'],
+      'nature': ['bird_song', 'wolf_howl', 'thunder', 'waterfall', 'leaves_rustling']
+    };
+
+    /**
+     * MUSIC MOOD PROGRESSION - How music should evolve
+     */
+    const MUSIC_MOODS = {
+      'tension_building': 'Low strings, minimal percussion, building dread',
+      'action_intense': 'Fast percussion, brass hits, driving rhythm',
+      'emotional_sad': 'Piano, soft strings, minor key, slow tempo',
+      'emotional_hopeful': 'Swelling strings, major key resolution, building warmth',
+      'triumphant': 'Full orchestra, brass fanfare, timpani, major key',
+      'mysterious': 'Ambient pads, unusual instruments, dissonant hints',
+      'peaceful': 'Gentle acoustic, soft pads, nature sounds blend',
+      'epic_scale': 'Full orchestra with choir, massive reverb, Hans Zimmer style',
+      'intimate': 'Solo instrument, minimal arrangement, close and personal',
+      'suspense': 'Staccato strings, held breaths, sudden stings'
+    };
+
     // === VIDEO MODEL-AWARE TIMING ===
     // Adjust scene structure based on AI video clip duration
     const clipDuration = videoModel.duration === '10s' ? 10 : 6;
@@ -24874,18 +25016,34 @@ ${productionSettings.specialInstructions ? `\nPRODUCTION SPECIAL: ${productionSe
 
 === ${productionSettings.name.toUpperCase()} NARRATIVE STRUCTURE ===${narrativeStructure}
 
-=== REQUIREMENTS ===
+=== CINEMATIC PRODUCTION REQUIREMENTS ===
 1. OPENING: ${productionSettings.openingStyle}
 2. Create EXACTLY ${sceneCount} scenes following the emotional arc: ${productionSettings.emotionalArc}
-3. EACH SCENE NARRATION: ~${wordsPerScene} WORDS (±5 words) - COUNT CAREFULLY!
+3. SCENE TYPE DISTRIBUTION (this is CINEMA, not presentation):
+   - Opening scene: Use "opening_narration" type for world-setting
+   - Middle scenes: Mix "dialogue", "action", "emotional" scenes - NOT all voiceover!
+   - Climax: Use "action" or "revelation" type
+   - Final scene: Use "closing_narration" or "emotional" for resolution
+   - MINIMUM 40% of scenes MUST be "dialogue" type with characters talking
+
 4. Each scene needs:
-   - narration: ~${wordsPerScene} words in ${productionSettings.narrativeStyle} voice
-   - visual: Start with [Camera Movement], then detailed ${productionSettings.visualApproach}
-   - visualDuration: ${visualDuration}
-   - narrationDuration: ${narrationDuration}
-   - cameraMovement: Array of 1-3 movements from the available list
-5. CLOSING: ${productionSettings.closingStyle}
-6. Visual descriptions: ${productionSettings.visualApproach}
+   - sceneType: Choose appropriate type (dialogue/action/emotional/etc.)
+   - audioLayer: Structured audio matching the scene type
+     * dialogue scenes: { type: "dialogue", dialogue: [{character, line, emotion}], sfx, musicMood }
+     * voiceover scenes: { type: "voiceover", voiceover: "text", sfx, musicMood }
+     * action scenes: { type: "action_sfx", sfx: [...], musicMood: "action_intense" }
+   - visualPrompt: Detailed cinematography with [Camera Movement]
+   - cameraIntent: WHY this camera move serves the story
+   - transition: { type, purpose } - purposeful transitions
+   - duration: ${visualDuration}
+
+5. AUDIO TIMING:
+   - Voiceover scenes: ~${wordsPerScene} words
+   - Dialogue scenes: 2-4 lines of dialogue per ${clipDuration}-second clip
+   - Action scenes: SFX list, NO spoken words
+
+6. CLOSING: ${productionSettings.closingStyle}
+7. Visual descriptions: ${productionSettings.visualApproach}
 
 ${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
 ${conceptEnrichment ? `
@@ -24938,40 +25096,109 @@ POOR EXAMPLE (DO NOT DO THIS):
 EXCELLENT EXAMPLE (DO THIS):
 "[Slow push-in, low-angle] A weathered inventor in his 60s with wild gray hair and oil-stained leather apron hunches intensely over a glowing brass mechanism, his calloused hands carefully adjusting delicate gears, determined expression lit by sparks. Foreground: scattered brass gears and burnt-out bulbs on worn wooden table. Midground: cluttered workbench with smoking apparatus, copper tubing, half-assembled devices. Background: brick walls covered in yellowed blueprints and shelves of failed prototypes. Late night atmosphere, single overhead work lamp casting harsh amber tungsten light (3200K), deep dramatic shadows across his face, dust motes and tiny sparks floating in the warm glow. Steam rising from cooling metal. Shallow depth of field with bokeh on background lights. Steampunk industrial aesthetic, Ridley Scott visual style."
 
-=== CRITICAL: VISUAL VS NARRATION SEPARATION ===
-You MUST output TWO SEPARATE fields for each scene:
+=== CRITICAL: CINEMATIC SCENE ARCHITECTURE ===
+You are NOT creating a presentation with voiceover. You are creating a FILM/TV PRODUCTION.
+Each scene must be structured like actual cinema - with proper scene types and audio layers.
 
-1. "visualPrompt" - What we SEE (for AI video generation)
-   - MUST include ALL cinematography elements listed above
-   - Optimized for Minimax AI video generation
-   - Rich, detailed description: minimum 150 words per scene
-   - Should NOT be spoken aloud - this is camera/visual direction
+🎬 SCENE TYPES - Choose the RIGHT type for each scene:
+- "opening_narration": Narrator sets the stage (LOTR opening, Pixar intros) - use for scene 1
+- "dialogue": Characters speak to each other - THE HEART OF DRAMA
+- "action": Physical action, chase, fight - minimal/no dialogue, SFX + music
+- "emotional": Character reflection, internal moment - close-ups, soft lighting
+- "montage": Time passage, preparation - quick cuts, music-driven
+- "revelation": Plot twist, discovery - dramatic pause then reaction
+- "closing_narration": Narrator reflects on meaning - final scene wrap-up
+
+🎧 AUDIO LAYER - What we HEAR depends on scene type:
+
+1. For "dialogue" scenes - audioLayer.type = "dialogue":
+   audioLayer: {
+     type: "dialogue",
+     dialogue: [
+       { character: "Maya", line: "We have to leave. Now.", emotion: "urgent" },
+       { character: "Kai", line: "Not without the artifact.", emotion: "determined" }
+     ],
+     sfx: ["wind_howling", "distant_thunder"],
+     musicMood: "tension_building"
+   }
+
+2. For "opening_narration" or "closing_narration" - audioLayer.type = "voiceover":
+   audioLayer: {
+     type: "voiceover",
+     voiceover: "The world was young then... before the darkness came.",
+     sfx: ["gentle_wind"],
+     musicMood: "epic_scale"
+   }
+
+3. For "action" scenes - audioLayer.type = "action_sfx":
+   audioLayer: {
+     type: "action_sfx",
+     voiceover: null,
+     dialogue: null,
+     sfx: ["explosion", "sword_clash", "footsteps_running"],
+     musicMood: "action_intense"
+   }
+
+4. For "emotional" scenes - audioLayer.type = "internal_monologue" or "music_only":
+   audioLayer: {
+     type: "internal_monologue",
+     internalMonologue: { character: "Maya", thought: "What have I done?" },
+     sfx: ["rain_on_window"],
+     musicMood: "emotional_sad"
+   }
+
+🎬 TRANSITION PURPOSE - Every transition must serve the story:
+- "cut": Normal flow, same energy
+- "smash_cut": Shock, sudden contrast
+- "fade_to_black": Chapter end, time passage, death
+- "dissolve": Memory, dream, time passing
+- "match_cut": Thematic connection between scenes
+- "j_cut": Next scene's audio starts before visual (builds anticipation)
+- "l_cut": Previous audio continues over new visual (emotional continuity)
+
+📹 visualPrompt - What we SEE (unchanged - still detailed cinematography):
    - Start with [Camera Movement] in brackets
-   - Example: "[Slow push-in] A weathered man in his 50s wearing a faded denim jacket stands at a rain-soaked window, his weathered hands pressed against the cold glass, reflection fractured by rivulets of water. Foreground: condensation droplets on glass, dead plant on windowsill. Midground: sparse apartment, single lamp casting warm amber pool. Background: city lights blurred through rain, distant neon signs. Dim blue-hour twilight mixed with warm practical lamp light, chiaroscuro shadows across his contemplative face, rain streaking down glass creating moving light patterns. Melancholic atmosphere, subtle dust particles in lamp beam. Close-up shot, eye-level, static camera with subtle handheld drift. Shallow depth of field, Denis Villeneuve mood, desaturated teal-orange color grade."
+   - Include ALL cinematography elements (lighting, composition, atmosphere)
+   - Minimum 150 words per scene
+   - When characters appear, use their EXACT visual descriptions
 
-2. "narration" - What we HEAR (for voiceover/TTS)
-   - The actual words that will be SPOKEN by a narrator
-   - Should COMPLEMENT the visuals, not describe them literally
-   - Can be null/empty for cinematic moments with music only
-   - Example: "In moments like these, we find clarity. When the noise fades, truth remains."
+⚠️ KEY DIFFERENCES FROM PRESENTATION:
+- Presentation: Every scene has narrator talking
+- Cinema: Scenes flow between dialogue, action, emotion, narration
+- Presentation: Same energy throughout
+- Cinema: Ebb and flow - tension, release, intimacy, spectacle
+- Presentation: Narrator describes what we see
+- Cinema: Audio ADDS meaning, doesn't describe visuals
 
-⚠️ NEVER have the narrator describe what viewers can already see!
-BAD: "A man stands alone" (describing the visual)
-GOOD: "The weight of decision pressed down on him" (adding meaning to the visual)
+SCENE DISTRIBUTION FOR FILM QUALITY:
+${productionMode === 'cinematic' || productionMode === 'story' ? `
+- Scene 1: opening_narration (set the world)
+- Scenes 2-3: dialogue + action (establish conflict)
+- Scenes 4-${sceneCount - 2}: Mix of dialogue, action, emotional (rising action)
+- Scene ${sceneCount - 1}: revelation or climax action
+- Scene ${sceneCount}: closing_narration or emotional resolution
+` : `
+- Opening: Can use voiceover to hook
+- Middle: Mix scene types based on content needs
+- Climax: Action or revelation
+- Closing: Resolution with optional closing narration
+`}
 
-Some scenes should have NO narration (narration: null) - let the visuals and music speak.
-${productionMode === 'cinematic' ? 'For CINEMATIC mode: At least 30% of scenes should have null narration.' : ''}
+MUSIC MOOD OPTIONS (choose one per scene):
+tension_building, action_intense, emotional_sad, emotional_hopeful,
+triumphant, mysterious, peaceful, epic_scale, intimate, suspense
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON:
 {
   "title": "Compelling ${productionSettings.name} style title (50-70 chars)",
-  "hook": "The attention-grabbing first line (this IS narration)",
+  "hook": "The attention-grabbing opening - can be narration or impactful dialogue",
   "characters": [
     {
       "name": "Character's name",
       "archetype": "The archetype (e.g., Reluctant Hero, Wise Mentor, Hidden Villain)",
       "visualDescription": "DETAILED visual description - exact appearance, clothing, features, distinguishing marks",
+      "voiceDescription": "How they sound - accent, pitch, speech patterns, emotional range",
       "role": "Their role in the story",
       "motivation": "What drives this character",
       "firstAppearance": 1,
@@ -24981,20 +25208,33 @@ Return ONLY valid JSON:
   "scenes": [
     {
       "id": 1,
-      "visualPrompt": "[Camera Movement] Detailed visual description for AI video generation - what we SEE. MUST include exact character visual descriptions when characters appear.",
-      "narration": "What we HEAR - voiceover text that complements the visual, or null for music-only scenes",
+      "sceneType": "opening_narration|dialogue|action|emotional|montage|revelation|closing_narration",
+      "visualPrompt": "[Camera Movement] Detailed cinematography for AI video generation",
       "visual": "[Camera Movement] Same as visualPrompt for backwards compatibility",
+      "audioLayer": {
+        "type": "voiceover|dialogue|internal_monologue|action_sfx|music_only",
+        "voiceover": "Narrator text if type=voiceover, otherwise null",
+        "dialogue": [
+          { "character": "Name", "line": "What they say", "emotion": "how they feel" }
+        ],
+        "internalMonologue": { "character": "Name", "thought": "Their internal thought" },
+        "sfx": ["sound_effect_1", "sound_effect_2"],
+        "musicMood": "tension_building|action_intense|emotional_sad|etc",
+        "musicTransition": "continue|fade_out|crescendo|sudden_stop"
+      },
+      "narration": "BACKWARDS COMPATIBLE: voiceover text or null (populated from audioLayer.voiceover)",
       "duration": ${visualDuration},
-      "narrationStartTime": 0.5,
-      "hasNarration": true,
       "cameraMovement": ["Push in"],
-      "mood": "contemplative|tense|uplifting|mysterious|etc",
-      "transition": "cut|fade|dissolve|zoom",
-      "charactersInScene": ["Character names that appear in this scene - MUST match names from characters array"],
-      "sceneRole": "What role this scene plays in the story arc (setup/escalation/climax/resolution)"
+      "cameraIntent": "Why this camera move - what emotion/story it serves",
+      "transition": {
+        "type": "cut|smash_cut|fade_to_black|dissolve|match_cut|j_cut|l_cut",
+        "purpose": "Why this transition - what story beat it serves"
+      },
+      "charactersInScene": ["Character names from characters array"],
+      "sceneRole": "setup|conflict|rising_action|climax|resolution"
     }
   ],
-  "cta": "Call-to-action woven naturally into final scene",
+  "cta": "Call-to-action woven naturally into story (not presentation-style)",
   "totalDuration": ${targetDuration},
   "timing": {
     "sceneCount": ${sceneCount},
@@ -25003,23 +25243,47 @@ Return ONLY valid JSON:
     "clipDuration": ${clipDuration}
   },
   "productionMode": "${productionMode}",
+  "audioDesign": {
+    "overallMusicStyle": "The musical theme/genre for the whole piece",
+    "musicProgression": "How music evolves: calm→tense→epic→resolution",
+    "keyAudioMoments": [
+      { "sceneId": 1, "moment": "Music swells as hero makes decision" }
+    ],
+    "silentMoments": ["Scene IDs where silence is used dramatically"],
+    "sfxHighlights": ["Key sound effects that drive story"]
+  },
   "metadata": {
     "targetAudience": "Who this video is for",
     "keyMessage": "The main takeaway",
-    "suggestedMusic": "${productionSettings.musicMood}",
-    "emotionalArc": "${productionSettings.emotionalArc}"
+    "emotionalArc": "${productionSettings.emotionalArc}",
+    "productionStyle": "Film genre this most resembles"
   },
   "storyArchitecture": {
     "centralTheme": "The core theme threading through all scenes",
     "characterArcs": ["Brief description of each character's journey/growth"],
     "visualSignatureUsed": "How the visual signature was applied",
     "iconicMoments": ["Scene IDs that contain memorable/iconic visual moments"],
-    "storyComplexity": "simple|layered|complex - self-assessment of narrative depth"
+    "storyComplexity": "simple|layered|complex",
+    "sceneTypeDistribution": {
+      "dialogue": 0,
+      "action": 0,
+      "narration": 0,
+      "emotional": 0
+    }
   }
 }
 
-CRITICAL: The "characters" array MUST contain ALL characters in your story with complete visual descriptions.
-When a character appears in a scene's visualPrompt, use their EXACT visual description from the characters array.`;
+CRITICAL REQUIREMENTS:
+1. The "characters" array MUST contain ALL characters with complete visual AND voice descriptions
+2. Each scene's "audioLayer" MUST match its "sceneType" - dialogue scenes need dialogue array, action needs sfx
+3. Use EXACT character visual descriptions in visualPrompt when they appear
+4. "narration" field must be populated from audioLayer for backwards compatibility:
+   - If audioLayer.type="voiceover", narration = audioLayer.voiceover
+   - If audioLayer.type="dialogue", narration = formatted dialogue lines
+   - If audioLayer.type="action_sfx" or "music_only", narration = null
+5. At least 40% of scenes should be "dialogue" type for character-driven stories
+6. transition.purpose MUST explain WHY that transition was chosen`;
+
 
     // Log enrichment data for debugging
     if (conceptEnrichment) {
@@ -25036,7 +25300,11 @@ When a character appears in a scene's visualPrompt, use their EXACT visual descr
     }
 
     // Call GPT-4o for script generation
-    // Note: max_tokens increased to 5500 to accommodate deep story architecture with full character definitions
+    // Note: max_tokens increased to 6500 for cinematic production with:
+    // - Full audioLayer structure per scene
+    // - Character dialogue arrays
+    // - audioDesign metadata
+    // - Detailed transition purposes
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
@@ -25044,7 +25312,7 @@ When a character appears in a scene's visualPrompt, use their EXACT visual descr
         { role: 'user', content: userPrompt }
       ],
       temperature: conceptEnrichment ? 0.85 : 0.8, // Slightly higher creativity for enriched concepts
-      max_tokens: conceptEnrichment ? 5500 : 3000 // More tokens for complex stories with character definitions
+      max_tokens: 6500 // Cinematic production requires more tokens for rich scene structure
     });
 
     // Parse the response
