@@ -23091,11 +23091,15 @@ exports.creationWizardSaveProject = functions.https.onCall(async (data, context)
         metadata: projectData.script.metadata || null
       } : null,
 
-      // Storyboard data - complete
+      // Storyboard data - complete (including Phase 4 Scene Memory)
       storyboard: projectData.storyboard ? {
         scenes: projectData.storyboard.scenes || [],
         visualStyle: projectData.storyboard.visualStyle || null,
-        selectedAspectRatio: projectData.storyboard.selectedAspectRatio || null
+        selectedAspectRatio: projectData.storyboard.selectedAspectRatio || null,
+        // Phase 4: Scene Memory System
+        styleBible: projectData.storyboard.styleBible || null,
+        characterBible: projectData.storyboard.characterBible || null,
+        technicalSpecs: projectData.storyboard.technicalSpecs || null
       } : null,
 
       // Animation data - complete
@@ -24957,9 +24961,14 @@ const VISUAL_INTELLIGENCE = {
 
 /**
  * buildVisualPrompt - Constructs an enhanced visual prompt using Visual Intelligence
- * @param {string} basePrompt - The original visual description from the script
- * @param {object} options - { genre, productionMode, mood, visualSettings }
+ * Now supports Phase 4: Scene Memory System with 4-layer architecture
+ *
+ * @param {string} basePrompt - The original visual description from the script (Layer 3: Scene Content)
+ * @param {object} options - { genre, productionMode, mood, visualSettings, sceneMemory }
  * @returns {object} - { enhancedPrompt, negativePrompt, visualMetadata }
+ *
+ * 4-Layer Prompt Architecture:
+ * [STYLE BIBLE] + [CHARACTER BIBLE] + [SCENE CONTENT] + [TECHNICAL SPECS]
  */
 function buildVisualPrompt(basePrompt, options = {}) {
   const {
@@ -24967,46 +24976,107 @@ function buildVisualPrompt(basePrompt, options = {}) {
     productionMode = 'standard',
     mood = null,
     visualSettings = {},
-    style = 'cinematic'
+    style = 'cinematic',
+    // Phase 4: Scene Memory System
+    sceneMemory = null
   } = options;
 
-  // Get genre visuals or fall back to production mode or standard
+  const promptParts = [];
+
+  // ===== PHASE 4: SCENE MEMORY 4-LAYER ARCHITECTURE =====
+
+  // Layer 1: Style Bible (if enabled) - SAME for every scene
+  if (sceneMemory?.styleBible?.enabled) {
+    const bible = sceneMemory.styleBible;
+    if (bible.style) promptParts.push(`Style: ${bible.style}`);
+    if (bible.colorGrade) promptParts.push(`Color Grade: ${bible.colorGrade}`);
+    if (bible.lighting) promptParts.push(`Lighting: ${bible.lighting}`);
+    if (bible.atmosphere) promptParts.push(`Atmosphere: ${bible.atmosphere}`);
+    if (bible.camera) promptParts.push(`Camera: ${bible.camera}`);
+  }
+
+  // Layer 2: Character Bible (if enabled) - Characters assigned to this scene
+  if (sceneMemory?.characterDescriptions && sceneMemory.characterDescriptions.length > 0) {
+    // Character descriptions are pre-filtered by the frontend for this specific scene
+    for (const charDesc of sceneMemory.characterDescriptions) {
+      if (charDesc && charDesc.trim()) {
+        promptParts.push(charDesc);
+      }
+    }
+  }
+
+  // Layer 3: Scene Content (the original visual prompt - UNIQUE per scene)
+  if (basePrompt) {
+    promptParts.push(basePrompt);
+  }
+
+  // === ORIGINAL VISUAL INTELLIGENCE (Only if Scene Memory Style Bible is NOT enabled) ===
+  // This maintains backward compatibility with existing projects
+  if (!sceneMemory?.styleBible?.enabled) {
+    // Get genre visuals or fall back to production mode or standard
+    const genreVisual = VISUAL_INTELLIGENCE.genreVisuals[genre] ||
+                        VISUAL_INTELLIGENCE.genreVisuals[productionMode] ||
+                        VISUAL_INTELLIGENCE.genreVisuals['standard'];
+
+    // Get specific visual components (allow override from visualSettings)
+    const compositionKey = visualSettings.composition || genreVisual.defaultComposition;
+    const lightingKey = visualSettings.lighting || genreVisual.defaultLighting;
+    const paletteKey = visualSettings.colorPalette || genreVisual.defaultPalette;
+
+    const composition = VISUAL_INTELLIGENCE.compositions[compositionKey] || VISUAL_INTELLIGENCE.compositions['rule-of-thirds'];
+    const lighting = VISUAL_INTELLIGENCE.lighting[lightingKey] || VISUAL_INTELLIGENCE.lighting['natural'];
+    const palette = VISUAL_INTELLIGENCE.colorPalettes[paletteKey] || VISUAL_INTELLIGENCE.colorPalettes['cool-tones'];
+
+    // Get mood if specified
+    const moodSettings = mood ? VISUAL_INTELLIGENCE.moods[mood] : null;
+
+    // Add Visual Intelligence components
+    promptParts.push(`Composition: ${composition.prompt}`);
+    promptParts.push(`Lighting: ${lighting.prompt}`);
+    promptParts.push(`Color: ${palette.prompt}`);
+    if (genreVisual.promptModifiers) promptParts.push(genreVisual.promptModifiers);
+    if (moodSettings?.prompt) promptParts.push(moodSettings.prompt);
+  }
+
+  // Layer 4: Technical Specs
+  if (sceneMemory?.technicalSpecs?.enabled && sceneMemory.technicalSpecs.positive) {
+    promptParts.push(sceneMemory.technicalSpecs.positive);
+  } else {
+    // Default technical specs for backward compatibility
+    promptParts.push('high quality, detailed, professional, 8K resolution, sharp focus');
+  }
+
+  const enhancedPrompt = promptParts.filter(Boolean).join('. ');
+
+  // Build negative prompt
+  let negativePrompt = '';
+  if (sceneMemory?.technicalSpecs?.enabled && sceneMemory.technicalSpecs.negative) {
+    negativePrompt = sceneMemory.technicalSpecs.negative;
+  } else {
+    // Default negative prompt
+    const negativeParts = [
+      'blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur'
+    ];
+
+    if (!sceneMemory?.styleBible?.enabled) {
+      const genreVisual = VISUAL_INTELLIGENCE.genreVisuals[genre] ||
+                          VISUAL_INTELLIGENCE.genreVisuals[productionMode] ||
+                          VISUAL_INTELLIGENCE.genreVisuals['standard'];
+      if (genreVisual.negativeModifiers) {
+        negativeParts.push(genreVisual.negativeModifiers);
+      }
+    }
+
+    negativePrompt = negativeParts.filter(Boolean).join(', ');
+  }
+
+  // Get composition/lighting/palette keys for metadata
   const genreVisual = VISUAL_INTELLIGENCE.genreVisuals[genre] ||
                       VISUAL_INTELLIGENCE.genreVisuals[productionMode] ||
                       VISUAL_INTELLIGENCE.genreVisuals['standard'];
-
-  // Get specific visual components (allow override from visualSettings)
   const compositionKey = visualSettings.composition || genreVisual.defaultComposition;
   const lightingKey = visualSettings.lighting || genreVisual.defaultLighting;
   const paletteKey = visualSettings.colorPalette || genreVisual.defaultPalette;
-
-  const composition = VISUAL_INTELLIGENCE.compositions[compositionKey] || VISUAL_INTELLIGENCE.compositions['rule-of-thirds'];
-  const lighting = VISUAL_INTELLIGENCE.lighting[lightingKey] || VISUAL_INTELLIGENCE.lighting['natural'];
-  const palette = VISUAL_INTELLIGENCE.colorPalettes[paletteKey] || VISUAL_INTELLIGENCE.colorPalettes['cool-tones'];
-
-  // Get mood if specified
-  const moodSettings = mood ? VISUAL_INTELLIGENCE.moods[mood] : null;
-
-  // Build the enhanced prompt
-  const promptParts = [
-    basePrompt,
-    `Composition: ${composition.prompt}`,
-    `Lighting: ${lighting.prompt}`,
-    `Color: ${palette.prompt}`,
-    genreVisual.promptModifiers,
-    moodSettings?.prompt || '',
-    'high quality, detailed, professional, 8K resolution, sharp focus'
-  ].filter(Boolean);
-
-  const enhancedPrompt = promptParts.join('. ');
-
-  // Build negative prompt
-  const negativeParts = [
-    'blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur',
-    genreVisual.negativeModifiers || ''
-  ].filter(Boolean);
-
-  const negativePrompt = negativeParts.join(', ');
 
   // Return structured result
   return {
@@ -25018,7 +25088,13 @@ function buildVisualPrompt(basePrompt, options = {}) {
       composition: compositionKey,
       lighting: lightingKey,
       colorPalette: paletteKey,
-      mood
+      mood,
+      // Phase 4: Scene Memory info
+      sceneMemoryEnabled: {
+        styleBible: !!sceneMemory?.styleBible?.enabled,
+        characterBible: !!(sceneMemory?.characterDescriptions?.length > 0),
+        technicalSpecs: sceneMemory?.technicalSpecs?.enabled !== false
+      }
     }
   };
 }
@@ -25027,7 +25103,7 @@ function buildVisualPrompt(basePrompt, options = {}) {
  * creationWizardGenerateSceneImage - Generate a single scene image using RunPod
  *
  * Uses existing RunPod HiDream integration to generate storyboard images
- * Now enhanced with Phase 3B Visual Intelligence
+ * Enhanced with Phase 3B Visual Intelligence and Phase 4 Scene Memory System
  */
 exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
@@ -25042,7 +25118,9 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
     genre = null,
     productionMode = 'standard',
     mood = null,
-    visualSettings = {}
+    visualSettings = {},
+    // Phase 4: Scene Memory System parameters
+    sceneMemory = null
   } = data;
 
   if (!prompt || prompt.trim().length < 10) {
@@ -25055,13 +25133,14 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
   }
 
   try {
-    // Phase 3B: Use Visual Intelligence to build enhanced prompt
+    // Phase 3B + Phase 4: Use Visual Intelligence + Scene Memory to build enhanced prompt
     const visualResult = buildVisualPrompt(prompt, {
       genre,
       productionMode,
       mood,
       visualSettings,
-      style
+      style,
+      sceneMemory  // Phase 4: Scene Memory data
     });
 
     const enhancedPrompt = visualResult.enhancedPrompt;
