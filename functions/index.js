@@ -23323,6 +23323,9 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     additionalInstructions = '',
     // Phase 2: Hollywood Production Mode
     productionMode = 'standard', // 'standard' | 'documentary' | 'thriller' | 'inspirational' | 'story' | 'cinematic'
+    // Phase 3A: Genre Reference System
+    genre = null, // Genre key from GENRE_REFERENCE_LIBRARY (e.g., 'documentary-nature', 'educational-explainer')
+    contentFormat = 'medium-form', // 'short-form' | 'medium-form' | 'long-form' | 'episodic'
     // Video Model Configuration (for scene duration optimization)
     videoModel = { duration: '6s', resolution: '1080p' }
   } = config;
@@ -23370,6 +23373,542 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     };
 
     const depthSettings = contentDepthConfig[contentDepth] || contentDepthConfig.standard;
+
+    // ============================================================
+    // PHASE 3A: GENRE REFERENCE LIBRARY
+    // Real-world production references for premium content creation
+    // ============================================================
+
+    /**
+     * GENRE REFERENCE LIBRARY
+     * Each genre contains references to successful productions and what makes them work.
+     * This ensures content never feels like a "basic presentation" regardless of assets used.
+     */
+    const GENRE_REFERENCE_LIBRARY = {
+      // === DOCUMENTARY GENRES ===
+      'documentary-nature': {
+        name: 'Nature Documentary',
+        category: 'documentary',
+        references: ['Planet Earth (BBC)', 'Our Planet (Netflix)', 'Blue Planet', 'Life (BBC)'],
+        whatMakesItWork: 'Epic scale contrasted with intimate moments. Anthropomorphizing animals without being childish. The drama of survival. Patience in letting moments breathe.',
+        narrativeVoice: 'Warm, authoritative, filled with wonder. David Attenborough energy. Never condescending. Treats subject with reverence.',
+        signatureTechniques: [
+          'The patient reveal - let beauty unfold slowly',
+          'Micro to macro transitions (dewdrop → forest → planet)',
+          'Behavior sequences that tell mini-stories',
+          'Silence before majesty - let visuals speak'
+        ],
+        hookStyles: [
+          'The impossible image: Start with something viewers have never seen',
+          'The countdown: "Every X seconds, something remarkable happens..."',
+          'The hidden world: "Just beneath the surface..."',
+          'The journey: "10,000 miles. One destination."'
+        ],
+        visualGrammar: 'Sweeping aerials, extreme close-ups, golden hour lighting, long takes that reward patience. 16:9 or wider aspect ratios.',
+        pacing: 'Slow build with punctuated moments of action. Breathing room between sequences.',
+        emotionalBeats: ['wonder', 'tension', 'relief', 'awe', 'hope'],
+        avoidAtAllCosts: ['Rushed narration', 'over-explaining visuals', 'cheap stock footage feeling', 'generic transitions']
+      },
+
+      'documentary-true-crime': {
+        name: 'True Crime',
+        category: 'documentary',
+        references: ['Making a Murderer', 'The Jinx', 'Tiger King', 'Serial (podcast)', 'Mindhunter'],
+        whatMakesItWork: 'The puzzle. Unreliable narrators. Information revealed strategically. The feeling that YOU are solving the case. Moral ambiguity.',
+        narrativeVoice: 'Investigative, measured, occasionally ominous. Let interview subjects reveal themselves. Narrator as guide, not judge.',
+        signatureTechniques: [
+          'The timeline reveal - show how pieces connect',
+          'Contradicting testimonies back-to-back',
+          'The detail that doesn\'t fit',
+          'Archival footage that takes on new meaning',
+          'The cliffhanger cut'
+        ],
+        hookStyles: [
+          'The missing piece: "One detail never made sense..."',
+          'The reversal: "Everything pointed to him. Until it didn\'t."',
+          'The witness: "She saw something that night. She\'s never told anyone."',
+          'The cold open: Start with the crime, no context'
+        ],
+        visualGrammar: 'Moody lighting, evidence close-ups, talking heads in shadowy settings, newspaper clippings, crime scene photos (tastefully), maps and timelines.',
+        pacing: 'Build tension, release with revelation, immediately raise new questions. Cliffhangers between scenes.',
+        emotionalBeats: ['intrigue', 'suspicion', 'shock', 'doubt', 'unsettling realization'],
+        avoidAtAllCosts: ['Sensationalism without substance', 'giving away the twist early', 'one-dimensional villains', 'fake dramatic pauses']
+      },
+
+      'documentary-social': {
+        name: 'Social Documentary',
+        category: 'documentary',
+        references: ['The Social Dilemma', 'Blackfish', '13th', 'Icarus', 'Won\'t You Be My Neighbor'],
+        whatMakesItWork: 'Personal stories that reveal systemic issues. Expert credibility. The "I had no idea" moment. Call to awareness.',
+        narrativeVoice: 'Urgent but not preachy. Let subjects speak for themselves. Data made human. Righteous anger earned through evidence.',
+        signatureTechniques: [
+          'The insider perspective - someone who was there',
+          'Statistics made visceral',
+          'The juxtaposition (what they say vs what happens)',
+          'The tipping point moment',
+          'The "this affects YOU" bridge'
+        ],
+        hookStyles: [
+          'The confession: "I helped build this. Now I regret it."',
+          'The statistic that shocks: "Every X minutes..."',
+          'The hidden connection: "Your morning routine funds..."',
+          'The question you\'ve never asked'
+        ],
+        visualGrammar: 'Intimate interviews, B-roll of everyday life affected, data visualizations, archival footage, behind-the-scenes access.',
+        pacing: 'Build the case methodically. Emotional peaks tied to human stories.',
+        emotionalBeats: ['curiosity', 'concern', 'anger', 'empathy', 'determination'],
+        avoidAtAllCosts: ['Preaching', 'one-sided without addressing counter-arguments', 'statistics without human context', 'guilt-tripping']
+      },
+
+      'documentary-historical': {
+        name: 'Historical Documentary',
+        category: 'documentary',
+        references: ['The Civil War (Ken Burns)', 'The Last Dance', 'Apollo 11', 'They Shall Not Grow Old'],
+        whatMakesItWork: 'Making the past feel alive and relevant. Finding the human stories within history. The "you are there" feeling. Connecting then to now.',
+        narrativeVoice: 'Authoritative but warm. Reading primary sources brings voices to life. Historians as storytellers, not lecturers.',
+        signatureTechniques: [
+          'The Ken Burns effect - life in still images',
+          'Letters and diaries read aloud',
+          'Then-and-now transitions',
+          'The overlooked perspective',
+          'The moment that changed everything'
+        ],
+        hookStyles: [
+          'The forgotten story: "History forgot them. Until now."',
+          'The parallel: "It happened before. It\'s happening again."',
+          'The artifact: "This letter was never meant to be found."',
+          'The eyewitness: "He was the last person alive who saw it."'
+        ],
+        visualGrammar: 'Archival photos with subtle movement, documents and maps, recreated scenes (tastefully), locations as they are today, artifacts in museums.',
+        pacing: 'Chronological with strategic flashbacks. Build to the pivotal moment.',
+        emotionalBeats: ['context', 'immersion', 'tension', 'tragedy or triumph', 'reflection'],
+        avoidAtAllCosts: ['Dry recitation of dates', 'assuming viewer knowledge', 'cheesy reenactments', 'ignoring human cost']
+      },
+
+      // === EDUCATIONAL GENRES ===
+      'educational-explainer': {
+        name: 'Explainer',
+        category: 'educational',
+        references: ['Kurzgesagt', 'Vox', 'Wendover Productions', 'Real Engineering', 'Veritasium'],
+        whatMakesItWork: 'Complex made simple without being dumbed down. Visual metaphors that click. The "aha" moment. Respecting viewer intelligence.',
+        narrativeVoice: 'Curious, enthusiastic, slightly nerdy. Explaining to a smart friend. Admitting what we don\'t know. Building mental models.',
+        signatureTechniques: [
+          'The unexpected connection (A relates to B how?!)',
+          'Scale comparisons that click',
+          'The common misconception corrected',
+          'Building complexity layer by layer',
+          'The satisfying callback'
+        ],
+        hookStyles: [
+          'The question you didn\'t know you had: "Why is X actually Y?"',
+          'The mind-blowing fact: "There\'s more X than Y on Earth."',
+          'The misconception: "Everything you know about X is wrong."',
+          'The challenge: "Can you explain X? Most people can\'t."'
+        ],
+        visualGrammar: 'Clean animations, infographics, real-world footage to ground concepts, visual metaphors, color-coded systems.',
+        pacing: 'Quick but not rushed. Each concept lands before the next. Occasional breathers for absorption.',
+        emotionalBeats: ['curiosity', 'confusion (brief)', 'understanding', 'wonder', 'satisfaction'],
+        avoidAtAllCosts: ['Talking down to viewers', 'jargon without explanation', 'boring visuals for complex topics', 'info-dumping']
+      },
+
+      'educational-tutorial': {
+        name: 'Tutorial/How-To',
+        category: 'educational',
+        references: ['Mark Rober', 'Simone Giertz', 'Adam Savage', 'Binging with Babish', 'DIY Perks'],
+        whatMakesItWork: 'Personality-driven teaching. Showing the process AND the struggle. Results that inspire. Making the viewer feel capable.',
+        narrativeVoice: 'Encouraging, patient, celebrating small wins. Acknowledging difficulty. The mentor vibe.',
+        signatureTechniques: [
+          'The "here\'s what I messed up" moment',
+          'Time-lapses of tedious parts',
+          'Close-ups at crucial steps',
+          'The reveal of finished product',
+          'Pro tips dropped casually'
+        ],
+        hookStyles: [
+          'The impossible result: "I built X in my garage."',
+          'The challenge: "They said it couldn\'t be done."',
+          'The problem solver: "I was tired of X, so I fixed it."',
+          'The transformation: "From junk to [amazing thing]"'
+        ],
+        visualGrammar: 'Clean workspace shots, hands in frame doing the work, before/after comparisons, materials laid out satisfyingly.',
+        pacing: 'Varies - quick for simple steps, slow for crucial moments. Always show the result early to hook.',
+        emotionalBeats: ['inspiration', 'follow-along confidence', 'problem-solving satisfaction', 'pride in result'],
+        avoidAtAllCosts: ['Skipping crucial steps', 'making it look too easy', 'boring tool explanations', 'no personality']
+      },
+
+      'educational-science': {
+        name: 'Science/Tech',
+        category: 'educational',
+        references: ['Veritasium', 'SmarterEveryDay', 'Vsauce', 'Numberphile', 'Physics Girl'],
+        whatMakesItWork: 'Wonder at the universe. Experiments that prove concepts. The joy of discovery. Making viewers feel smart.',
+        narrativeVoice: 'Genuinely excited by knowledge. Asking questions with viewers. "Isn\'t that weird?" energy.',
+        signatureTechniques: [
+          'The experiment that proves it',
+          'Slow-motion reveals',
+          'The intuition that\'s wrong',
+          'Expert interviews that humanize science',
+          'The "but wait, there\'s more" escalation'
+        ],
+        hookStyles: [
+          'The paradox: "This shouldn\'t be possible. And yet..."',
+          'The demo: [Show something impossible-looking first]',
+          'The question: "What would happen if..."',
+          'The mistake everyone makes'
+        ],
+        visualGrammar: 'Lab settings, real experiments, diagrams that build, slow-motion, microscopic/telescopic footage.',
+        pacing: 'Build curiosity, test hypothesis, reveal answer, explore implications.',
+        emotionalBeats: ['curiosity', 'prediction', 'surprise', 'understanding', 'wonder'],
+        avoidAtAllCosts: ['Being a boring lecture', 'no visual demonstration', 'assuming prior knowledge', 'no payoff to setup']
+      },
+
+      // === ENTERTAINMENT GENRES ===
+      'entertainment-comedy': {
+        name: 'Comedy',
+        category: 'entertainment',
+        references: ['The Office', 'Brooklyn 99', 'Key & Peele', 'SNL Digital Shorts', 'Ryan George (Pitch Meetings)'],
+        whatMakesItWork: 'Timing. Subverted expectations. Specificity over generality. Callbacks. Commitment to the bit.',
+        narrativeVoice: 'Depends on style - deadpan, manic, observational. The character\'s voice IS the comedy.',
+        signatureTechniques: [
+          'The callback - setup early, payoff late',
+          'The escalation - each beat more absurd',
+          'The cut - comedic timing through editing',
+          'The straight man - ground absurdity in reality',
+          'The pause - let the joke land'
+        ],
+        hookStyles: [
+          'The absurd premise stated matter-of-factly',
+          'The relatable situation pushed to extreme',
+          'The fish-out-of-water setup',
+          'Cold open with no context (context comes later for payoff)'
+        ],
+        visualGrammar: 'Timing-aware editing, reaction shots, awkward silence holds, visual gags in background, motivated camera moves for punchlines.',
+        pacing: 'Rapid-fire OR slow burn. Rarely in between. Jokes need breathing room.',
+        emotionalBeats: ['setup', 'misdirection', 'punchline', 'callback', 'button'],
+        avoidAtAllCosts: ['Explaining the joke', 'rushing punchlines', 'no straight man', 'trying too hard']
+      },
+
+      'entertainment-drama': {
+        name: 'Drama',
+        category: 'entertainment',
+        references: ['Breaking Bad', 'Succession', 'The Crown', 'Better Call Saul', 'Chernobyl'],
+        whatMakesItWork: 'Stakes. Character conflict. Moral complexity. Tension in silence. Making viewers root for flawed people.',
+        narrativeVoice: 'Measured, allowing subtext. Dialogue with layers. What isn\'t said matters.',
+        signatureTechniques: [
+          'The moral dilemma with no good answer',
+          'Slow push-in during revelation',
+          'Silence that speaks',
+          'The scene before the storm',
+          'Parallel editing building to collision'
+        ],
+        hookStyles: [
+          'In media res - middle of conflict',
+          'The aftermath - show destruction, then flashback',
+          'The choice - protagonist facing impossible decision',
+          'The lie that will unravel'
+        ],
+        visualGrammar: 'Cinematic compositions, meaningful blocking, shadow and light for moral ambiguity, close-ups in emotional moments.',
+        pacing: 'Slow burn punctuated by explosive moments. Tension is the currency.',
+        emotionalBeats: ['normalcy', 'disturbance', 'escalation', 'crisis', 'transformation'],
+        avoidAtAllCosts: ['Melodrama without earned emotion', 'on-the-nose dialogue', 'convenient resolutions', 'flat characters']
+      },
+
+      'entertainment-horror': {
+        name: 'Horror/Thriller',
+        category: 'entertainment',
+        references: ['Black Mirror', 'Get Out', 'Hereditary', 'The Haunting of Hill House', 'A Quiet Place'],
+        whatMakesItWork: 'Dread over jump scares. The unknown. Making familiar things threatening. Psychological unease. Rules that make it scarier.',
+        narrativeVoice: 'Unreliable, paranoid, or ominously calm. The voice itself can unsettle.',
+        signatureTechniques: [
+          'The long take building dread',
+          'Something wrong in the frame (viewer notices before character)',
+          'Sound design that unsettles',
+          'The fake-out relief before real scare',
+          'The rules that make it worse'
+        ],
+        hookStyles: [
+          'The mundane made wrong - something is off',
+          'The warning ignored',
+          'The discovery that shouldn\'t exist',
+          'The voice that shouldn\'t be there'
+        ],
+        visualGrammar: 'Deep shadows, unsettling framing, slow zooms, negative space that threatens, practical effects feeling.',
+        pacing: 'Slow build, release, LONGER slow build, bigger release. Escalating cycle.',
+        emotionalBeats: ['unease', 'tension', 'false relief', 'dread', 'horror', 'lingering discomfort'],
+        avoidAtAllCosts: ['Jump scares without buildup', 'over-explaining the threat', 'gore as substitute for tension', 'breaking established rules cheaply']
+      },
+
+      // === BUSINESS/MARKETING GENRES ===
+      'business-brand': {
+        name: 'Brand Story',
+        category: 'business',
+        references: ['Apple keynotes', 'Nike campaigns', 'Patagonia', 'Dollar Shave Club', 'Mailchimp'],
+        whatMakesItWork: 'Values over features. Aspiration over information. The customer as hero. Emotional truth.',
+        narrativeVoice: 'Confident without arrogance. Speaks to identity, not just needs. "We believe" energy.',
+        signatureTechniques: [
+          'The manifesto moment - what we stand for',
+          'The customer transformation story',
+          'The origin story with purpose',
+          'Show don\'t tell the value',
+          'The rallying cry close'
+        ],
+        hookStyles: [
+          'The bold statement: "We believe..."',
+          'The enemy: "Most companies do X. We don\'t."',
+          'The movement: "Join the [type of] people who..."',
+          'The question of identity: "Are you the kind of person who..."'
+        ],
+        visualGrammar: 'Aspirational lifestyle imagery, real customers, behind-the-scenes authenticity, product in context of life.',
+        pacing: 'Building emotional crescendo. End on high.',
+        emotionalBeats: ['recognition', 'belonging', 'aspiration', 'conviction', 'action'],
+        avoidAtAllCosts: ['Features lists', 'corporate speak', 'inauthentic diversity', 'hard sell']
+      },
+
+      'business-product': {
+        name: 'Product Launch',
+        category: 'business',
+        references: ['Apple product reveals', 'Tesla unveilings', 'Dyson', 'MKBHD reviews', 'Unbox Therapy'],
+        whatMakesItWork: 'Building anticipation. Strategic reveals. Technical excellence made emotional. The moment of truth.',
+        narrativeVoice: 'Authoritative, precise, building to enthusiasm. Facts that impress.',
+        signatureTechniques: [
+          'The problem no one knew they had',
+          'The "one more thing" reveal',
+          'Specs made meaningful',
+          'The satisfying unboxing',
+          'Real-world demo over marketing claims'
+        ],
+        hookStyles: [
+          'The tease: Show result before showing product',
+          'The problem: Start with frustration, then solution',
+          'The comparison: "While others do X..."',
+          'The numbers: One spec that stops scrolling'
+        ],
+        visualGrammar: 'Clean product shots, 360 views, detail macro shots, size/scale references, dramatic lighting.',
+        pacing: 'Build anticipation, reveal, explore, demonstrate, close with aspiration.',
+        emotionalBeats: ['curiosity', 'anticipation', 'reveal satisfaction', 'want', 'justified desire'],
+        avoidAtAllCosts: ['Specs without context', 'overpromising', 'no real demo', 'ignoring competition dishonestly']
+      },
+
+      'business-testimonial': {
+        name: 'Testimonial/Case Study',
+        category: 'business',
+        references: ['Salesforce customer stories', 'Apple "Shot on iPhone"', 'Squarespace creators'],
+        whatMakesItWork: 'Real people, real results. Specific over generic. The transformation story. Credible authenticity.',
+        narrativeVoice: 'Let the customer speak. Minimal brand voice. Genuine, unscripted feeling.',
+        signatureTechniques: [
+          'The before/after with specifics',
+          'The unexpected benefit',
+          'Day-in-the-life authenticity',
+          'Numbers that prove it',
+          'The moment of realization'
+        ],
+        hookStyles: [
+          'The transformation: "I went from X to Y"',
+          'The skeptic converted: "I didn\'t believe it until..."',
+          'The specific result: "In 3 months, we..."',
+          'The peer recommendation: "If you\'re like me..."'
+        ],
+        visualGrammar: 'Real settings, authentic lighting, the person in their element, B-roll of them working/succeeding.',
+        pacing: 'Problem → Discovery → Skepticism → Trial → Success → Advocacy',
+        emotionalBeats: ['relatability', 'recognition', 'hope', 'proof', 'inspiration'],
+        avoidAtAllCosts: ['Script-reading', 'too polished', 'vague claims', 'no specific results']
+      },
+
+      // === SOCIAL MEDIA NATIVE GENRES ===
+      'social-viral': {
+        name: 'Viral/Hook-Driven',
+        category: 'social',
+        references: ['MrBeast hooks', 'TikTok trending sounds', 'Instagram Reels top performers'],
+        whatMakesItWork: 'First 1 second stops the scroll. Pattern interrupt. Curiosity gap. Instant value promise.',
+        narrativeVoice: 'High energy, direct, no preamble. "Here\'s the thing" energy.',
+        signatureTechniques: [
+          'The mid-action start',
+          'The impossible thumbnail moment',
+          'The countdown/list format',
+          'The result shown first',
+          'The loop - ending that makes you rewatch'
+        ],
+        hookStyles: [
+          'The POV: "POV: You just discovered..."',
+          'The controversial take: "Unpopular opinion..."',
+          'The hack: "Stop doing X, do Y instead"',
+          'The reaction: Start with the payoff expression'
+        ],
+        visualGrammar: 'Vertical, in-your-face, fast cuts, text overlays, trending effects.',
+        pacing: 'No slow moments. Every second earns the next.',
+        emotionalBeats: ['interrupt', 'hook', 'deliver', 'payoff/twist', 'call to action'],
+        avoidAtAllCosts: ['Slow starts', 'burying the lead', 'inside jokes', 'horizontal thinking']
+      },
+
+      'social-storytime': {
+        name: 'Storytime',
+        category: 'social',
+        references: ['Reddit stories on TikTok', 'True crime TikTok', 'Commentary channels'],
+        whatMakesItWork: 'Bingeable narrative. Strategic cliffhangers. Personality of the teller. "And then it got worse" energy.',
+        narrativeVoice: 'Conversational, expressive, reactive. Like telling a friend the craziest thing.',
+        signatureTechniques: [
+          'The teased ending: "What happened next changed everything"',
+          'The reaction inserts',
+          'Building to "the part"',
+          'Strategic pauses for drama',
+          'The satisfying callback'
+        ],
+        hookStyles: [
+          'The chaos preview: "So there I was..."',
+          'The rating: "This is a 10/10 crazy story"',
+          'The category: "Insane customer stories, part 47"',
+          'The question: "Has this ever happened to you?"'
+        ],
+        visualGrammar: 'Face-to-camera, expressive reactions, simple visuals that don\'t distract, maybe relevant B-roll.',
+        pacing: 'Build tension, milk the drama, deliver the payoff, button with reaction.',
+        emotionalBeats: ['hook', 'context', 'escalation', 'climax', 'reaction/callback'],
+        avoidAtAllCosts: ['Spoiling the ending', 'too much context', 'underselling the payoff', 'no personality']
+      },
+
+      // === SERIES/EPISODIC GENRES ===
+      'series-docuseries': {
+        name: 'Docuseries',
+        category: 'series',
+        references: ['The Last Dance', 'Formula 1: Drive to Survive', 'Chef\'s Table', 'Abstract'],
+        whatMakesItWork: 'Each episode complete but connected. Overarching narrative. Character development across episodes. The binge factor.',
+        narrativeVoice: 'Consistent tone, evolving perspective. Characters become familiar.',
+        signatureTechniques: [
+          'The episode-end cliffhanger',
+          'The season arc tease',
+          'Character intro episodes that set up payoffs',
+          'The callback to earlier episodes',
+          'The previously on...'
+        ],
+        hookStyles: [
+          'The season tease: Montage of what\'s coming',
+          'The immediate drama: Drop into conflict',
+          'The character hook: Who is this person?',
+          'The question the season will answer'
+        ],
+        visualGrammar: 'Consistent visual language across episodes, signature shots, evolving as story evolves.',
+        pacing: 'Each episode: setup, development, mini-climax, tease next. Season: build to finale.',
+        emotionalBeats: ['per episode arc within larger season arc'],
+        avoidAtAllCosts: ['Episodes that feel standalone', 'no payoff to setups', 'inconsistent quality', 'filler episodes']
+      }
+    };
+
+    /**
+     * CONTENT FORMAT MODIFIERS
+     * How the genre adapts to different content lengths/platforms
+     */
+    const CONTENT_FORMATS = {
+      'short-form': {
+        name: 'Short-Form (< 60s)',
+        platforms: ['TikTok', 'Reels', 'Shorts'],
+        adaptations: 'Compress to essence. Hook in 0.5s. One key idea. Strong close loop.',
+        pacingMultiplier: 1.5, // Faster
+        sceneCount: '3-5 scenes',
+        hookCritical: true
+      },
+      'medium-form': {
+        name: 'Medium-Form (1-5 min)',
+        platforms: ['YouTube', 'Instagram', 'LinkedIn'],
+        adaptations: 'Full narrative arc possible. Multiple beats. Room for nuance.',
+        pacingMultiplier: 1.0,
+        sceneCount: '5-12 scenes',
+        hookCritical: true
+      },
+      'long-form': {
+        name: 'Long-Form (5-20 min)',
+        platforms: ['YouTube', 'Podcast video', 'Course content'],
+        adaptations: 'Deep exploration. Multiple sub-sections. Varied pacing. Retention strategies throughout.',
+        pacingMultiplier: 0.8,
+        sceneCount: '10-25 scenes',
+        hookCritical: true
+      },
+      'episodic': {
+        name: 'Episodic (Series)',
+        platforms: ['YouTube series', 'Netflix-style', 'Course modules'],
+        adaptations: 'Each episode complete but connected. Cliffhangers. Character development. Previously on...',
+        pacingMultiplier: 0.9,
+        sceneCount: 'Varies by episode',
+        hookCritical: true
+      }
+    };
+
+    /**
+     * HOOK ARCHETYPES
+     * Universal hook structures that work across genres
+     */
+    const HOOK_ARCHETYPES = {
+      'curiosity-gap': {
+        name: 'Curiosity Gap',
+        structure: 'Reveal partial information that demands completion',
+        examples: ['There\'s one thing about X that nobody talks about...', 'What happened next surprised everyone...'],
+        bestFor: ['documentary', 'educational', 'mystery']
+      },
+      'pattern-interrupt': {
+        name: 'Pattern Interrupt',
+        structure: 'Start with something unexpected that breaks mental autopilot',
+        examples: ['[Unexpected visual/sound]', 'Forget everything you know about X...'],
+        bestFor: ['social', 'comedy', 'educational']
+      },
+      'identity-hook': {
+        name: 'Identity Hook',
+        structure: 'Appeal to who the viewer wants to be',
+        examples: ['If you\'re the kind of person who...', 'Most people will scroll past this...'],
+        bestFor: ['business', 'inspirational', 'tutorial']
+      },
+      'result-first': {
+        name: 'Result First',
+        structure: 'Show the payoff immediately, then explain how',
+        examples: ['[Show amazing result] Want to know how?', 'I made $X in Y days. Here\'s exactly how.'],
+        bestFor: ['tutorial', 'business', 'transformation']
+      },
+      'controversy': {
+        name: 'Controversial Take',
+        structure: 'State an opinion that challenges common belief',
+        examples: ['X is actually bad for you. Here\'s why.', 'Unpopular opinion: [take]'],
+        bestFor: ['educational', 'social', 'commentary']
+      },
+      'story-drop': {
+        name: 'Story Drop',
+        structure: 'Begin mid-story with high stakes',
+        examples: ['So there I was, $10,000 in debt, when...', 'The day I almost lost everything...'],
+        bestFor: ['story', 'testimonial', 'drama']
+      },
+      'the-list': {
+        name: 'The List',
+        structure: 'Promise a specific number of valuable items',
+        examples: ['7 things I wish I knew before...', '3 mistakes that are costing you...'],
+        bestFor: ['educational', 'tutorial', 'business']
+      },
+      'demonstration': {
+        name: 'Demonstration',
+        structure: 'Show don\'t tell - lead with action',
+        examples: ['[Start with the experiment/demo]', 'Watch what happens when I...'],
+        bestFor: ['science', 'tutorial', 'product']
+      }
+    };
+
+    /**
+     * ANTI-GENERIC RULES
+     * Rules to ensure content never feels like a basic presentation
+     */
+    const ANTI_GENERIC_RULES = [
+      'Never start with "Hey guys" or "What\'s up everyone" - earn attention first',
+      'Never use stock transitions without purpose',
+      'Never explain what you\'re about to explain - just explain it',
+      'Never use generic background music that doesn\'t match mood',
+      'Never have talking head without B-roll for more than 10 seconds',
+      'Never use bullet points on screen - visualize concepts instead',
+      'Never end with "Don\'t forget to like and subscribe" as the main CTA',
+      'Never have dead air without intentional purpose',
+      'Never use the first take if authenticity isn\'t the point',
+      'Never describe what viewers can already see',
+      'Never rush through the payoff after slow buildup',
+      'Never have consistent energy throughout - vary rhythm'
+    ];
+
+    // Get genre settings if specified
+    const genreKey = config.genre || null;
+    const genreSettings = genreKey ? GENRE_REFERENCE_LIBRARY[genreKey] : null;
+    const formatKey = config.contentFormat || 'medium-form';
+    const formatSettings = CONTENT_FORMATS[formatKey] || CONTENT_FORMATS['medium-form'];
 
     // === HOLLYWOOD PRODUCTION MODES ===
     // Cinematic templates for professional-quality video storytelling
@@ -23512,9 +24051,55 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
       ? `\nSuggested camera movements for this style: ${productionSettings.cameraDirections.join(', ')}`
       : '';
 
+    // Build genre-specific guidance if genre is selected
+    let genreGuidance = '';
+    if (genreSettings) {
+      genreGuidance = `
+
+=== GENRE REFERENCE: ${genreSettings.name.toUpperCase()} ===
+Study these successful productions for reference: ${genreSettings.references.join(', ')}
+
+WHAT MAKES THIS GENRE WORK:
+${genreSettings.whatMakesItWork}
+
+NARRATIVE VOICE FOR THIS GENRE:
+${genreSettings.narrativeVoice}
+
+SIGNATURE TECHNIQUES TO USE:
+${genreSettings.signatureTechniques.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+HOOK STYLES FOR THIS GENRE:
+${genreSettings.hookStyles.map((h, i) => `${i + 1}. ${h}`).join('\n')}
+
+VISUAL GRAMMAR:
+${genreSettings.visualGrammar}
+
+EMOTIONAL BEATS: ${genreSettings.emotionalBeats.join(' → ')}
+
+⚠️ AVOID AT ALL COSTS:
+${genreSettings.avoidAtAllCosts.map(a => `- ${a}`).join('\n')}`;
+    }
+
+    // Build format-specific guidance
+    const formatGuidance = `
+CONTENT FORMAT: ${formatSettings.name}
+- Platforms: ${formatSettings.platforms.join(', ')}
+- Adaptation: ${formatSettings.adaptations}
+- Scene Count: ${formatSettings.sceneCount}`;
+
+    // Anti-generic rules to ensure premium quality
+    const antiGenericGuidance = `
+
+🚫 ANTI-GENERIC RULES (NEVER DO THESE):
+${ANTI_GENERIC_RULES.slice(0, 6).map(r => `- ${r}`).join('\n')}`;
+
     // Build the prompt for GPT-4o
-    const systemPrompt = `You are a HOLLYWOOD SCREENWRITER and visual director creating ${productionSettings.name.toUpperCase()} style video content.
-Your specialty: ${productionSettings.description}
+    const systemPrompt = `You are a HOLLYWOOD-LEVEL PRODUCTION DIRECTOR creating premium video content.
+You have studied the greatest productions ever made and apply their techniques with precision.
+Your content NEVER feels like a basic presentation or generic corporate video.
+
+PRODUCTION MODE: ${productionSettings.name.toUpperCase()}
+${productionSettings.description}
 
 PRODUCTION STYLE GUIDE:
 - Narrative Voice: ${productionSettings.narrativeStyle}
@@ -23525,6 +24110,9 @@ PRODUCTION STYLE GUIDE:
 - Music Mood: ${productionSettings.musicMood}
 ${productionSettings.specialInstructions ? `- Special: ${productionSettings.specialInstructions}` : ''}
 ${cameraGuidance}
+${genreGuidance}
+${formatGuidance}
+${antiGenericGuidance}
 
 You create scripts for ${platform || 'social media'} in ${aspectRatio || '16:9'} format, specializing in ${niche || 'general'} content.
 
@@ -23743,6 +24331,10 @@ Return ONLY valid JSON:
       pacing,
       contentDepth,
       productionMode,
+      // Phase 3A: Genre Reference
+      genre: genreKey,
+      genreName: genreSettings?.name || null,
+      contentFormat: formatKey,
       videoModel
     };
     script.timing = script.timing || {
@@ -24775,6 +25367,203 @@ exports.creationWizardGetMinimaxModels = functions.https.onCall(async (data, con
       speed: 'hailuo-2.3-fast',
       continuity: 'hailuo-02'
     }
+  };
+});
+
+/**
+ * creationWizardGetGenres - Get available genres and content formats
+ * Phase 3A: Genre Reference Library for premium content creation
+ */
+exports.creationWizardGetGenres = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Simplified genre data for the frontend
+  const genres = {
+    // Documentary Genres
+    'documentary-nature': {
+      id: 'documentary-nature',
+      name: 'Nature Documentary',
+      category: 'documentary',
+      icon: '🌍',
+      description: 'Planet Earth style - epic scale, intimate moments',
+      references: ['Planet Earth', 'Our Planet', 'Blue Planet']
+    },
+    'documentary-true-crime': {
+      id: 'documentary-true-crime',
+      name: 'True Crime',
+      category: 'documentary',
+      icon: '🔍',
+      description: 'Mystery-driven, investigative storytelling',
+      references: ['Making a Murderer', 'The Jinx', 'Tiger King']
+    },
+    'documentary-social': {
+      id: 'documentary-social',
+      name: 'Social Documentary',
+      category: 'documentary',
+      icon: '📢',
+      description: 'Issues-driven, awareness-building content',
+      references: ['The Social Dilemma', 'Blackfish', '13th']
+    },
+    'documentary-historical': {
+      id: 'documentary-historical',
+      name: 'Historical Documentary',
+      category: 'documentary',
+      icon: '📜',
+      description: 'Ken Burns style - bringing history to life',
+      references: ['The Civil War', 'The Last Dance', 'Apollo 11']
+    },
+    // Educational Genres
+    'educational-explainer': {
+      id: 'educational-explainer',
+      name: 'Explainer',
+      category: 'educational',
+      icon: '💡',
+      description: 'Complex topics made simple and engaging',
+      references: ['Kurzgesagt', 'Vox', 'Wendover Productions']
+    },
+    'educational-tutorial': {
+      id: 'educational-tutorial',
+      name: 'Tutorial/How-To',
+      category: 'educational',
+      icon: '🛠️',
+      description: 'Personality-driven teaching and making',
+      references: ['Mark Rober', 'Binging with Babish', 'Adam Savage']
+    },
+    'educational-science': {
+      id: 'educational-science',
+      name: 'Science/Tech',
+      category: 'educational',
+      icon: '🔬',
+      description: 'Wonder-filled exploration of how things work',
+      references: ['Veritasium', 'SmarterEveryDay', 'Vsauce']
+    },
+    // Entertainment Genres
+    'entertainment-comedy': {
+      id: 'entertainment-comedy',
+      name: 'Comedy',
+      category: 'entertainment',
+      icon: '😂',
+      description: 'Timing, subversion, and commitment to the bit',
+      references: ['The Office', 'Key & Peele', 'Brooklyn 99']
+    },
+    'entertainment-drama': {
+      id: 'entertainment-drama',
+      name: 'Drama',
+      category: 'entertainment',
+      icon: '🎭',
+      description: 'Stakes, conflict, and moral complexity',
+      references: ['Breaking Bad', 'Succession', 'Chernobyl']
+    },
+    'entertainment-horror': {
+      id: 'entertainment-horror',
+      name: 'Horror/Thriller',
+      category: 'entertainment',
+      icon: '👻',
+      description: 'Dread, psychological tension, and the unknown',
+      references: ['Black Mirror', 'Get Out', 'A Quiet Place']
+    },
+    // Business Genres
+    'business-brand': {
+      id: 'business-brand',
+      name: 'Brand Story',
+      category: 'business',
+      icon: '✨',
+      description: 'Values-driven, aspirational brand content',
+      references: ['Apple keynotes', 'Nike campaigns', 'Patagonia']
+    },
+    'business-product': {
+      id: 'business-product',
+      name: 'Product Launch',
+      category: 'business',
+      icon: '🚀',
+      description: 'Anticipation, reveals, and product excellence',
+      references: ['Apple reveals', 'Tesla unveilings', 'MKBHD']
+    },
+    'business-testimonial': {
+      id: 'business-testimonial',
+      name: 'Testimonial',
+      category: 'business',
+      icon: '💬',
+      description: 'Real people, real results, authentic stories',
+      references: ['Salesforce stories', 'Shot on iPhone']
+    },
+    // Social Media Native Genres
+    'social-viral': {
+      id: 'social-viral',
+      name: 'Viral/Hook-Driven',
+      category: 'social',
+      icon: '🔥',
+      description: 'Stop-scrolling hooks, instant value',
+      references: ['MrBeast', 'TikTok trends', 'Top Reels']
+    },
+    'social-storytime': {
+      id: 'social-storytime',
+      name: 'Storytime',
+      category: 'social',
+      icon: '📖',
+      description: 'Bingeable narratives with personality',
+      references: ['Reddit stories', 'Commentary channels']
+    },
+    // Series Genres
+    'series-docuseries': {
+      id: 'series-docuseries',
+      name: 'Docuseries',
+      category: 'series',
+      icon: '📺',
+      description: 'Episodic storytelling with overarching narrative',
+      references: ['The Last Dance', 'Drive to Survive', 'Chef\'s Table']
+    }
+  };
+
+  const contentFormats = {
+    'short-form': {
+      id: 'short-form',
+      name: 'Short-Form',
+      duration: '< 60s',
+      icon: '⚡',
+      platforms: ['TikTok', 'Reels', 'Shorts'],
+      description: 'Hook in 0.5s, one key idea, strong loop'
+    },
+    'medium-form': {
+      id: 'medium-form',
+      name: 'Medium-Form',
+      duration: '1-5 min',
+      icon: '📱',
+      platforms: ['YouTube', 'Instagram', 'LinkedIn'],
+      description: 'Full narrative arc, room for nuance'
+    },
+    'long-form': {
+      id: 'long-form',
+      name: 'Long-Form',
+      duration: '5-20 min',
+      icon: '🎬',
+      platforms: ['YouTube', 'Podcasts', 'Courses'],
+      description: 'Deep exploration, varied pacing'
+    },
+    'episodic': {
+      id: 'episodic',
+      name: 'Episodic',
+      duration: 'Series',
+      icon: '📺',
+      platforms: ['YouTube series', 'Courses'],
+      description: 'Connected episodes, cliffhangers'
+    }
+  };
+
+  const categories = [
+    { id: 'documentary', name: 'Documentary', icon: '🎬' },
+    { id: 'educational', name: 'Educational', icon: '💡' },
+    { id: 'entertainment', name: 'Entertainment', icon: '🎭' },
+    { id: 'business', name: 'Business', icon: '💼' },
+    { id: 'social', name: 'Social Native', icon: '📱' },
+    { id: 'series', name: 'Series', icon: '📺' }
+  ];
+
+  return {
+    success: true,
+    genres,
+    contentFormats,
+    categories
   };
 });
 
