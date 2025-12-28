@@ -6112,6 +6112,21 @@
             try {
                 const generateScriptFn = functions.httpsCallable('creationWizardGenerateScript');
 
+                // Build enriched concept data from AI improvement if available
+                const conceptEnrichment = state.concept?.improvedData ? {
+                    improvedConcept: state.concept.improvedData.improvedConcept || null,
+                    characters: state.concept.improvedData.characters || [],
+                    worldBuilding: state.concept.improvedData.worldBuilding || null,
+                    keyElements: state.concept.improvedData.keyElements || [],
+                    visualSignature: state.concept.improvedData.visualSignature || null,
+                    genreFusion: state.concept.improvedData.genreFusion || null,
+                    hookLine: state.concept.improvedData.hookLine || null,
+                    extractedStyles: state.concept.improvedData.extractedStyles || [],
+                    thingsToAvoid: state.concept.improvedData.thingsToAvoid || [],
+                    suggestedMood: state.concept.improvedData.suggestedMood || null,
+                    suggestedTone: state.concept.improvedData.suggestedTone || null
+                } : null;
+
                 const config = {
                     platform: state.platform.selected,
                     aspectRatio: state.platform.aspectRatio,
@@ -6130,7 +6145,9 @@
                     contentFormat: state.content.contentFormat || 'medium-form',
                     // Video Model Configuration (for scene timing optimization)
                     videoModel: state.content.videoModel || { duration: '6s', resolution: '1080p' },
-                    additionalInstructions
+                    additionalInstructions,
+                    // Phase 5: AI Concept Enhancement Data - Deep Story Architecture
+                    conceptEnrichment
                 };
 
                 const result = await generateScriptFn({
