@@ -33121,6 +33121,516 @@ exports.getMusicCategories = functions.https.onCall(async (data, context) => {
   };
 });
 
+// ==========================================
+// PHASE 5: BEAT SYNCHRONIZATION ENGINE
+// ==========================================
+
+/**
+ * BEAT_SYNC_PRESETS - Pre-defined beat maps for common music patterns
+ * Since client-side beat detection is complex, we use BPM-based estimation
+ */
+const BEAT_SYNC_PRESETS = {
+  // Common time signatures and structures
+  '4/4': {
+    beatsPerMeasure: 4,
+    measureDuration: (bpm) => (60 / bpm) * 4, // seconds per measure
+    strongBeats: [1], // Downbeat
+    mediumBeats: [3], // Backbeat
+    weakBeats: [2, 4]
+  },
+  '3/4': {
+    beatsPerMeasure: 3,
+    measureDuration: (bpm) => (60 / bpm) * 3,
+    strongBeats: [1],
+    mediumBeats: [],
+    weakBeats: [2, 3]
+  },
+  '6/8': {
+    beatsPerMeasure: 6,
+    measureDuration: (bpm) => (60 / bpm) * 6,
+    strongBeats: [1, 4],
+    mediumBeats: [],
+    weakBeats: [2, 3, 5, 6]
+  }
+};
+
+/**
+ * MUSIC_STRUCTURE_PATTERNS - Common song structures for section detection
+ */
+const MUSIC_STRUCTURE_PATTERNS = {
+  'pop': {
+    sections: [
+      { type: 'intro', typicalBars: 4, position: 0 },
+      { type: 'verse', typicalBars: 8, position: 0.1 },
+      { type: 'chorus', typicalBars: 8, position: 0.3 },
+      { type: 'verse2', typicalBars: 8, position: 0.45 },
+      { type: 'chorus2', typicalBars: 8, position: 0.6 },
+      { type: 'bridge', typicalBars: 4, position: 0.75 },
+      { type: 'chorus3', typicalBars: 8, position: 0.85 },
+      { type: 'outro', typicalBars: 4, position: 0.95 }
+    ]
+  },
+  'cinematic': {
+    sections: [
+      { type: 'intro', typicalBars: 8, position: 0 },
+      { type: 'build', typicalBars: 16, position: 0.15 },
+      { type: 'climax', typicalBars: 8, position: 0.5 },
+      { type: 'sustain', typicalBars: 8, position: 0.65 },
+      { type: 'resolve', typicalBars: 8, position: 0.8 },
+      { type: 'outro', typicalBars: 4, position: 0.92 }
+    ]
+  },
+  'ambient': {
+    sections: [
+      { type: 'intro', typicalBars: 4, position: 0 },
+      { type: 'develop', typicalBars: 16, position: 0.1 },
+      { type: 'peak', typicalBars: 8, position: 0.5 },
+      { type: 'fade', typicalBars: 16, position: 0.7 },
+      { type: 'outro', typicalBars: 4, position: 0.9 }
+    ]
+  },
+  'corporate': {
+    sections: [
+      { type: 'intro', typicalBars: 4, position: 0 },
+      { type: 'main', typicalBars: 16, position: 0.1 },
+      { type: 'variation', typicalBars: 8, position: 0.5 },
+      { type: 'main2', typicalBars: 8, position: 0.7 },
+      { type: 'outro', typicalBars: 4, position: 0.9 }
+    ]
+  }
+};
+
+/**
+ * generateBeatMap - Analyzes music track and generates beat timestamps
+ * Uses BPM-based calculation for reliable beat mapping
+ */
+exports.generateBeatMap = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const {
+    trackId,
+    bpm = 120,
+    duration,
+    timeSignature = '4/4',
+    musicStyle = 'corporate'
+  } = data;
+
+  if (!duration) {
+    throw new functions.https.HttpsError('invalid-argument', 'Track duration required');
+  }
+
+  try {
+    const durationMs = duration * 1000;
+    const beatDurationMs = (60 / bpm) * 1000; // Duration of one beat in ms
+    const signature = BEAT_SYNC_PRESETS[timeSignature] || BEAT_SYNC_PRESETS['4/4'];
+    const measureDurationMs = signature.measureDuration(bpm) * 1000;
+
+    // Generate all beat timestamps
+    const beats = [];
+    const measures = [];
+    const downbeats = [];
+
+    let currentTime = 0;
+    let beatCount = 0;
+    let measureCount = 0;
+
+    while (currentTime < durationMs) {
+      beatCount++;
+      const beatInMeasure = ((beatCount - 1) % signature.beatsPerMeasure) + 1;
+
+      beats.push({
+        time: Math.round(currentTime),
+        beatNumber: beatCount,
+        beatInMeasure,
+        isDownbeat: beatInMeasure === 1,
+        isStrong: signature.strongBeats.includes(beatInMeasure),
+        isMedium: signature.mediumBeats.includes(beatInMeasure)
+      });
+
+      // Track measure boundaries (downbeats)
+      if (beatInMeasure === 1) {
+        measureCount++;
+        measures.push({
+          measureNumber: measureCount,
+          time: Math.round(currentTime)
+        });
+        downbeats.push(Math.round(currentTime));
+      }
+
+      currentTime += beatDurationMs;
+    }
+
+    // Generate section markers based on music style
+    const structure = MUSIC_STRUCTURE_PATTERNS[musicStyle] || MUSIC_STRUCTURE_PATTERNS['corporate'];
+    const sections = structure.sections.map(section => ({
+      type: section.type,
+      startTime: Math.round(durationMs * section.position),
+      // Find nearest downbeat
+      nearestDownbeat: downbeats.reduce((nearest, db) =>
+        Math.abs(db - durationMs * section.position) < Math.abs(nearest - durationMs * section.position) ? db : nearest
+      , downbeats[0])
+    }));
+
+    // Calculate optimal cut points (every 2, 4, or 8 measures for clean cuts)
+    const optimalCutPoints = {
+      tight: [], // Every 2 measures
+      balanced: [], // Every 4 measures
+      relaxed: [] // Every 8 measures
+    };
+
+    measures.forEach((measure, i) => {
+      if ((i + 1) % 2 === 0) optimalCutPoints.tight.push(measure.time);
+      if ((i + 1) % 4 === 0) optimalCutPoints.balanced.push(measure.time);
+      if ((i + 1) % 8 === 0) optimalCutPoints.relaxed.push(measure.time);
+    });
+
+    return {
+      success: true,
+      beatMap: {
+        trackId,
+        bpm,
+        timeSignature,
+        duration: durationMs,
+        beatCount: beats.length,
+        measureCount: measures.length,
+        beatDurationMs: Math.round(beatDurationMs),
+        measureDurationMs: Math.round(measureDurationMs),
+        beats: beats.slice(0, 500), // Limit to first 500 beats for performance
+        measures: measures.slice(0, 100), // Limit measures
+        downbeats: downbeats.slice(0, 100),
+        sections,
+        optimalCutPoints
+      }
+    };
+
+  } catch (error) {
+    console.error('[generateBeatMap] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to generate beat map');
+  }
+});
+
+/**
+ * suggestBeatSyncCuts - Analyzes scenes and suggests optimal cut points aligned with music beats
+ */
+exports.suggestBeatSyncCuts = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const {
+    scenes,
+    beatMap,
+    syncMode = 'balanced', // 'tight' | 'balanced' | 'relaxed'
+    preserveMinDuration = 3000, // Minimum scene duration in ms
+    preserveMaxAdjustment = 2000 // Maximum adjustment allowed in ms
+  } = data;
+
+  if (!scenes || !scenes.length) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scenes array required');
+  }
+
+  if (!beatMap || !beatMap.downbeats) {
+    throw new functions.https.HttpsError('invalid-argument', 'Beat map with downbeats required');
+  }
+
+  try {
+    const { downbeats, measures, optimalCutPoints, measureDurationMs, beatDurationMs } = beatMap;
+    const cutPoints = optimalCutPoints[syncMode] || optimalCutPoints.balanced;
+
+    // Calculate current scene end times
+    let currentTime = 0;
+    const sceneEndTimes = scenes.map(scene => {
+      const duration = (scene.duration || 5) * 1000;
+      currentTime += duration;
+      return {
+        sceneId: scene.id || scene.sceneId,
+        originalEnd: currentTime,
+        originalDuration: duration
+      };
+    });
+
+    // Suggest adjustments for each scene
+    const suggestions = sceneEndTimes.map((scene, index) => {
+      const isLastScene = index === sceneEndTimes.length - 1;
+
+      // Find nearest downbeat to current scene end
+      const nearestDownbeat = downbeats.reduce((nearest, db) =>
+        Math.abs(db - scene.originalEnd) < Math.abs(nearest - scene.originalEnd) ? db : nearest
+      , downbeats[0]);
+
+      // Find nearest optimal cut point
+      const nearestCutPoint = cutPoints.reduce((nearest, cp) =>
+        Math.abs(cp - scene.originalEnd) < Math.abs(nearest - scene.originalEnd) ? cp : nearest
+      , cutPoints[0] || nearestDownbeat);
+
+      // Find nearest measure boundary
+      const nearestMeasure = measures.reduce((nearest, m) =>
+        Math.abs(m.time - scene.originalEnd) < Math.abs(nearest.time - scene.originalEnd) ? m : nearest
+      , measures[0]);
+
+      // Calculate adjustments
+      const downbeatAdjustment = nearestDownbeat - scene.originalEnd;
+      const cutPointAdjustment = nearestCutPoint - scene.originalEnd;
+      const measureAdjustment = nearestMeasure.time - scene.originalEnd;
+
+      // Determine best suggestion based on constraints
+      let suggestedEnd = scene.originalEnd;
+      let adjustment = 0;
+      let quality = 'none';
+      let syncType = 'none';
+
+      // Priority: optimal cut point > measure > downbeat
+      if (Math.abs(cutPointAdjustment) <= preserveMaxAdjustment) {
+        const newDuration = scene.originalDuration + cutPointAdjustment;
+        if (newDuration >= preserveMinDuration) {
+          suggestedEnd = nearestCutPoint;
+          adjustment = cutPointAdjustment;
+          quality = 'perfect';
+          syncType = 'phrase';
+        }
+      }
+
+      if (quality === 'none' && Math.abs(measureAdjustment) <= preserveMaxAdjustment) {
+        const newDuration = scene.originalDuration + measureAdjustment;
+        if (newDuration >= preserveMinDuration) {
+          suggestedEnd = nearestMeasure.time;
+          adjustment = measureAdjustment;
+          quality = 'great';
+          syncType = 'measure';
+        }
+      }
+
+      if (quality === 'none' && Math.abs(downbeatAdjustment) <= preserveMaxAdjustment) {
+        const newDuration = scene.originalDuration + downbeatAdjustment;
+        if (newDuration >= preserveMinDuration) {
+          suggestedEnd = nearestDownbeat;
+          adjustment = downbeatAdjustment;
+          quality = 'good';
+          syncType = 'downbeat';
+        }
+      }
+
+      // If no good sync point found, keep original
+      if (quality === 'none') {
+        quality = 'keep';
+        syncType = 'original';
+      }
+
+      return {
+        sceneId: scene.sceneId,
+        sceneIndex: index,
+        originalDuration: scene.originalDuration,
+        suggestedDuration: scene.originalDuration + adjustment,
+        originalEnd: scene.originalEnd,
+        suggestedEnd,
+        adjustment,
+        adjustmentSeconds: Math.round(adjustment / 100) / 10,
+        quality, // 'perfect' | 'great' | 'good' | 'keep'
+        syncType, // 'phrase' | 'measure' | 'downbeat' | 'original'
+        nearestDownbeat,
+        nearestMeasure: nearestMeasure.measureNumber,
+        isLastScene
+      };
+    });
+
+    // Calculate overall sync score
+    const qualityScores = { perfect: 100, great: 80, good: 60, keep: 40 };
+    const avgScore = suggestions.reduce((sum, s) => sum + qualityScores[s.quality], 0) / suggestions.length;
+
+    // Recalculate adjusted timeline
+    let adjustedTime = 0;
+    const adjustedTimeline = suggestions.map(s => {
+      adjustedTime += s.suggestedDuration;
+      return {
+        sceneId: s.sceneId,
+        endTime: adjustedTime
+      };
+    });
+
+    return {
+      success: true,
+      suggestions,
+      summary: {
+        totalScenes: scenes.length,
+        perfectSyncs: suggestions.filter(s => s.quality === 'perfect').length,
+        greatSyncs: suggestions.filter(s => s.quality === 'great').length,
+        goodSyncs: suggestions.filter(s => s.quality === 'good').length,
+        keptOriginal: suggestions.filter(s => s.quality === 'keep').length,
+        overallScore: Math.round(avgScore),
+        totalAdjustment: suggestions.reduce((sum, s) => sum + Math.abs(s.adjustment), 0),
+        newTotalDuration: adjustedTime,
+        originalTotalDuration: sceneEndTimes[sceneEndTimes.length - 1].originalEnd
+      },
+      adjustedTimeline,
+      syncMode,
+      bpm: beatMap.bpm
+    };
+
+  } catch (error) {
+    console.error('[suggestBeatSyncCuts] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to generate beat sync suggestions');
+  }
+});
+
+/**
+ * applyBeatSync - Applies beat sync adjustments to scene durations
+ */
+exports.applyBeatSync = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+
+  const {
+    projectId,
+    suggestions,
+    applyAll = true,
+    selectedSceneIds = []
+  } = data;
+
+  if (!projectId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+  }
+
+  if (!suggestions || !suggestions.length) {
+    throw new functions.https.HttpsError('invalid-argument', 'Suggestions array required');
+  }
+
+  try {
+    // Filter suggestions to apply
+    const toApply = applyAll
+      ? suggestions.filter(s => s.quality !== 'keep')
+      : suggestions.filter(s => selectedSceneIds.includes(s.sceneId));
+
+    // Get project
+    const projectRef = db.collection('creationProjects').doc(projectId);
+    const projectDoc = await projectRef.get();
+
+    if (!projectDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Project not found');
+    }
+
+    const projectData = projectDoc.data();
+    if (projectData.userId !== uid) {
+      throw new functions.https.HttpsError('permission-denied', 'Not your project');
+    }
+
+    // Update scene durations in script
+    const scriptScenes = projectData.state?.script?.scenes || [];
+    const updatedScenes = scriptScenes.map(scene => {
+      const suggestion = toApply.find(s => s.sceneId === scene.id);
+      if (suggestion) {
+        return {
+          ...scene,
+          duration: Math.round(suggestion.suggestedDuration / 1000 * 10) / 10, // Convert to seconds
+          beatSynced: true,
+          originalDuration: scene.duration,
+          syncQuality: suggestion.quality,
+          syncType: suggestion.syncType
+        };
+      }
+      return scene;
+    });
+
+    // Update project
+    await projectRef.update({
+      'state.script.scenes': updatedScenes,
+      'state.assembly.beatSyncApplied': true,
+      'state.assembly.beatSyncTimestamp': admin.firestore.FieldValue.serverTimestamp(),
+      'state.assembly.beatSyncStats': {
+        appliedCount: toApply.length,
+        totalScenes: scriptScenes.length
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      appliedCount: toApply.length,
+      updatedScenes: updatedScenes.filter(s => s.beatSynced).map(s => ({
+        sceneId: s.id,
+        newDuration: s.duration,
+        originalDuration: s.originalDuration,
+        syncQuality: s.syncQuality
+      }))
+    };
+
+  } catch (error) {
+    console.error('[applyBeatSync] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to apply beat sync');
+  }
+});
+
+/**
+ * getBeatSyncPreview - Quick preview of beat sync without full analysis
+ * Returns simple alignment info for UI preview
+ */
+exports.getBeatSyncPreview = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const {
+    sceneDurations, // Array of durations in seconds
+    bpm = 120,
+    syncMode = 'balanced'
+  } = data;
+
+  if (!sceneDurations || !sceneDurations.length) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scene durations required');
+  }
+
+  try {
+    const measureDuration = (60 / bpm) * 4; // 4/4 time
+    const beatDuration = 60 / bpm;
+
+    let currentTime = 0;
+    const preview = sceneDurations.map((duration, index) => {
+      currentTime += duration;
+
+      // Find how close to nearest measure boundary
+      const nearestMeasure = Math.round(currentTime / measureDuration) * measureDuration;
+      const measureOffset = currentTime - nearestMeasure;
+
+      // Find how close to nearest beat
+      const nearestBeat = Math.round(currentTime / beatDuration) * beatDuration;
+      const beatOffset = currentTime - nearestBeat;
+
+      // Determine sync quality
+      let quality;
+      if (Math.abs(measureOffset) < 0.1) {
+        quality = 'perfect'; // Within 100ms of measure
+      } else if (Math.abs(measureOffset) < 0.3) {
+        quality = 'great'; // Within 300ms of measure
+      } else if (Math.abs(beatOffset) < 0.15) {
+        quality = 'good'; // Within 150ms of beat
+      } else {
+        quality = 'off'; // Not synced
+      }
+
+      return {
+        sceneIndex: index,
+        currentEnd: Math.round(currentTime * 100) / 100,
+        nearestMeasure: Math.round(nearestMeasure * 100) / 100,
+        measureOffset: Math.round(measureOffset * 100) / 100,
+        quality,
+        suggestedAdjustment: -measureOffset
+      };
+    });
+
+    // Calculate overall alignment score
+    const qualityScores = { perfect: 100, great: 75, good: 50, off: 0 };
+    const avgScore = preview.reduce((sum, p) => sum + qualityScores[p.quality], 0) / preview.length;
+
+    return {
+      success: true,
+      preview,
+      bpm,
+      measureDuration: Math.round(measureDuration * 100) / 100,
+      beatDuration: Math.round(beatDuration * 100) / 100,
+      overallAlignment: Math.round(avgScore),
+      alignmentLabel: avgScore >= 80 ? 'Excellent' : avgScore >= 60 ? 'Good' : avgScore >= 40 ? 'Fair' : 'Needs Adjustment'
+    };
+
+  } catch (error) {
+    console.error('[getBeatSyncPreview] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to generate beat sync preview');
+  }
+});
+
 /**
  * importStockMedia - Download and cache stock media to Firebase Storage
  * Needed because some APIs don't allow hotlinking
