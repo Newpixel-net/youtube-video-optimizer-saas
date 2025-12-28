@@ -3188,7 +3188,18 @@
                 bRollStrategy: null,           // 'aggressive' | 'moderate' | 'minimal' | etc.
                 // Smart Audio AI (Phase 2)
                 audioProfile: null,            // AI-generated audio recommendations
-                audioAnalyzing: false          // Loading state for audio analysis
+                audioAnalyzing: false,         // Loading state for audio analysis
+                // Music Browser (Phase 3)
+                musicBrowser: {
+                    isOpen: false,
+                    searchQuery: '',
+                    selectedCategory: null,
+                    results: [],
+                    categories: [],
+                    loading: false,
+                    page: 1,
+                    total: 0
+                }
             },
 
             // Preview Engine State
@@ -10151,6 +10162,9 @@
                 html += renderExportModal();
             }
 
+            // Add music browser modal if open
+            html += renderMusicBrowserModal();
+
             return html;
         }
 
@@ -10525,7 +10539,12 @@
 
             // Track Selection
             html += '<div style="margin-bottom: 1rem;">';
-            html += '<label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.4rem;">Select Track</label>';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">';
+            html += '<label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Select Track</label>';
+            html += '<button onclick="openMusicBrowser()" style="padding: 0.25rem 0.5rem; border-radius: 0.3rem; border: 1px solid rgba(139,92,246,0.4); background: transparent; color: #a78bfa; font-size: 0.65rem; cursor: pointer; display: flex; align-items: center; gap: 0.25rem;">';
+            html += '<span>🔍</span> Browse Library';
+            html += '</button>';
+            html += '</div>';
             html += '<select id="music-select" onchange="selectMusicTrack(this.value)" style="width: 100%; padding: 0.6rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.8rem; cursor: pointer;">';
             html += '<option value="">Choose a track...</option>';
             musicLibrary.forEach(function(track) {
@@ -11683,6 +11702,245 @@
             scheduleAutoSave();
             render();
             showToast('Smart Audio recommendations applied!', 'success');
+        }
+
+        // ==========================================
+        // MUSIC BROWSER - Phase 3
+        // ==========================================
+
+        async function openMusicBrowser() {
+            state.assembly.musicBrowser.isOpen = true;
+            state.assembly.musicBrowser.loading = true;
+            render();
+
+            try {
+                // Load categories and initial results
+                const [categoriesResult, searchResult] = await Promise.all([
+                    firebase.functions().httpsCallable('getMusicCategories')({}),
+                    firebase.functions().httpsCallable('searchEnhancedMusicLibrary')({
+                        page: 1,
+                        perPage: 12
+                    })
+                ]);
+
+                if (categoriesResult.data.success) {
+                    state.assembly.musicBrowser.categories = categoriesResult.data.categories;
+                }
+
+                if (searchResult.data.success) {
+                    state.assembly.musicBrowser.results = searchResult.data.results;
+                    state.assembly.musicBrowser.total = searchResult.data.total;
+                }
+            } catch (error) {
+                console.error('[openMusicBrowser] Error:', error);
+                showToast('Failed to load music library', 'error');
+            } finally {
+                state.assembly.musicBrowser.loading = false;
+                render();
+            }
+        }
+
+        function closeMusicBrowser() {
+            state.assembly.musicBrowser.isOpen = false;
+            render();
+        }
+
+        async function searchMusicLibrary(query) {
+            state.assembly.musicBrowser.searchQuery = query;
+            state.assembly.musicBrowser.loading = true;
+            state.assembly.musicBrowser.page = 1;
+            render();
+
+            try {
+                const searchMusic = firebase.functions().httpsCallable('searchEnhancedMusicLibrary');
+                const result = await searchMusic({
+                    query: query,
+                    category: state.assembly.musicBrowser.selectedCategory,
+                    page: 1,
+                    perPage: 12
+                });
+
+                if (result.data.success) {
+                    state.assembly.musicBrowser.results = result.data.results;
+                    state.assembly.musicBrowser.total = result.data.total;
+                }
+            } catch (error) {
+                console.error('[searchMusicLibrary] Error:', error);
+            } finally {
+                state.assembly.musicBrowser.loading = false;
+                render();
+            }
+        }
+
+        async function filterMusicByCategory(category) {
+            state.assembly.musicBrowser.selectedCategory = category;
+            state.assembly.musicBrowser.loading = true;
+            state.assembly.musicBrowser.page = 1;
+            render();
+
+            try {
+                const searchMusic = firebase.functions().httpsCallable('searchEnhancedMusicLibrary');
+                const result = await searchMusic({
+                    query: state.assembly.musicBrowser.searchQuery,
+                    category: category,
+                    page: 1,
+                    perPage: 12
+                });
+
+                if (result.data.success) {
+                    state.assembly.musicBrowser.results = result.data.results;
+                    state.assembly.musicBrowser.total = result.data.total;
+                }
+            } catch (error) {
+                console.error('[filterMusicByCategory] Error:', error);
+            } finally {
+                state.assembly.musicBrowser.loading = false;
+                render();
+            }
+        }
+
+        function selectMusicFromBrowser(trackId) {
+            // Find the track in the results or add to library
+            const track = state.assembly.musicBrowser.results.find(t => t.id === trackId);
+            if (track) {
+                // Add to music library if not already present
+                if (!state.assembly.musicLibrary.find(t => t.id === trackId)) {
+                    state.assembly.musicLibrary.push(track);
+                }
+
+                // Select the track
+                state.assembly.music.trackId = trackId;
+                state.assembly.music.enabled = true;
+
+                closeMusicBrowser();
+                scheduleAutoSave();
+                showToast(`Selected: ${track.name}`, 'success');
+            }
+        }
+
+        function formatTrackDuration(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return mins + ':' + (secs < 10 ? '0' : '') + secs;
+        }
+
+        function renderMusicBrowserModal() {
+            const browser = state.assembly.musicBrowser;
+            if (!browser.isOpen) return '';
+
+            let html = '';
+            html += '<div onclick="closeMusicBrowser()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1001; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px);">';
+            html += '<div onclick="event.stopPropagation()" style="background: linear-gradient(135deg, #1a1a2e, #16213e); border: 1px solid rgba(139,92,246,0.3); border-radius: 1rem; width: 90%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.5);">';
+
+            // Header
+            html += '<div style="padding: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.75rem;">';
+            html += '<span style="font-size: 1.5rem;">🎵</span>';
+            html += '<div>';
+            html += '<div style="font-size: 1.1rem; font-weight: 700; color: white;">Music Library</div>';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">' + browser.total + ' tracks available</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '<button onclick="closeMusicBrowser()" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: white; cursor: pointer; font-size: 1rem;">✕</button>';
+            html += '</div>';
+
+            // Search & Filters
+            html += '<div style="padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">';
+
+            // Search input
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<input type="text" placeholder="Search music..." value="' + (browser.searchQuery || '') + '" onchange="searchMusicLibrary(this.value)" style="width: 100%; padding: 0.75rem 1rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem;" oninput="this.setAttribute(\'value\', this.value)">';
+            html += '</div>';
+
+            // Category chips
+            html += '<div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">';
+            html += '<button onclick="filterMusicByCategory(null)" style="padding: 0.4rem 0.75rem; border-radius: 2rem; border: 1px solid ' + (!browser.selectedCategory ? '#8b5cf6' : 'rgba(255,255,255,0.2)') + '; background: ' + (!browser.selectedCategory ? 'rgba(139,92,246,0.2)' : 'transparent') + '; color: ' + (!browser.selectedCategory ? '#a78bfa' : 'rgba(255,255,255,0.6)') + '; font-size: 0.7rem; cursor: pointer;">All</button>';
+
+            (browser.categories || []).forEach(function(cat) {
+                const isSelected = browser.selectedCategory === cat.id;
+                html += '<button onclick="filterMusicByCategory(\'' + cat.id + '\')" style="padding: 0.4rem 0.75rem; border-radius: 2rem; border: 1px solid ' + (isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.2)') + '; background: ' + (isSelected ? 'rgba(139,92,246,0.2)' : 'transparent') + '; color: ' + (isSelected ? '#a78bfa' : 'rgba(255,255,255,0.6)') + '; font-size: 0.7rem; cursor: pointer;">';
+                html += cat.icon + ' ' + cat.name + ' (' + cat.count + ')';
+                html += '</button>';
+            });
+            html += '</div>';
+            html += '</div>';
+
+            // Results
+            html += '<div style="flex: 1; overflow-y: auto; padding: 1rem;">';
+
+            if (browser.loading) {
+                html += '<div style="display: flex; align-items: center; justify-content: center; padding: 3rem; gap: 0.75rem;">';
+                html += '<div class="animate-spin" style="width: 24px; height: 24px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>';
+                html += '<span style="color: rgba(255,255,255,0.6);">Loading music...</span>';
+                html += '</div>';
+            } else if (browser.results.length === 0) {
+                html += '<div style="text-align: center; padding: 3rem; color: rgba(255,255,255,0.5);">';
+                html += '<div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>';
+                html += '<div>No tracks found. Try a different search.</div>';
+                html += '</div>';
+            } else {
+                html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;">';
+
+                browser.results.forEach(function(track) {
+                    const isSelected = state.assembly.music.trackId === track.id;
+
+                    html += '<div onclick="selectMusicFromBrowser(\'' + track.id + '\')" style="background: ' + (isSelected ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)') + '; border: 1px solid ' + (isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)') + '; border-radius: 0.75rem; padding: 1rem; cursor: pointer; transition: all 0.2s;" onmouseenter="this.style.borderColor=\'rgba(139,92,246,0.5)\'" onmouseleave="this.style.borderColor=\'' + (isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)') + '\'">';
+
+                    // Track icon & name
+                    html += '<div style="display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.75rem;">';
+                    html += '<div style="width: 40px; height: 40px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">';
+                    html += '<span style="font-size: 1.1rem;">🎵</span>';
+                    html += '</div>';
+                    html += '<div style="flex: 1; min-width: 0;">';
+                    html += '<div style="font-size: 0.85rem; font-weight: 600; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' + track.name + '</div>';
+                    html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">' + (track.mood || track.category || '') + '</div>';
+                    html += '</div>';
+                    if (isSelected) {
+                        html += '<span style="color: #10b981; font-size: 1rem;">✓</span>';
+                    }
+                    html += '</div>';
+
+                    // Track metadata
+                    html += '<div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">';
+                    if (track.duration) {
+                        html += '<span style="font-size: 0.6rem; padding: 0.2rem 0.4rem; background: rgba(255,255,255,0.1); border-radius: 0.25rem; color: rgba(255,255,255,0.6);">⏱ ' + formatTrackDuration(track.duration) + '</span>';
+                    }
+                    if (track.bpm) {
+                        html += '<span style="font-size: 0.6rem; padding: 0.2rem 0.4rem; background: rgba(255,255,255,0.1); border-radius: 0.25rem; color: rgba(255,255,255,0.6);">♪ ' + track.bpm + ' BPM</span>';
+                    }
+                    if (track.energy) {
+                        const energyPercent = Math.round(track.energy * 100);
+                        html += '<span style="font-size: 0.6rem; padding: 0.2rem 0.4rem; background: rgba(255,255,255,0.1); border-radius: 0.25rem; color: rgba(255,255,255,0.6);">⚡ ' + energyPercent + '%</span>';
+                    }
+                    html += '</div>';
+
+                    // Tags
+                    if (track.tags && track.tags.length > 0) {
+                        html += '<div style="margin-top: 0.5rem; display: flex; gap: 0.25rem; flex-wrap: wrap;">';
+                        track.tags.slice(0, 3).forEach(function(tag) {
+                            html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.35rem; background: rgba(139,92,246,0.15); color: #a78bfa; border-radius: 0.2rem;">' + tag + '</span>';
+                        });
+                        html += '</div>';
+                    }
+
+                    html += '</div>';
+                });
+
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            // Footer
+            html += '<div style="padding: 1rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Click a track to select it</div>';
+            html += '<button onclick="closeMusicBrowser()" style="padding: 0.5rem 1rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: rgba(255,255,255,0.7); font-size: 0.75rem; cursor: pointer;">Close</button>';
+            html += '</div>';
+
+            html += '</div>';
+            html += '</div>';
+
+            return html;
         }
 
         // Phase 3D: Audio Intelligence Functions
