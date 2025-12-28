@@ -9947,11 +9947,20 @@
         function renderStoryboardCard(scene, storyboardScene, index) {
             const status = storyboardScene.status || 'pending';
             const imageUrl = storyboardScene.imageUrl;
-            const prompt = storyboardScene.prompt || scene.visual || '';
 
             // Phase 8-11: Check if scene has prompt chain data
             const chainData = getPromptChainForScene(scene.id);
             const hasChainData = !!chainData && state.storyboard.promptChain?.enabled;
+
+            // Show the actual optimized prompt when chain is enabled, otherwise show stored/visual prompt
+            let prompt;
+            if (hasChainData && chainData.imagePrompt?.prompt) {
+                // Use the chain-optimized image prompt
+                prompt = chainData.imagePrompt.prompt;
+            } else {
+                // Fallback to stored prompt or scene visual
+                prompt = storyboardScene.prompt || scene.visual || '';
+            }
 
             let cardContent = '';
 

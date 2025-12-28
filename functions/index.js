@@ -35051,10 +35051,16 @@ const IMAGE_PROMPT_GENERATOR = {
 
   /**
    * Build subject description from scene and character bible
+   * CRITICAL FIX: When no visualBlueprint exists (most scripts), fall back to scene.visual
    */
   buildSubjectDescription: (scene, characterBible) => {
     const ab = scene.actionBlueprint?.characterAction;
-    if (!ab?.who) return scene.visualBlueprint?.midground || '';
+
+    // CRITICAL: Fall back to scene.visual when no blueprint exists
+    // This is the original visual description from script generation
+    if (!ab?.who) {
+      return scene.visualBlueprint?.midground || scene.visual || scene.visualPrompt || '';
+    }
 
     // Look up character in bible
     const character = characterBible?.find(c =>
