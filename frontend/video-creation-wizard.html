@@ -3150,7 +3150,7 @@
                 sceneOrder: [],
                 transitions: {},
                 defaultTransition: 'fade',     // Default transition type
-                music: { enabled: false, trackId: null, volume: 30 },
+                music: { enabled: false, trackId: null, volume: 30, fadeIn: 2, fadeOut: 3 },
                 // Enhanced caption settings
                 captions: {
                     enabled: true,
@@ -11561,6 +11561,28 @@
             if (previewEngine) {
                 previewEngine.musicVolume = volume / 100;
             }
+            render();
+        }
+
+        function setMusicFadeIn(seconds) {
+            state.assembly.music.fadeIn = parseFloat(seconds);
+            scheduleAutoSave();
+            render();
+        }
+
+        function setMusicFadeOut(seconds) {
+            state.assembly.music.fadeOut = parseFloat(seconds);
+            scheduleAutoSave();
+            render();
+        }
+
+        function setAudioDucking(enabled) {
+            if (!state.assembly.audioMix) state.assembly.audioMix = {};
+            state.assembly.audioMix.ducking = enabled;
+            if (previewEngine) {
+                previewEngine.audioDucking = enabled;
+            }
+            scheduleAutoSave();
             render();
         }
 
