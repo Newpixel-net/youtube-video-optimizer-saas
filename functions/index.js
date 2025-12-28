@@ -23779,7 +23779,9 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     genre = null, // Genre key from GENRE_REFERENCE_LIBRARY (e.g., 'documentary-nature', 'educational-explainer')
     contentFormat = 'medium-form', // 'short-form' | 'medium-form' | 'long-form' | 'episodic'
     // Video Model Configuration (for scene duration optimization)
-    videoModel = { duration: '6s', resolution: '1080p' }
+    videoModel = { duration: '6s', resolution: '1080p' },
+    // Phase 5: AI Concept Enhancement - Deep Story Architecture
+    conceptEnrichment = null
   } = config;
 
   if (!topic || topic.trim().length < 3) {
@@ -24545,6 +24547,168 @@ CONTENT FORMAT: ${formatSettings.name}
 🚫 ANTI-GENERIC RULES (NEVER DO THESE):
 ${ANTI_GENERIC_RULES.slice(0, 6).map(r => `- ${r}`).join('\n')}`;
 
+    // ============================================================
+    // PHASE 5: DEEP STORY ARCHITECTURE
+    // Inject enriched concept data for complex, character-driven stories
+    // ============================================================
+    let deepStoryArchitecture = '';
+
+    if (conceptEnrichment) {
+      console.log('[creationWizardGenerateScript] Applying Deep Story Architecture from concept enrichment');
+
+      // Build character bible section
+      let characterBible = '';
+      if (conceptEnrichment.characters && conceptEnrichment.characters.length > 0) {
+        characterBible = `
+
+🎭 CHARACTER BIBLE - REQUIRED CHARACTERS
+These characters MUST appear in your script with consistency:
+
+${conceptEnrichment.characters.map((char, idx) => `CHARACTER ${idx + 1}: ${char.archetype}
+- Unique Twist: ${char.uniqueTwist}
+- Visual Description: ${char.visualDescription}
+- MUST appear in at least ${Math.max(2, Math.ceil(sceneCount / 2))} scenes
+- Maintain EXACT visual consistency in every appearance
+- Show character development/arc across scenes`).join('\n\n')}
+
+CHARACTER DISTRIBUTION REQUIREMENTS:
+- Each character MUST appear in multiple scenes (not just one)
+- Characters should interact or their stories should interweave
+- Show character growth/change between their first and last appearance
+- Reference character visual descriptions EXACTLY in every visualPrompt they appear in`;
+      }
+
+      // Build world-building section
+      let worldBuildingSection = '';
+      if (conceptEnrichment.worldBuilding) {
+        worldBuildingSection = `
+
+🌍 WORLD-BUILDING - CONSISTENT UNIVERSE
+This story takes place in a specific, consistent world:
+
+SETTING: ${conceptEnrichment.worldBuilding.setting}
+WORLD RULES: ${conceptEnrichment.worldBuilding.rules}
+ATMOSPHERE: ${conceptEnrichment.worldBuilding.atmosphere}
+
+WORLD CONSISTENCY REQUIREMENTS:
+- Every scene MUST feel like it exists in this same world
+- Environmental details should reference the world rules
+- The atmosphere should pervade every visual description
+- Background elements should reinforce the world's unique nature`;
+      }
+
+      // Build visual signature section
+      let visualSignatureSection = '';
+      if (conceptEnrichment.visualSignature) {
+        visualSignatureSection = `
+
+🎬 VISUAL SIGNATURE - CONSISTENT STYLE
+Every scene MUST adhere to this visual signature:
+"${conceptEnrichment.visualSignature}"
+
+This visual style MUST be:
+- Referenced in EVERY visualPrompt
+- The unifying aesthetic thread across all scenes
+- Adapted to each scene's needs while maintaining core signature elements`;
+      }
+
+      // Build key elements section
+      let keyElementsSection = '';
+      if (conceptEnrichment.keyElements && conceptEnrichment.keyElements.length > 0) {
+        keyElementsSection = `
+
+🔑 KEY STORY ELEMENTS - MUST INCLUDE
+These elements MUST appear throughout the story:
+${conceptEnrichment.keyElements.map((elem, idx) => `${idx + 1}. ${elem}`).join('\n')}
+
+Weave these elements naturally across multiple scenes - don't dump them all in one scene.`;
+      }
+
+      // Build genre fusion guidance
+      let genreFusionSection = '';
+      if (conceptEnrichment.genreFusion) {
+        genreFusionSection = `
+
+🎯 GENRE FUSION
+${conceptEnrichment.genreFusion}
+
+Balance these genre elements throughout the narrative structure.`;
+      }
+
+      // Build things to avoid section
+      let avoidSection = '';
+      if (conceptEnrichment.thingsToAvoid && conceptEnrichment.thingsToAvoid.length > 0) {
+        avoidSection = `
+
+⚠️ CRITICAL - THINGS TO AVOID (ORIGINALITY REQUIREMENTS)
+${conceptEnrichment.thingsToAvoid.map(avoid => `- DO NOT: ${avoid}`).join('\n')}`;
+      }
+
+      // Build style references section
+      let styleReferencesSection = '';
+      if (conceptEnrichment.extractedStyles && conceptEnrichment.extractedStyles.length > 0) {
+        styleReferencesSection = `
+
+🎨 VISUAL STYLE INSPIRATIONS (Reference, don't copy)
+${conceptEnrichment.extractedStyles.map(style => `- ${style}`).join('\n')}
+
+Use these as VISUAL STYLE inspiration only - create original content, characters, and story.`;
+      }
+
+      // Build hook line section
+      let hookLineSection = '';
+      if (conceptEnrichment.hookLine) {
+        hookLineSection = `
+
+🎣 HOOK LINE - USE THIS AS OPENING INSPIRATION
+"${conceptEnrichment.hookLine}"
+
+Your opening scene/hook should capture this energy and promise.`;
+      }
+
+      // Combine all sections
+      deepStoryArchitecture = `
+
+============================================================
+🎬 DEEP STORY ARCHITECTURE - PREMIUM PRODUCTION MODE 🎬
+============================================================
+This content has been enriched with AI-powered concept development.
+You MUST use this information to create a COMPLEX, MULTI-LAYERED story.
+
+ENHANCED CONCEPT VISION:
+${conceptEnrichment.improvedConcept || topic}
+${conceptEnrichment.suggestedMood ? `\nOVERALL MOOD: ${conceptEnrichment.suggestedMood}` : ''}
+${conceptEnrichment.suggestedTone ? `NARRATIVE TONE: ${conceptEnrichment.suggestedTone}` : ''}
+${characterBible}
+${worldBuildingSection}
+${visualSignatureSection}
+${keyElementsSection}
+${genreFusionSection}
+${styleReferencesSection}
+${avoidSection}
+${hookLineSection}
+
+============================================================
+DEEP STORY QUALITY REQUIREMENTS
+============================================================
+1. STORY COMPLEXITY: Create a narrative with multiple layers - surface plot AND deeper themes
+2. CHARACTER DEPTH: Characters must have motivations, conflicts, and growth arcs
+3. VISUAL CONSISTENCY: Every scene must feel part of ONE cohesive visual world
+4. EMOTIONAL JOURNEY: The viewer should feel a complete emotional arc from start to finish
+5. MEMORABLE MOMENTS: Include at least 2-3 "iconic" visual moments that could be movie posters
+6. THEMATIC UNITY: A central theme should thread through every scene
+7. CINEMATIC INTELLIGENCE: This should feel like a trailer for a $100M production
+
+DO NOT CREATE:
+- Generic, surface-level content
+- Disconnected scenes that don't build on each other
+- Characters that appear once and disappear
+- Visuals that could be from any random video
+- Cookie-cutter stories without unique identity
+============================================================
+`;
+    }
+
     // Build the prompt for GPT-4o
     const systemPrompt = `You are a HOLLYWOOD-LEVEL PRODUCTION DIRECTOR creating premium video content.
 You have studied the greatest productions ever made and apply their techniques with precision.
@@ -24565,6 +24729,7 @@ ${cameraGuidance}
 ${genreGuidance}
 ${formatGuidance}
 ${antiGenericGuidance}
+${deepStoryArchitecture}
 
 You create scripts for ${platform || 'social media'} in ${aspectRatio || '16:9'} format, specializing in ${niche || 'general'} content.
 
@@ -24662,7 +24827,12 @@ ${productionSettings.specialInstructions ? `\nPRODUCTION SPECIAL: ${productionSe
 6. Visual descriptions: ${productionSettings.visualApproach}
 
 ${additionalInstructions ? `=== ADDITIONAL INSTRUCTIONS ===\n${additionalInstructions}\n` : ''}
-
+${conceptEnrichment ? `
+=== CRITICAL: DEEP STORY ARCHITECTURE ACTIVE ===
+Refer to the DEEP STORY ARCHITECTURE section in the system prompt.
+You MUST incorporate all characters, world-building, and visual signature elements.
+This is NOT optional - failure to use this enrichment data will result in generic content.
+` : ''}
 === HOLLYWOOD CINEMATOGRAPHY REQUIREMENTS FOR visualPrompt ===
 Each visualPrompt MUST be a RICH, DETAILED cinematographic description with ALL these elements:
 
@@ -24747,7 +24917,9 @@ Return ONLY valid JSON:
       "hasNarration": true,
       "cameraMovement": ["Push in"],
       "mood": "contemplative|tense|uplifting|mysterious|etc",
-      "transition": "cut|fade|dissolve|zoom"
+      "transition": "cut|fade|dissolve|zoom",
+      "charactersInScene": ["Character archetype names that appear in this scene - from CHARACTER BIBLE if provided"],
+      "sceneRole": "What role this scene plays in the story arc (setup/escalation/climax/resolution)"
     }
   ],
   "cta": "Call-to-action woven naturally into final scene",
@@ -24764,18 +24936,26 @@ Return ONLY valid JSON:
     "keyMessage": "The main takeaway",
     "suggestedMusic": "${productionSettings.musicMood}",
     "emotionalArc": "${productionSettings.emotionalArc}"
+  },
+  "storyArchitecture": {
+    "centralTheme": "The core theme threading through all scenes",
+    "characterArcs": ["Brief description of each character's journey/growth"],
+    "visualSignatureUsed": "How the visual signature was applied",
+    "iconicMoments": ["Scene IDs that contain memorable/iconic visual moments"],
+    "storyComplexity": "simple|layered|complex - self-assessment of narrative depth"
   }
 }`;
 
     // Call GPT-4o for script generation
+    // Note: max_tokens increased to 4500 to accommodate deep story architecture with characters and world-building
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: 0.8,
-      max_tokens: 3000
+      temperature: conceptEnrichment ? 0.85 : 0.8, // Slightly higher creativity for enriched concepts
+      max_tokens: conceptEnrichment ? 4500 : 3000 // More tokens for complex stories
     });
 
     // Parse the response
