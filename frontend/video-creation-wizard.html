@@ -2924,6 +2924,12 @@
                 // Phase 3A: Genre Reference System
                 genre: null,              // Genre key (e.g., 'documentary-nature', 'educational-explainer')
                 contentFormat: 'medium-form', // 'short-form' | 'medium-form' | 'long-form' | 'episodic'
+                // Phase 3F: Narrative Structure Intelligence
+                narrativePreset: null,    // 'youtube-standard' | 'tiktok-viral' | 'cinematic-short' | etc.
+                storyArc: null,           // 'three-act' | 'heros-journey' | 'dan-harmon-circle' | etc.
+                emotionalJourney: null,   // 'triumph' | 'redemption' | 'thriller' | etc.
+                tensionCurve: null,       // 'steady-build' | 'waves' | 'slow-burn' | etc.
+                narrativeAnalysis: null,  // Cached analysis from AI
                 // Video Generation Model Configuration
                 videoModel: {
                     provider: 'minimax',                    // 'minimax' | 'runpod' (future providers)
@@ -3027,6 +3033,7 @@
                 status: 'idle',
                 sceneOrder: [],
                 transitions: {},
+                defaultTransition: 'fade',     // Default transition type
                 music: { enabled: false, trackId: null, volume: 30 },
                 // Enhanced caption settings
                 captions: {
@@ -3051,7 +3058,18 @@
                 transitionTypes: [],
                 captionStyles: [],
                 // UI state for tabbed interface
-                activeTab: 'text'              // 'text', 'audio', 'media', 'transitions'
+                activeTab: 'text',             // 'text', 'audio', 'media', 'transitions'
+                // Phase 3D: Audio Intelligence
+                audioMood: null,               // 'epic' | 'intimate' | 'mysterious' | etc.
+                voiceProfile: null,            // 'narrator-warm' | 'documentary' | etc.
+                transitionSound: null,         // 'whoosh-soft' | 'glitch' | etc.
+                ambienceLayer: null,           // 'nature-forest' | 'urban-city' | etc.
+                // Phase 3E: Smart Assembly Engine
+                assemblyPreset: null,          // 'youtube-engaging' | 'cinematic-film' | etc.
+                pacingProfile: null,           // 'rapid-fire' | 'balanced' | 'cinematic' | etc.
+                beatSyncMode: 'off',           // 'off' | 'subtle' | 'moderate' | 'aggressive' | 'music-video'
+                patternInterrupt: null,        // 'youtube' | 'tiktok' | 'cinema' | etc.
+                bRollStrategy: null            // 'aggressive' | 'moderate' | 'minimal' | etc.
             },
 
             // Preview Engine State
