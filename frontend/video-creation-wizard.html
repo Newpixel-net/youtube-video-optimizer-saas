@@ -3115,7 +3115,16 @@
                 editPrompt: '',         // Edit instruction prompt
                 editLoading: false,     // Is edit in progress
                 editHistory: [],        // Mask history for undo
-                editOriginalData: null  // Original image data for canvas
+                editOriginalData: null, // Original image data for canvas
+                // Phase 8-11: Prompt Chain Architecture
+                // The Golden Chain of Quality - Script → Image Prompt → Video Prompt → Final
+                promptChain: {
+                    enabled: true,              // Toggle prompt chain processing
+                    status: 'idle',             // 'idle', 'processing', 'ready', 'error'
+                    processedAt: null,          // When scenes were processed
+                    scenes: [],                 // Array of processed scene data with blueprints
+                    config: null                // Cached configuration from backend
+                }
             },
 
             // Step 5: Animation (to be implemented)
@@ -4289,6 +4298,16 @@
                     negative: 'blurry, low quality, watermark, text, logo, deformed, extra fingers, bad anatomy'
                 };
             }
+            // Phase 8-11: Initialize Prompt Chain Architecture defaults
+            if (!state.storyboard.promptChain) {
+                state.storyboard.promptChain = {
+                    enabled: true,
+                    status: 'idle',
+                    processedAt: null,
+                    scenes: [],
+                    config: null
+                };
+            }
         }
 
         // Style Bible Management
@@ -4912,6 +4931,239 @@
             showToast('Assembled prompt logged to console (F12)', 'info');
         }
 
+        // ==========================================
+        // PHASE 8-11: PROMPT CHAIN ARCHITECTURE
+        // The Golden Chain of Quality
+        // ==========================================
+
+        /**
+         * Process all scenes through the Prompt Chain Architecture
+         * This generates optimized blueprints, image prompts, video prompts, and transitions
+         */
+        async function processPromptChain() {
+            if (!state.script.scenes || state.script.scenes.length === 0) {
+                showToast('No scenes to process. Generate a script first.', 'warning');
+                return;
+            }
+
+            state.storyboard.promptChain.status = 'processing';
+            render();
+
+            try {
+                const processAllScenesFn = functions.httpsCallable('creationWizardProcessAllScenes');
+
+                const result = await processAllScenesFn({
+                    scenes: state.script.scenes,
+                    styleBible: state.storyboard.styleBible?.enabled ? state.storyboard.styleBible : null,
+                    characterBible: state.storyboard.characterBible?.enabled ?
+                        state.storyboard.characterBible.characters : null,
+                    genre: state.content.genre || null,
+                    productionMode: state.content.productionMode || 'standard',
+                    videoModel: state.content.videoModel?.duration === '10s' ? 'minimax' : 'minimax',
+                    projectId: state.project.id || null
+                });
+
+                if (result.data.success) {
+                    state.storyboard.promptChain.status = 'ready';
+                    state.storyboard.promptChain.processedAt = new Date().toISOString();
+                    state.storyboard.promptChain.scenes = result.data.scenes;
+
+                    // Auto-apply prompt chain transitions to assembly
+                    applyPromptChainTransitions();
+
+                    showToast(`Prompt chain processed: ${result.data.summary.successful}/${result.data.summary.total} scenes`, 'success');
+                    console.log('[Prompt Chain] Processed scenes:', result.data);
+                    scheduleAutoSave();
+                } else {
+                    throw new Error('Processing failed');
+                }
+
+            } catch (error) {
+                console.error('[Prompt Chain] Error:', error);
+                state.storyboard.promptChain.status = 'error';
+                showToast('Failed to process prompt chain: ' + (error.message || 'Unknown error'), 'error');
+            }
+
+            render();
+        }
+
+        /**
+         * Get prompt chain data for a specific scene
+         */
+        function getPromptChainForScene(sceneId) {
+            if (!state.storyboard.promptChain?.scenes) return null;
+            return state.storyboard.promptChain.scenes.find(s =>
+                s.sceneId === sceneId || s.sceneId === String(sceneId)
+            );
+        }
+
+        /**
+         * Get the optimized image prompt from prompt chain (or fall back to assembled prompt)
+         */
+        function getOptimizedImagePrompt(scene) {
+            // Check if prompt chain is enabled and has data for this scene
+            if (state.storyboard.promptChain?.enabled && state.storyboard.promptChain?.status === 'ready') {
+                const chainData = getPromptChainForScene(scene.id);
+                if (chainData?.imagePrompt?.prompt) {
+                    return {
+                        prompt: chainData.imagePrompt.prompt,
+                        negativePrompt: chainData.imagePrompt.negativePrompt || '',
+                        source: 'prompt-chain',
+                        metadata: chainData.imagePrompt.metadata
+                    };
+                }
+            }
+
+            // Fall back to the standard assembled prompt
+            const assembled = assembleScenePrompt(scene);
+            return {
+                prompt: assembled.assembledPrompt,
+                negativePrompt: assembled.negativePrompt,
+                source: 'assembled',
+                metadata: assembled.layerInfo
+            };
+        }
+
+        /**
+         * Get transition data between current scene and next scene
+         */
+        function getTransitionForScene(sceneId) {
+            const chainData = getPromptChainForScene(sceneId);
+            return chainData?.transition || null;
+        }
+
+        /**
+         * Toggle prompt chain processing on/off
+         */
+        function togglePromptChain(enabled) {
+            state.storyboard.promptChain.enabled = enabled;
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Load prompt chain configuration from backend
+         */
+        async function loadPromptChainConfig() {
+            if (state.storyboard.promptChain.config) return state.storyboard.promptChain.config;
+
+            try {
+                const getConfigFn = functions.httpsCallable('creationWizardGetPromptChainConfig');
+                const result = await getConfigFn({});
+
+                if (result.data.success) {
+                    state.storyboard.promptChain.config = result.data.config;
+                    return result.data.config;
+                }
+            } catch (error) {
+                console.error('[Prompt Chain Config] Error:', error);
+            }
+
+            return null;
+        }
+
+        /**
+         * Generate a single scene blueprint
+         */
+        async function generateSceneBlueprint(sceneId) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (!scene) return null;
+
+            try {
+                const generateBlueprintFn = functions.httpsCallable('creationWizardGenerateSceneBlueprint');
+                const result = await generateBlueprintFn({
+                    scene: scene,
+                    genre: state.content.genre || null,
+                    productionMode: state.content.productionMode || 'standard',
+                    styleBible: state.storyboard.styleBible?.enabled ? state.storyboard.styleBible : null,
+                    characterBible: state.storyboard.characterBible?.enabled ?
+                        state.storyboard.characterBible.characters : null
+                });
+
+                if (result.data.success) {
+                    console.log('[Scene Blueprint] Generated:', result.data.blueprint);
+                    return result.data.blueprint;
+                }
+            } catch (error) {
+                console.error('[Scene Blueprint] Error:', error);
+                showToast('Failed to generate blueprint: ' + error.message, 'error');
+            }
+
+            return null;
+        }
+
+        /**
+         * Preview the prompt chain visual blueprint for a scene
+         */
+        function previewPromptChainBlueprint(sceneId) {
+            const chainData = getPromptChainForScene(sceneId);
+            if (!chainData) {
+                showToast('No prompt chain data. Click "Process Chain" first.', 'info');
+                return;
+            }
+
+            console.log('=== PROMPT CHAIN BLUEPRINT ===');
+            console.log('Scene ID:', sceneId);
+            console.log('Visual Blueprint:', chainData.visualBlueprint);
+            console.log('Image Prompt:', chainData.imagePrompt);
+            console.log('Video Prompt Template:', chainData.videoPromptTemplate);
+            console.log('Transition:', chainData.transition);
+            console.log('Audio Blueprint:', chainData.audioBlueprint);
+
+            showToast('Prompt chain data logged to console (F12)', 'info');
+        }
+
+        /**
+         * Apply prompt chain transitions to assembly state
+         * Maps intelligent transition recommendations to assembly transitions
+         */
+        function applyPromptChainTransitions() {
+            if (!state.storyboard.promptChain?.scenes || state.storyboard.promptChain.scenes.length === 0) {
+                return;
+            }
+
+            // Map prompt chain transition types to assembly transition types
+            const transitionMap = {
+                'cut': 'cut',
+                'hard-cut': 'cut',
+                'dissolve': 'dissolve',
+                'fade': 'dissolve',
+                'match-cut': 'dissolve',  // Match cuts rendered as dissolves
+                'j-cut': 'cut',           // J-cut is handled by audio, visual is cut
+                'l-cut': 'cut',           // L-cut is handled by audio, visual is cut
+                'fade-to-black': 'fade',
+                'fade-from-black': 'fade',
+                'wipe': 'wipe'
+            };
+
+            let appliedCount = 0;
+
+            state.storyboard.promptChain.scenes.forEach(chainScene => {
+                const sceneId = chainScene.sceneId;
+                const transition = chainScene.transition;
+
+                if (transition && transition.cutType && transition.cutType.type) {
+                    const chainType = transition.cutType.type;
+                    const assemblyType = transitionMap[chainType] || 'cut';
+
+                    // Apply to assembly transitions
+                    if (!state.assembly.transitions) {
+                        state.assembly.transitions = {};
+                    }
+                    state.assembly.transitions[sceneId] = {
+                        type: assemblyType,
+                        chainType: chainType,  // Store original chain type for reference
+                        chainReason: transition.cutType.instruction || null
+                    };
+                    appliedCount++;
+                }
+            });
+
+            if (appliedCount > 0) {
+                console.log(`[Prompt Chain] Applied ${appliedCount} intelligent transitions`);
+            }
+        }
+
         function applyTopicSuggestion(topic) {
             state.content.topic = topic;
             render();
@@ -5354,7 +5606,10 @@
             storyboardScene.error = null;
             render();
 
-            const prompt = scene.visual || scene.narration || 'A cinematic scene';
+            // Phase 8-11: Get optimized prompt from Prompt Chain (falls back to assembled prompt)
+            const optimizedPrompt = getOptimizedImagePrompt(scene);
+            const prompt = optimizedPrompt.prompt || scene.visual || scene.narration || 'A cinematic scene';
+            const promptSource = optimizedPrompt.source; // 'prompt-chain' or 'assembled'
 
             try {
                 // Phase 4: Build Scene Memory data for this specific scene
@@ -5365,6 +5620,11 @@
                     characterDescriptions: getCharactersForScene(sceneId).map(c => c.description).filter(Boolean),
                     technicalSpecs: state.storyboard.technicalSpecs
                 };
+
+                // Log prompt source for debugging
+                if (promptSource === 'prompt-chain') {
+                    console.log(`[Scene ${sceneId}] Using Prompt Chain optimized prompt`);
+                }
 
                 // Check if using HiDream (RunPod) or NanoBanana (Gemini)
                 if (modelId === 'hidream') {
@@ -5386,7 +5646,10 @@
                             colorPalette: state.storyboard.visualStyle?.colorPalette || null
                         },
                         // Phase 4: Scene Memory System
-                        sceneMemory: sceneMemoryData
+                        sceneMemory: sceneMemoryData,
+                        // Phase 8-11: Prompt Chain metadata
+                        promptChainSource: promptSource,
+                        promptChainMetadata: optimizedPrompt.metadata
                     });
 
                     if (result.data.success) {
@@ -5416,9 +5679,9 @@
                     // Get character reference image for this scene (if available)
                     const characterRef = getCharacterReferenceForScene(sceneId);
 
-                    // Assemble the full prompt using 4-layer architecture
-                    const assembled = assembleScenePrompt(scene);
-                    const fullPrompt = assembled.assembledPrompt || prompt;
+                    // Phase 8-11: Use optimized prompt from Prompt Chain (already fetched above)
+                    // Falls back to assembled prompt if prompt chain not available
+                    const fullPrompt = prompt; // This already has the optimized prompt from getOptimizedImagePrompt()
 
                     const requestData = {
                         prompt: fullPrompt,
@@ -5431,8 +5694,8 @@
                     // Only add negativePrompt for models that support it (not Gemini)
                     // Gemini models handle negative prompts by embedding in the prompt text
                     const isGeminiModel = ['nanobanana-pro', 'nanobanana', 'nano-banana-pro', 'nano-banana'].includes(modelId);
-                    if (!isGeminiModel && assembled.negativePrompt) {
-                        requestData.negativePrompt = assembled.negativePrompt;
+                    if (!isGeminiModel && optimizedPrompt.negativePrompt) {
+                        requestData.negativePrompt = optimizedPrompt.negativePrompt;
                     }
 
                     // Add character reference image if available
@@ -8362,6 +8625,49 @@
                                 </label>
                             </div>
                         </div>
+
+                        <!-- Phase 8-11: Prompt Chain Architecture -->
+                        <div style="margin-top: 0.75rem; background: ${state.storyboard.promptChain?.status === 'ready' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.promptChain?.status === 'ready' ? 'rgba(251, 191, 36, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.75rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.85rem;">⛓️</span>
+                                    <div>
+                                        <div style="color: white; font-size: 0.8rem; font-weight: 600;">Prompt Chain</div>
+                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.6rem;">
+                                            ${state.storyboard.promptChain?.status === 'ready' ? 'Optimized prompts ready' :
+                                              state.storyboard.promptChain?.status === 'processing' ? 'Processing...' :
+                                              'Hollywood-grade scene blueprints'}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    ${state.storyboard.promptChain?.status === 'processing' ? `
+                                        <span style="font-size: 0.65rem; color: rgba(251, 191, 36, 0.8);">⏳ Processing...</span>
+                                    ` : state.storyboard.promptChain?.status === 'ready' ? `
+                                        <span style="font-size: 0.65rem; color: rgba(16, 185, 129, 0.9);">✓ Ready</span>
+                                        <button onclick="processPromptChain()" style="padding: 0.25rem 0.5rem; background: rgba(251, 191, 36, 0.2); border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 0.35rem; color: white; font-size: 0.6rem; cursor: pointer;">
+                                            Refresh
+                                        </button>
+                                    ` : `
+                                        <button onclick="processPromptChain()" style="padding: 0.3rem 0.6rem; background: linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.3)); border: 1px solid rgba(251, 191, 36, 0.5); border-radius: 0.35rem; color: white; font-size: 0.65rem; cursor: pointer; font-weight: 500;">
+                                            ⚡ Process Chain
+                                        </button>
+                                    `}
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;">
+                                        <input type="checkbox" ${state.storyboard.promptChain?.enabled !== false ? 'checked' : ''} onchange="togglePromptChain(this.checked)" style="accent-color: #fbbf24;">
+                                    </label>
+                                </div>
+                            </div>
+                            ${state.storyboard.promptChain?.status === 'ready' && state.storyboard.promptChain?.scenes?.length > 0 ? `
+                                <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem; margin-top: 0.25rem;">
+                                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.6rem;">
+                                        <span style="background: rgba(139, 92, 246, 0.2); padding: 0.15rem 0.4rem; border-radius: 0.25rem; color: rgba(255,255,255,0.7);">🖼️ Image Prompts</span>
+                                        <span style="background: rgba(6, 182, 212, 0.2); padding: 0.15rem 0.4rem; border-radius: 0.25rem; color: rgba(255,255,255,0.7);">🎬 Video Prompts</span>
+                                        <span style="background: rgba(16, 185, 129, 0.2); padding: 0.15rem 0.4rem; border-radius: 0.25rem; color: rgba(255,255,255,0.7);">↔️ Transitions</span>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
             `;
@@ -8404,6 +8710,10 @@
             const status = storyboardScene.status || 'pending';
             const imageUrl = storyboardScene.imageUrl;
             const prompt = storyboardScene.prompt || scene.visual || '';
+
+            // Phase 8-11: Check if scene has prompt chain data
+            const chainData = getPromptChainForScene(scene.id);
+            const hasChainData = !!chainData && state.storyboard.promptChain?.enabled;
 
             let cardContent = '';
 
@@ -8549,15 +8859,31 @@
                         <div style="position: absolute; top: 0.5rem; left: 0.5rem; background: rgba(0,0,0,0.7); color: white; padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 600; z-index: 1;">
                             Scene ${index + 1}
                         </div>
+                        ${hasChainData ? `
+                            <div style="position: absolute; top: 0.5rem; right: 0.5rem; z-index: 1;">
+                                <button onclick="previewPromptChainBlueprint(${scene.id})" style="background: rgba(251, 191, 36, 0.9); color: #1a1a2e; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.55rem; font-weight: 600; border: none; cursor: pointer;" title="View Prompt Chain Blueprint">
+                                    ⛓️ Chain
+                                </button>
+                            </div>
+                        ` : ''}
                         ${cardContent}
                     </div>
 
                     <!-- Prompt -->
                     <div style="padding: 0.75rem;">
-                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">PROMPT</div>
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">
+                            ${hasChainData ? 'OPTIMIZED PROMPT ⛓️' : 'PROMPT'}
+                        </div>
                         <div style="font-size: 0.8rem; color: rgba(255,255,255,0.8); line-height: 1.4; max-height: 3.6em; overflow: hidden; text-overflow: ellipsis;">
                             ${prompt.substring(0, 120)}${prompt.length > 120 ? '...' : ''}
                         </div>
+                        ${hasChainData && chainData.transition ? `
+                            <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+                                <span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">
+                                    ↔️ ${chainData.transition.cutType?.type || 'cut'} transition
+                                </span>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
@@ -10331,8 +10657,23 @@
             render();
 
             try {
-                // Build visual prompt from storyboard + script
-                var visualPrompt = (storyboardScene.prompt || '') + ' ' + (scriptScene.visualDescription || scriptScene.narration || '');
+                // Phase 8-11: Check for prompt chain video prompt template
+                var chainData = getPromptChainForScene(sceneId);
+                var visualPrompt;
+                var videoPromptSource = 'assembled';
+
+                if (chainData && chainData.videoPromptTemplate && state.storyboard.promptChain?.enabled) {
+                    // Use the prompt chain video prompt template
+                    visualPrompt = chainData.videoPromptTemplate.prompt || '';
+                    // Replace placeholder with actual image URL
+                    visualPrompt = visualPrompt.replace('[reference_image]', storyboardScene.imageUrl);
+                    visualPrompt = visualPrompt.replace('[GENERATED_IMAGE_URL]', storyboardScene.imageUrl);
+                    videoPromptSource = 'prompt-chain';
+                    console.log('[Scene ' + sceneId + '] Using Prompt Chain video prompt');
+                } else {
+                    // Fallback: Build visual prompt from storyboard + script
+                    visualPrompt = (storyboardScene.prompt || '') + ' ' + (scriptScene.visualDescription || scriptScene.narration || '');
+                }
 
                 // Call Minimax API via cloud function
                 var generateMinimaxVideoFn = firebase.functions().httpsCallable('creationWizardGenerateMinimaxVideo');
@@ -10345,7 +10686,10 @@
                     duration: videoModel.duration,
                     resolution: videoModel.resolution,
                     cameraMovements: sceneCameraMovements,
-                    promptOptimizer: true
+                    promptOptimizer: true,
+                    // Phase 8-11: Pass prompt chain metadata
+                    promptChainSource: videoPromptSource,
+                    promptChainMetadata: chainData ? chainData.videoPromptTemplate?.metadata : null
                 });
 
                 if (result.data.success) {

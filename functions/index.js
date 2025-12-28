@@ -23095,15 +23095,23 @@ exports.creationWizardSaveProject = functions.https.onCall(async (data, context)
         metadata: projectData.script.metadata || null
       } : null,
 
-      // Storyboard data - complete (including Phase 4 Scene Memory)
+      // Storyboard data - complete (including Phase 4 Scene Memory & Phase 8-11 Prompt Chain)
       storyboard: projectData.storyboard ? {
         scenes: projectData.storyboard.scenes || [],
         visualStyle: projectData.storyboard.visualStyle || null,
         selectedAspectRatio: projectData.storyboard.selectedAspectRatio || null,
+        imageModel: projectData.storyboard.imageModel || 'hidream',
         // Phase 4: Scene Memory System
         styleBible: projectData.storyboard.styleBible || null,
         characterBible: projectData.storyboard.characterBible || null,
-        technicalSpecs: projectData.storyboard.technicalSpecs || null
+        technicalSpecs: projectData.storyboard.technicalSpecs || null,
+        // Phase 8-11: Prompt Chain Architecture
+        promptChain: projectData.storyboard.promptChain ? {
+          enabled: projectData.storyboard.promptChain.enabled !== false,
+          status: projectData.storyboard.promptChain.status || 'idle',
+          processedAt: projectData.storyboard.promptChain.processedAt || null,
+          scenes: projectData.storyboard.promptChain.scenes || []
+        } : null
       } : null,
 
       // Animation data - complete
