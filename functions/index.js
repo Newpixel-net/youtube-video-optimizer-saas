@@ -27287,6 +27287,1079 @@ exports.creationWizardBuildAudioTreatment = functions.https.onCall(async (data, 
   };
 });
 
+// ============================================================
+// PHASE 3E: SMART ASSEMBLY ENGINE
+// Intelligent editing with transitions, pacing, and beat sync
+// ============================================================
+
+const ASSEMBLY_INTELLIGENCE = {
+  // Transition Intelligence - Genre and context-aware transitions
+  transitions: {
+    // Transition types with properties
+    types: {
+      'cut': {
+        name: 'Hard Cut',
+        duration: 0,
+        energy: 'high',
+        use: ['fast-paced', 'action', 'dialogue', 'emphasis'],
+        audioSync: false,
+        description: 'Instant switch between shots'
+      },
+      'dissolve': {
+        name: 'Cross Dissolve',
+        duration: { min: 0.5, max: 2 },
+        energy: 'low',
+        use: ['time-passage', 'emotional', 'dreamlike', 'memory'],
+        audioSync: true,
+        description: 'Gradual blend between shots'
+      },
+      'fade-black': {
+        name: 'Fade to Black',
+        duration: { min: 1, max: 3 },
+        energy: 'very-low',
+        use: ['scene-end', 'chapter-break', 'dramatic-pause', 'death'],
+        audioSync: true,
+        description: 'Fade out to black, then fade in'
+      },
+      'fade-white': {
+        name: 'Fade to White',
+        duration: { min: 1, max: 2 },
+        energy: 'transcendent',
+        use: ['flashback', 'revelation', 'spiritual', 'memory'],
+        audioSync: true,
+        description: 'Fade out to white, bright transition'
+      },
+      'wipe-left': {
+        name: 'Wipe Left',
+        duration: { min: 0.3, max: 1 },
+        energy: 'medium',
+        use: ['scene-change', 'location-change', 'retro-style'],
+        audioSync: true,
+        description: 'New scene wipes in from right'
+      },
+      'wipe-right': {
+        name: 'Wipe Right',
+        duration: { min: 0.3, max: 1 },
+        energy: 'medium',
+        use: ['scene-change', 'location-change', 'retro-style'],
+        audioSync: true,
+        description: 'New scene wipes in from left'
+      },
+      'push': {
+        name: 'Push',
+        duration: { min: 0.3, max: 0.8 },
+        energy: 'medium-high',
+        use: ['slide-show', 'list-items', 'fast-montage'],
+        audioSync: true,
+        description: 'New scene pushes old scene out'
+      },
+      'zoom-in': {
+        name: 'Zoom In',
+        duration: { min: 0.5, max: 1.5 },
+        energy: 'high',
+        use: ['focus', 'emphasis', 'reveal', 'dramatic'],
+        audioSync: true,
+        description: 'Zoom into transition point'
+      },
+      'zoom-out': {
+        name: 'Zoom Out',
+        duration: { min: 0.5, max: 1.5 },
+        energy: 'medium',
+        use: ['reveal', 'context', 'establishing'],
+        audioSync: true,
+        description: 'Zoom out to reveal new scene'
+      },
+      'glitch': {
+        name: 'Glitch',
+        duration: { min: 0.2, max: 0.5 },
+        energy: 'very-high',
+        use: ['tech', 'error', 'dramatic', 'modern'],
+        audioSync: true,
+        description: 'Digital glitch effect'
+      },
+      'flash': {
+        name: 'Flash',
+        duration: { min: 0.1, max: 0.3 },
+        energy: 'very-high',
+        use: ['impact', 'photo', 'memory', 'emphasis'],
+        audioSync: true,
+        description: 'Quick white flash between scenes'
+      },
+      'blur': {
+        name: 'Blur Transition',
+        duration: { min: 0.5, max: 1.5 },
+        energy: 'low',
+        use: ['dreamlike', 'memory', 'confusion', 'passage'],
+        audioSync: true,
+        description: 'Blur out then in'
+      },
+      'whip-pan': {
+        name: 'Whip Pan',
+        duration: { min: 0.2, max: 0.5 },
+        energy: 'very-high',
+        use: ['action', 'fast-paced', 'comedy', 'vlog'],
+        audioSync: true,
+        description: 'Fast motion blur pan'
+      },
+      'morph': {
+        name: 'Morph',
+        duration: { min: 1, max: 3 },
+        energy: 'medium',
+        use: ['transformation', 'comparison', 'before-after'],
+        audioSync: true,
+        description: 'Shape morphing between scenes'
+      },
+      'slide-up': {
+        name: 'Slide Up',
+        duration: { min: 0.3, max: 0.8 },
+        energy: 'medium',
+        use: ['vertical-content', 'social-media', 'lists'],
+        audioSync: true,
+        description: 'New scene slides up'
+      },
+      'slide-down': {
+        name: 'Slide Down',
+        duration: { min: 0.3, max: 0.8 },
+        energy: 'medium',
+        use: ['vertical-content', 'social-media', 'reveals'],
+        audioSync: true,
+        description: 'New scene slides down'
+      }
+    },
+
+    // Genre to transition style mapping
+    genreTransitions: {
+      'documentary-nature': {
+        primary: ['dissolve', 'fade-black'],
+        secondary: ['cut'],
+        avoid: ['glitch', 'whip-pan', 'flash'],
+        defaultDuration: 1.5,
+        rhythm: 'slow'
+      },
+      'documentary-historical': {
+        primary: ['dissolve', 'fade-black', 'fade-white'],
+        secondary: ['cut', 'wipe-left'],
+        avoid: ['glitch', 'whip-pan'],
+        defaultDuration: 1.5,
+        rhythm: 'measured'
+      },
+      'documentary-crime': {
+        primary: ['cut', 'fade-black'],
+        secondary: ['dissolve', 'flash'],
+        avoid: ['wipe-left', 'push', 'slide-up'],
+        defaultDuration: 1,
+        rhythm: 'tense'
+      },
+      'educational-explainer': {
+        primary: ['cut', 'push', 'slide-up'],
+        secondary: ['dissolve', 'wipe-left'],
+        avoid: ['fade-black', 'blur', 'morph'],
+        defaultDuration: 0.5,
+        rhythm: 'snappy'
+      },
+      'educational-tutorial': {
+        primary: ['cut', 'dissolve'],
+        secondary: ['fade-black', 'push'],
+        avoid: ['glitch', 'whip-pan', 'flash'],
+        defaultDuration: 0.8,
+        rhythm: 'steady'
+      },
+      'entertainment-comedy': {
+        primary: ['cut', 'whip-pan', 'push'],
+        secondary: ['flash', 'glitch', 'zoom-in'],
+        avoid: ['fade-black', 'dissolve', 'blur'],
+        defaultDuration: 0.3,
+        rhythm: 'punchy'
+      },
+      'entertainment-drama': {
+        primary: ['dissolve', 'fade-black', 'cut'],
+        secondary: ['fade-white', 'blur'],
+        avoid: ['glitch', 'whip-pan', 'push'],
+        defaultDuration: 1.5,
+        rhythm: 'emotional'
+      },
+      'entertainment-action': {
+        primary: ['cut', 'whip-pan', 'flash'],
+        secondary: ['glitch', 'zoom-in', 'push'],
+        avoid: ['dissolve', 'fade-black', 'blur'],
+        defaultDuration: 0.3,
+        rhythm: 'rapid'
+      },
+      'entertainment-horror': {
+        primary: ['cut', 'fade-black', 'flash'],
+        secondary: ['glitch', 'blur'],
+        avoid: ['dissolve', 'wipe-left', 'push'],
+        defaultDuration: 0.5,
+        rhythm: 'jarring'
+      },
+      'entertainment-romance': {
+        primary: ['dissolve', 'fade-white', 'blur'],
+        secondary: ['cut', 'fade-black'],
+        avoid: ['glitch', 'whip-pan', 'flash'],
+        defaultDuration: 1.5,
+        rhythm: 'dreamy'
+      },
+      'marketing-product': {
+        primary: ['cut', 'push', 'zoom-in'],
+        secondary: ['dissolve', 'slide-up'],
+        avoid: ['fade-black', 'blur', 'morph'],
+        defaultDuration: 0.4,
+        rhythm: 'dynamic'
+      },
+      'marketing-brand': {
+        primary: ['dissolve', 'cut', 'fade-white'],
+        secondary: ['zoom-in', 'push'],
+        avoid: ['glitch', 'whip-pan'],
+        defaultDuration: 1,
+        rhythm: 'emotional'
+      },
+      'marketing-social': {
+        primary: ['cut', 'whip-pan', 'push'],
+        secondary: ['glitch', 'flash', 'slide-up'],
+        avoid: ['dissolve', 'fade-black', 'blur'],
+        defaultDuration: 0.3,
+        rhythm: 'viral'
+      },
+      'cinematic': {
+        primary: ['cut', 'dissolve', 'fade-black'],
+        secondary: ['fade-white', 'zoom-in'],
+        avoid: ['wipe-left', 'push', 'glitch'],
+        defaultDuration: 1,
+        rhythm: 'cinematic'
+      },
+      'vlog-lifestyle': {
+        primary: ['cut', 'whip-pan', 'push'],
+        secondary: ['dissolve', 'zoom-in'],
+        avoid: ['fade-black', 'morph'],
+        defaultDuration: 0.4,
+        rhythm: 'casual'
+      },
+      'gaming': {
+        primary: ['cut', 'glitch', 'flash'],
+        secondary: ['whip-pan', 'zoom-in'],
+        avoid: ['dissolve', 'fade-black', 'blur'],
+        defaultDuration: 0.3,
+        rhythm: 'intense'
+      },
+      'fitness': {
+        primary: ['cut', 'whip-pan', 'flash'],
+        secondary: ['push', 'zoom-in'],
+        avoid: ['dissolve', 'fade-black', 'blur'],
+        defaultDuration: 0.25,
+        rhythm: 'energetic'
+      }
+    },
+
+    // Context-based transition rules
+    contextRules: {
+      'scene-start': { prefer: ['cut', 'fade-black'], avoid: ['dissolve'] },
+      'scene-end': { prefer: ['fade-black', 'dissolve'], avoid: ['cut', 'push'] },
+      'same-location': { prefer: ['cut', 'dissolve'], avoid: ['fade-black', 'wipe-left'] },
+      'location-change': { prefer: ['dissolve', 'fade-black', 'wipe-left'], avoid: ['cut'] },
+      'time-skip': { prefer: ['dissolve', 'fade-black', 'fade-white'], avoid: ['cut', 'push'] },
+      'flashback': { prefer: ['fade-white', 'blur', 'dissolve'], avoid: ['cut', 'glitch'] },
+      'montage': { prefer: ['cut', 'dissolve', 'push'], avoid: ['fade-black'] },
+      'emphasis': { prefer: ['cut', 'flash', 'zoom-in'], avoid: ['dissolve', 'fade-black'] },
+      'reveal': { prefer: ['zoom-out', 'fade-white', 'dissolve'], avoid: ['cut'] },
+      'climax': { prefer: ['cut', 'flash'], avoid: ['dissolve', 'fade-black'] }
+    }
+  },
+
+  // Pacing Algorithm - Scene duration and rhythm control
+  pacing: {
+    // Pacing profiles
+    profiles: {
+      'rapid-fire': {
+        name: 'Rapid Fire',
+        avgSceneDuration: { min: 1, max: 3 },
+        cutFrequency: 'very-high',
+        breathingRoom: 0,
+        energyCurve: 'constant-high',
+        use: ['tiktok', 'action', 'comedy', 'gaming']
+      },
+      'fast': {
+        name: 'Fast',
+        avgSceneDuration: { min: 2, max: 5 },
+        cutFrequency: 'high',
+        breathingRoom: 0.1,
+        energyCurve: 'building',
+        use: ['youtube-shorts', 'marketing', 'explainer']
+      },
+      'dynamic': {
+        name: 'Dynamic',
+        avgSceneDuration: { min: 3, max: 8 },
+        cutFrequency: 'medium-high',
+        breathingRoom: 0.15,
+        energyCurve: 'varied',
+        use: ['vlog', 'product', 'brand']
+      },
+      'balanced': {
+        name: 'Balanced',
+        avgSceneDuration: { min: 5, max: 12 },
+        cutFrequency: 'medium',
+        breathingRoom: 0.2,
+        energyCurve: 'wave',
+        use: ['youtube-standard', 'documentary', 'tutorial']
+      },
+      'contemplative': {
+        name: 'Contemplative',
+        avgSceneDuration: { min: 8, max: 20 },
+        cutFrequency: 'low',
+        breathingRoom: 0.3,
+        energyCurve: 'gradual',
+        use: ['nature-doc', 'art-film', 'meditation']
+      },
+      'cinematic': {
+        name: 'Cinematic',
+        avgSceneDuration: { min: 5, max: 30 },
+        cutFrequency: 'motivated',
+        breathingRoom: 0.25,
+        energyCurve: 'dramatic',
+        use: ['film', 'drama', 'epic']
+      },
+      'episodic': {
+        name: 'Episodic TV',
+        avgSceneDuration: { min: 4, max: 15 },
+        cutFrequency: 'structured',
+        breathingRoom: 0.2,
+        energyCurve: 'act-based',
+        use: ['tv-episode', 'series', 'streaming']
+      }
+    },
+
+    // Energy curves - how energy flows through the video
+    energyCurves: {
+      'constant-high': {
+        pattern: [0.8, 0.85, 0.9, 0.85, 0.9, 0.95, 0.9, 0.85],
+        description: 'Maintains high energy throughout'
+      },
+      'building': {
+        pattern: [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        description: 'Gradual build to climax'
+      },
+      'varied': {
+        pattern: [0.5, 0.7, 0.4, 0.8, 0.5, 0.9, 0.6, 0.8],
+        description: 'Dynamic ups and downs'
+      },
+      'wave': {
+        pattern: [0.4, 0.6, 0.8, 0.6, 0.4, 0.6, 0.8, 0.7],
+        description: 'Rolling wave pattern'
+      },
+      'gradual': {
+        pattern: [0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65],
+        description: 'Slow steady build'
+      },
+      'dramatic': {
+        pattern: [0.5, 0.4, 0.6, 0.5, 0.7, 0.6, 0.9, 1.0],
+        description: 'Tension and release'
+      },
+      'act-based': {
+        pattern: [0.5, 0.6, 0.7, 0.5, 0.6, 0.8, 0.7, 0.9],
+        description: 'Three-act structure'
+      }
+    },
+
+    // Scene duration modifiers based on content
+    durationModifiers: {
+      'dialogue-heavy': 1.5,
+      'action-sequence': 0.6,
+      'establishing-shot': 0.8,
+      'emotional-moment': 1.3,
+      'information-dense': 1.2,
+      'visual-spectacle': 0.9,
+      'transition-scene': 0.7,
+      'climax': 1.1,
+      'denouement': 1.4
+    }
+  },
+
+  // Beat Synchronization - Aligning cuts to music
+  beatSync: {
+    // Beat sync modes
+    modes: {
+      'off': {
+        name: 'Off',
+        description: 'No beat synchronization',
+        cutOnBeat: false
+      },
+      'subtle': {
+        name: 'Subtle',
+        description: 'Occasional cuts on strong beats',
+        cutOnBeat: true,
+        beatStrength: 'strong-only',
+        percentage: 0.3
+      },
+      'moderate': {
+        name: 'Moderate',
+        description: 'Regular cuts aligned to beats',
+        cutOnBeat: true,
+        beatStrength: 'medium-strong',
+        percentage: 0.5
+      },
+      'aggressive': {
+        name: 'Aggressive',
+        description: 'Most cuts on beats',
+        cutOnBeat: true,
+        beatStrength: 'all',
+        percentage: 0.8
+      },
+      'music-video': {
+        name: 'Music Video',
+        description: 'Nearly all cuts on beats',
+        cutOnBeat: true,
+        beatStrength: 'all',
+        percentage: 0.95
+      }
+    },
+
+    // Beat markers
+    beatMarkers: {
+      'downbeat': { strength: 1.0, prefer: ['cut', 'flash', 'zoom-in'] },
+      'backbeat': { strength: 0.8, prefer: ['cut', 'push'] },
+      'offbeat': { strength: 0.4, prefer: ['dissolve'] },
+      'measure-start': { strength: 1.0, prefer: ['cut', 'fade-black', 'scene-change'] },
+      'phrase-end': { strength: 0.9, prefer: ['dissolve', 'fade-black'] },
+      'drop': { strength: 1.0, prefer: ['flash', 'glitch', 'impact'] },
+      'build-peak': { strength: 0.9, prefer: ['cut', 'zoom-in'] }
+    },
+
+    // Tempo to cut frequency mapping
+    tempoMapping: {
+      'very-slow': { bpm: [40, 60], cutsPerMinute: [4, 8] },
+      'slow': { bpm: [60, 80], cutsPerMinute: [6, 12] },
+      'medium-slow': { bpm: [80, 100], cutsPerMinute: [8, 15] },
+      'medium': { bpm: [100, 120], cutsPerMinute: [10, 20] },
+      'medium-fast': { bpm: [120, 140], cutsPerMinute: [15, 30] },
+      'fast': { bpm: [140, 160], cutsPerMinute: [20, 40] },
+      'very-fast': { bpm: [160, 200], cutsPerMinute: [30, 60] }
+    }
+  },
+
+  // Pattern Interrupts - Strategic engagement hooks
+  patternInterrupts: {
+    // Types of pattern interrupts
+    types: {
+      'visual-change': {
+        name: 'Visual Change',
+        description: 'Sudden visual style shift',
+        elements: ['color-grade-shift', 'aspect-ratio-change', 'zoom-level'],
+        frequency: 'every-45-90s',
+        impact: 'medium'
+      },
+      'audio-shift': {
+        name: 'Audio Shift',
+        description: 'Music or sound change',
+        elements: ['music-change', 'silence', 'sfx-hit'],
+        frequency: 'every-30-60s',
+        impact: 'medium'
+      },
+      'pacing-change': {
+        name: 'Pacing Change',
+        description: 'Speed up or slow down',
+        elements: ['faster-cuts', 'slower-shots', 'freeze-frame'],
+        frequency: 'every-60-120s',
+        impact: 'high'
+      },
+      'direct-address': {
+        name: 'Direct Address',
+        description: 'Speaker looks at camera',
+        elements: ['eye-contact', 'question', 'call-to-action'],
+        frequency: 'every-90-180s',
+        impact: 'very-high'
+      },
+      'b-roll-burst': {
+        name: 'B-Roll Burst',
+        description: 'Rapid B-roll sequence',
+        elements: ['quick-cuts', 'montage', 'visual-variety'],
+        frequency: 'every-30-60s',
+        impact: 'medium'
+      },
+      'text-graphic': {
+        name: 'Text/Graphic',
+        description: 'On-screen text or graphic',
+        elements: ['title-card', 'statistic', 'quote'],
+        frequency: 'every-45-90s',
+        impact: 'medium'
+      },
+      'perspective-shift': {
+        name: 'Perspective Shift',
+        description: 'Camera angle change',
+        elements: ['angle-change', 'pov-shot', 'drone-shot'],
+        frequency: 'every-60-120s',
+        impact: 'medium'
+      },
+      'humor-break': {
+        name: 'Humor Break',
+        description: 'Light moment or joke',
+        elements: ['funny-aside', 'blooper', 'self-deprecation'],
+        frequency: 'every-120-180s',
+        impact: 'high'
+      }
+    },
+
+    // Platform-specific interrupt strategies
+    platformStrategies: {
+      'tiktok': {
+        maxAttentionSpan: 8,
+        interruptFrequency: 'very-high',
+        preferredTypes: ['visual-change', 'audio-shift', 'text-graphic'],
+        hookWindow: 1
+      },
+      'youtube-shorts': {
+        maxAttentionSpan: 15,
+        interruptFrequency: 'high',
+        preferredTypes: ['visual-change', 'pacing-change', 'b-roll-burst'],
+        hookWindow: 3
+      },
+      'instagram-reels': {
+        maxAttentionSpan: 10,
+        interruptFrequency: 'high',
+        preferredTypes: ['visual-change', 'audio-shift', 'text-graphic'],
+        hookWindow: 2
+      },
+      'youtube-standard': {
+        maxAttentionSpan: 60,
+        interruptFrequency: 'medium',
+        preferredTypes: ['pacing-change', 'direct-address', 'b-roll-burst'],
+        hookWindow: 30
+      },
+      'youtube-longform': {
+        maxAttentionSpan: 120,
+        interruptFrequency: 'low',
+        preferredTypes: ['pacing-change', 'perspective-shift', 'humor-break'],
+        hookWindow: 60
+      },
+      'netflix-episode': {
+        maxAttentionSpan: 300,
+        interruptFrequency: 'very-low',
+        preferredTypes: ['pacing-change', 'perspective-shift'],
+        hookWindow: 180
+      }
+    }
+  },
+
+  // B-Roll Intelligence - Smart supplementary footage placement
+  bRoll: {
+    // B-roll placement strategies
+    strategies: {
+      'illustrative': {
+        name: 'Illustrative',
+        description: 'Shows what narrator describes',
+        timing: 'on-keyword',
+        duration: { min: 2, max: 5 },
+        overlap: 0.5
+      },
+      'atmospheric': {
+        name: 'Atmospheric',
+        description: 'Sets mood and tone',
+        timing: 'continuous',
+        duration: { min: 3, max: 8 },
+        overlap: 0.3
+      },
+      'transitional': {
+        name: 'Transitional',
+        description: 'Bridges between scenes',
+        timing: 'between-scenes',
+        duration: { min: 1, max: 3 },
+        overlap: 0
+      },
+      'emphasis': {
+        name: 'Emphasis',
+        description: 'Reinforces key points',
+        timing: 'on-emphasis',
+        duration: { min: 1.5, max: 4 },
+        overlap: 0.4
+      },
+      'variety': {
+        name: 'Variety',
+        description: 'Breaks visual monotony',
+        timing: 'periodic',
+        duration: { min: 2, max: 4 },
+        overlap: 0.5
+      }
+    },
+
+    // B-roll density by genre
+    genreDensity: {
+      'documentary-nature': { density: 0.7, strategy: 'atmospheric' },
+      'documentary-crime': { density: 0.5, strategy: 'illustrative' },
+      'educational-explainer': { density: 0.6, strategy: 'illustrative' },
+      'educational-tutorial': { density: 0.3, strategy: 'illustrative' },
+      'entertainment-action': { density: 0.8, strategy: 'variety' },
+      'marketing-product': { density: 0.7, strategy: 'emphasis' },
+      'marketing-brand': { density: 0.6, strategy: 'atmospheric' },
+      'vlog-lifestyle': { density: 0.5, strategy: 'variety' },
+      'cinematic': { density: 0.4, strategy: 'atmospheric' }
+    },
+
+    // Keywords that trigger B-roll
+    triggerKeywords: {
+      'location': ['city', 'beach', 'mountain', 'office', 'home', 'street', 'park'],
+      'action': ['running', 'walking', 'driving', 'flying', 'building', 'creating'],
+      'emotion': ['happy', 'sad', 'excited', 'worried', 'peaceful', 'angry'],
+      'time': ['morning', 'evening', 'night', 'sunset', 'sunrise', 'season'],
+      'abstract': ['growth', 'success', 'failure', 'change', 'innovation', 'future']
+    }
+  },
+
+  // Assembly Presets - Complete assembly configurations
+  presets: {
+    'documentary-standard': {
+      name: 'Documentary Standard',
+      transitions: 'documentary-nature',
+      pacing: 'balanced',
+      beatSync: 'subtle',
+      patternInterrupts: 'youtube-standard',
+      bRoll: { density: 0.5, strategy: 'illustrative' }
+    },
+    'explainer-fast': {
+      name: 'Fast Explainer',
+      transitions: 'educational-explainer',
+      pacing: 'fast',
+      beatSync: 'moderate',
+      patternInterrupts: 'youtube-shorts',
+      bRoll: { density: 0.6, strategy: 'illustrative' }
+    },
+    'social-viral': {
+      name: 'Social Viral',
+      transitions: 'marketing-social',
+      pacing: 'rapid-fire',
+      beatSync: 'aggressive',
+      patternInterrupts: 'tiktok',
+      bRoll: { density: 0.7, strategy: 'variety' }
+    },
+    'cinematic-epic': {
+      name: 'Cinematic Epic',
+      transitions: 'cinematic',
+      pacing: 'cinematic',
+      beatSync: 'subtle',
+      patternInterrupts: 'netflix-episode',
+      bRoll: { density: 0.4, strategy: 'atmospheric' }
+    },
+    'brand-emotional': {
+      name: 'Brand Emotional',
+      transitions: 'marketing-brand',
+      pacing: 'dynamic',
+      beatSync: 'moderate',
+      patternInterrupts: 'youtube-standard',
+      bRoll: { density: 0.6, strategy: 'atmospheric' }
+    },
+    'action-intense': {
+      name: 'Action Intense',
+      transitions: 'entertainment-action',
+      pacing: 'rapid-fire',
+      beatSync: 'aggressive',
+      patternInterrupts: 'youtube-shorts',
+      bRoll: { density: 0.8, strategy: 'variety' }
+    },
+    'tutorial-clear': {
+      name: 'Tutorial Clear',
+      transitions: 'educational-tutorial',
+      pacing: 'balanced',
+      beatSync: 'off',
+      patternInterrupts: 'youtube-standard',
+      bRoll: { density: 0.3, strategy: 'illustrative' }
+    },
+    'drama-emotional': {
+      name: 'Drama Emotional',
+      transitions: 'entertainment-drama',
+      pacing: 'contemplative',
+      beatSync: 'subtle',
+      patternInterrupts: 'netflix-episode',
+      bRoll: { density: 0.4, strategy: 'atmospheric' }
+    }
+  }
+};
+
+/**
+ * Get recommended transition for scene change
+ */
+function getTransitionRecommendation(options = {}) {
+  const { genre, fromScene, toScene, context, mood, tempo } = options;
+
+  const genreTransitions = ASSEMBLY_INTELLIGENCE.transitions.genreTransitions[genre] ||
+                           ASSEMBLY_INTELLIGENCE.transitions.genreTransitions['cinematic'];
+
+  // Check context rules first
+  let preferredTransitions = [];
+  let avoidTransitions = [];
+
+  if (context) {
+    const contextRule = ASSEMBLY_INTELLIGENCE.transitions.contextRules[context];
+    if (contextRule) {
+      preferredTransitions = contextRule.prefer || [];
+      avoidTransitions = contextRule.avoid || [];
+    }
+  }
+
+  // Combine with genre preferences
+  const genrePrimary = genreTransitions.primary || [];
+  const genreSecondary = genreTransitions.secondary || [];
+  const genreAvoid = genreTransitions.avoid || [];
+
+  // Filter and prioritize
+  const allPreferred = [...new Set([...preferredTransitions, ...genrePrimary])];
+  const allAvoid = [...new Set([...avoidTransitions, ...genreAvoid])];
+
+  // Select transition
+  let selectedTransition = 'cut';
+  for (const trans of allPreferred) {
+    if (!allAvoid.includes(trans)) {
+      selectedTransition = trans;
+      break;
+    }
+  }
+
+  // Get transition details
+  const transitionType = ASSEMBLY_INTELLIGENCE.transitions.types[selectedTransition];
+  let duration = genreTransitions.defaultDuration || 0.5;
+
+  if (transitionType.duration && typeof transitionType.duration === 'object') {
+    duration = (transitionType.duration.min + transitionType.duration.max) / 2;
+  }
+
+  return {
+    type: selectedTransition,
+    name: transitionType.name,
+    duration,
+    audioSync: transitionType.audioSync,
+    alternatives: genreSecondary.filter(t => !allAvoid.includes(t))
+  };
+}
+
+/**
+ * Calculate scene pacing based on content and energy
+ */
+function calculateScenePacing(options = {}) {
+  const { genre, platform, sceneCount, totalDuration, energyLevel, contentType } = options;
+
+  // Get pacing profile
+  let pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['balanced'];
+
+  // Determine profile based on platform/genre
+  if (platform?.includes('tiktok') || platform?.includes('shorts')) {
+    pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['rapid-fire'];
+  } else if (genre?.includes('action') || genre?.includes('gaming')) {
+    pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['fast'];
+  } else if (genre?.includes('documentary') || genre?.includes('nature')) {
+    pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['contemplative'];
+  } else if (genre?.includes('cinematic')) {
+    pacingProfile = ASSEMBLY_INTELLIGENCE.pacing.profiles['cinematic'];
+  }
+
+  // Get energy curve
+  const energyCurve = ASSEMBLY_INTELLIGENCE.pacing.energyCurves[pacingProfile.energyCurve];
+
+  // Calculate scene durations
+  const avgDuration = totalDuration / sceneCount;
+  const sceneDurations = [];
+
+  for (let i = 0; i < sceneCount; i++) {
+    const curvePosition = i / (sceneCount - 1 || 1);
+    const curveIndex = Math.floor(curvePosition * (energyCurve.pattern.length - 1));
+    const energyFactor = energyCurve.pattern[curveIndex];
+
+    // Higher energy = shorter scenes
+    const durationMultiplier = 1.5 - (energyFactor * 0.8);
+    let sceneDuration = avgDuration * durationMultiplier;
+
+    // Apply content type modifier
+    if (contentType) {
+      const modifier = ASSEMBLY_INTELLIGENCE.pacing.durationModifiers[contentType] || 1;
+      sceneDuration *= modifier;
+    }
+
+    // Clamp to profile limits
+    sceneDuration = Math.max(pacingProfile.avgSceneDuration.min,
+                            Math.min(pacingProfile.avgSceneDuration.max, sceneDuration));
+
+    sceneDurations.push({
+      index: i,
+      duration: sceneDuration,
+      energy: energyFactor
+    });
+  }
+
+  return {
+    profile: pacingProfile.name,
+    energyCurve: pacingProfile.energyCurve,
+    sceneDurations,
+    breathingRoom: pacingProfile.breathingRoom
+  };
+}
+
+/**
+ * Generate pattern interrupt suggestions
+ */
+function getPatternInterruptSuggestions(options = {}) {
+  const { platform, duration, sceneCount, genre } = options;
+
+  const strategy = ASSEMBLY_INTELLIGENCE.patternInterrupts.platformStrategies[platform] ||
+                   ASSEMBLY_INTELLIGENCE.patternInterrupts.platformStrategies['youtube-standard'];
+
+  const interrupts = [];
+  const interruptInterval = strategy.maxAttentionSpan;
+
+  // Calculate interrupt positions
+  for (let time = interruptInterval; time < duration; time += interruptInterval) {
+    // Select interrupt type
+    const typeIndex = interrupts.length % strategy.preferredTypes.length;
+    const interruptTypeKey = strategy.preferredTypes[typeIndex];
+    const interruptType = ASSEMBLY_INTELLIGENCE.patternInterrupts.types[interruptTypeKey];
+
+    interrupts.push({
+      time,
+      type: interruptTypeKey,
+      name: interruptType.name,
+      description: interruptType.description,
+      elements: interruptType.elements,
+      impact: interruptType.impact
+    });
+  }
+
+  return {
+    strategy: platform,
+    hookWindow: strategy.hookWindow,
+    interrupts,
+    frequency: strategy.interruptFrequency
+  };
+}
+
+/**
+ * Get B-roll placement suggestions
+ */
+function getBRollPlacements(options = {}) {
+  const { genre, scenes, keywords } = options;
+
+  const genreConfig = ASSEMBLY_INTELLIGENCE.bRoll.genreDensity[genre] ||
+                      { density: 0.5, strategy: 'illustrative' };
+
+  const strategy = ASSEMBLY_INTELLIGENCE.bRoll.strategies[genreConfig.strategy];
+  const placements = [];
+
+  // Determine B-roll placement for each scene
+  scenes.forEach((scene, index) => {
+    const shouldHaveBRoll = Math.random() < genreConfig.density;
+
+    if (shouldHaveBRoll) {
+      // Check for keyword triggers
+      const sceneText = (scene.narration || scene.visual || '').toLowerCase();
+      let triggerType = null;
+
+      for (const [category, words] of Object.entries(ASSEMBLY_INTELLIGENCE.bRoll.triggerKeywords)) {
+        for (const word of words) {
+          if (sceneText.includes(word)) {
+            triggerType = category;
+            break;
+          }
+        }
+        if (triggerType) break;
+      }
+
+      placements.push({
+        sceneIndex: index,
+        strategy: genreConfig.strategy,
+        duration: (strategy.duration.min + strategy.duration.max) / 2,
+        timing: strategy.timing,
+        trigger: triggerType,
+        overlap: strategy.overlap
+      });
+    }
+  });
+
+  return {
+    density: genreConfig.density,
+    strategy: genreConfig.strategy,
+    placements
+  };
+}
+
+/**
+ * Build complete assembly plan for a video
+ */
+function buildAssemblyPlan(options = {}) {
+  const {
+    genre,
+    platform,
+    scenes,
+    totalDuration,
+    musicTempo,
+    mood
+  } = options;
+
+  // Get preset or build custom
+  let preset = null;
+  if (genre?.includes('documentary')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['documentary-standard'];
+  } else if (genre?.includes('explainer')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['explainer-fast'];
+  } else if (platform?.includes('tiktok') || platform?.includes('shorts')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['social-viral'];
+  } else if (genre?.includes('cinematic')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['cinematic-epic'];
+  } else if (genre?.includes('brand')) {
+    preset = ASSEMBLY_INTELLIGENCE.presets['brand-emotional'];
+  } else {
+    preset = ASSEMBLY_INTELLIGENCE.presets['documentary-standard'];
+  }
+
+  const plan = {
+    preset: preset.name,
+    transitions: [],
+    pacing: null,
+    patternInterrupts: [],
+    bRollPlacements: []
+  };
+
+  // Generate transition plan
+  for (let i = 0; i < scenes.length - 1; i++) {
+    const transition = getTransitionRecommendation({
+      genre,
+      fromScene: scenes[i],
+      toScene: scenes[i + 1],
+      mood
+    });
+    plan.transitions.push({
+      afterScene: i,
+      ...transition
+    });
+  }
+
+  // Calculate pacing
+  plan.pacing = calculateScenePacing({
+    genre,
+    platform,
+    sceneCount: scenes.length,
+    totalDuration
+  });
+
+  // Generate pattern interrupts
+  plan.patternInterrupts = getPatternInterruptSuggestions({
+    platform,
+    duration: totalDuration,
+    sceneCount: scenes.length,
+    genre
+  }).interrupts;
+
+  // Generate B-roll placements
+  plan.bRollPlacements = getBRollPlacements({
+    genre,
+    scenes
+  }).placements;
+
+  return plan;
+}
+
+/**
+ * Cloud function to get assembly intelligence profiles
+ */
+exports.creationWizardGetAssemblyProfiles = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  // Format transitions
+  const transitions = Object.entries(ASSEMBLY_INTELLIGENCE.transitions.types).map(([id, trans]) => ({
+    id,
+    name: trans.name,
+    duration: trans.duration,
+    energy: trans.energy,
+    use: trans.use,
+    description: trans.description
+  }));
+
+  // Format pacing profiles
+  const pacingProfiles = Object.entries(ASSEMBLY_INTELLIGENCE.pacing.profiles).map(([id, profile]) => ({
+    id,
+    name: profile.name,
+    avgSceneDuration: profile.avgSceneDuration,
+    cutFrequency: profile.cutFrequency,
+    energyCurve: profile.energyCurve,
+    use: profile.use
+  }));
+
+  // Format beat sync modes
+  const beatSyncModes = Object.entries(ASSEMBLY_INTELLIGENCE.beatSync.modes).map(([id, mode]) => ({
+    id,
+    name: mode.name,
+    description: mode.description,
+    percentage: mode.percentage
+  }));
+
+  // Format pattern interrupt types
+  const patternInterrupts = Object.entries(ASSEMBLY_INTELLIGENCE.patternInterrupts.types).map(([id, type]) => ({
+    id,
+    name: type.name,
+    description: type.description,
+    elements: type.elements,
+    impact: type.impact
+  }));
+
+  // Format presets
+  const presets = Object.entries(ASSEMBLY_INTELLIGENCE.presets).map(([id, preset]) => ({
+    id,
+    name: preset.name,
+    transitions: preset.transitions,
+    pacing: preset.pacing,
+    beatSync: preset.beatSync
+  }));
+
+  return {
+    success: true,
+    transitions,
+    pacingProfiles,
+    beatSyncModes,
+    patternInterrupts,
+    presets,
+    genreTransitions: ASSEMBLY_INTELLIGENCE.transitions.genreTransitions,
+    bRollStrategies: ASSEMBLY_INTELLIGENCE.bRoll.strategies
+  };
+});
+
+/**
+ * Cloud function to build assembly plan
+ */
+exports.creationWizardBuildAssemblyPlan = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, platform, scenes, totalDuration, musicTempo, mood } = data;
+
+  const plan = buildAssemblyPlan({
+    genre,
+    platform,
+    scenes,
+    totalDuration,
+    musicTempo,
+    mood
+  });
+
+  return {
+    success: true,
+    plan
+  };
+});
+
+/**
+ * Cloud function to get transition recommendation
+ */
+exports.creationWizardGetTransitionRecommendation = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const { genre, fromScene, toScene, context: transContext, mood, tempo } = data;
+
+  const recommendation = getTransitionRecommendation({
+    genre,
+    fromScene,
+    toScene,
+    context: transContext,
+    mood,
+    tempo
+  });
+
+  return {
+    success: true,
+    recommendation
+  };
+});
+
 /**
  * creationWizardCheckImageStatus - Check the status of a RunPod image generation job
  */

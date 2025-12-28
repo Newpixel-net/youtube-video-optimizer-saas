@@ -10232,6 +10232,112 @@
                 html += '</div>';
             }
 
+            // Phase 3E: Smart Assembly Intelligence Section
+            html += '<div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">';
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px;">🎬 Smart Assembly</div>';
+            html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #06b6d4, #8b5cf6); border-radius: 0.2rem; color: white; font-weight: 600;">AI</span>';
+            html += '</div>';
+
+            // Assembly Preset Selector
+            var assemblyPreset = state.assembly.assemblyPreset || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Assembly Preset</label>';
+            html += '<select onchange="setAssemblyPreset(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from genre)</option>';
+            html += '<option value="youtube-engaging"' + (assemblyPreset === 'youtube-engaging' ? ' selected' : '') + '>🎯 YouTube Engaging</option>';
+            html += '<option value="tiktok-viral"' + (assemblyPreset === 'tiktok-viral' ? ' selected' : '') + '>⚡ TikTok Viral</option>';
+            html += '<option value="cinematic-film"' + (assemblyPreset === 'cinematic-film' ? ' selected' : '') + '>🎬 Cinematic Film</option>';
+            html += '<option value="documentary"' + (assemblyPreset === 'documentary' ? ' selected' : '') + '>📽️ Documentary</option>';
+            html += '<option value="music-video"' + (assemblyPreset === 'music-video' ? ' selected' : '') + '>🎵 Music Video</option>';
+            html += '<option value="commercial-ad"' + (assemblyPreset === 'commercial-ad' ? ' selected' : '') + '>📺 Commercial/Ad</option>';
+            html += '<option value="educational"' + (assemblyPreset === 'educational' ? ' selected' : '') + '>📚 Educational</option>';
+            html += '<option value="asmr-relaxation"' + (assemblyPreset === 'asmr-relaxation' ? ' selected' : '') + '>🌙 ASMR/Relaxation</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Pacing Profile Selector
+            var pacingProfile = state.assembly.pacingProfile || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Pacing Profile</label>';
+            html += '<select onchange="setPacingProfile(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from preset)</option>';
+            html += '<option value="rapid-fire"' + (pacingProfile === 'rapid-fire' ? ' selected' : '') + '>⚡ Rapid Fire (1-2s)</option>';
+            html += '<option value="fast"' + (pacingProfile === 'fast' ? ' selected' : '') + '>🏃 Fast (2-3s)</option>';
+            html += '<option value="dynamic"' + (pacingProfile === 'dynamic' ? ' selected' : '') + '>📈 Dynamic (varies)</option>';
+            html += '<option value="balanced"' + (pacingProfile === 'balanced' ? ' selected' : '') + '>⚖️ Balanced (3-5s)</option>';
+            html += '<option value="contemplative"' + (pacingProfile === 'contemplative' ? ' selected' : '') + '>🧘 Contemplative (5-8s)</option>';
+            html += '<option value="cinematic"' + (pacingProfile === 'cinematic' ? ' selected' : '') + '>🎥 Cinematic (6-12s)</option>';
+            html += '<option value="episodic"' + (pacingProfile === 'episodic' ? ' selected' : '') + '>📺 Episodic (structured)</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Beat Sync Mode Selector
+            var beatSyncMode = state.assembly.beatSyncMode || 'off';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Beat Synchronization</label>';
+            html += '<select onchange="setBeatSyncMode(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="off"' + (beatSyncMode === 'off' ? ' selected' : '') + '>🔇 Off</option>';
+            html += '<option value="subtle"' + (beatSyncMode === 'subtle' ? ' selected' : '') + '>🎵 Subtle (phrases)</option>';
+            html += '<option value="moderate"' + (beatSyncMode === 'moderate' ? ' selected' : '') + '>🎶 Moderate (measures)</option>';
+            html += '<option value="aggressive"' + (beatSyncMode === 'aggressive' ? ' selected' : '') + '>🥁 Aggressive (beats)</option>';
+            html += '<option value="music-video"' + (beatSyncMode === 'music-video' ? ' selected' : '') + '>⚡ Music Video (every beat)</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Pattern Interrupt Strategy
+            var patternInterrupt = state.assembly.patternInterrupt || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">Pattern Interrupts</label>';
+            html += '<select onchange="setPatternInterrupt(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from platform)</option>';
+            html += '<option value="youtube"' + (patternInterrupt === 'youtube' ? ' selected' : '') + '>📺 YouTube (every 45-60s)</option>';
+            html += '<option value="tiktok"' + (patternInterrupt === 'tiktok' ? ' selected' : '') + '>⚡ TikTok (every 3-5s)</option>';
+            html += '<option value="instagram"' + (patternInterrupt === 'instagram' ? ' selected' : '') + '>📱 Instagram (every 15-20s)</option>';
+            html += '<option value="cinema"' + (patternInterrupt === 'cinema' ? ' selected' : '') + '>🎬 Cinema (story beats)</option>';
+            html += '<option value="documentary"' + (patternInterrupt === 'documentary' ? ' selected' : '') + '>📽️ Documentary (every 90-120s)</option>';
+            html += '<option value="minimal"' + (patternInterrupt === 'minimal' ? ' selected' : '') + '>🌙 Minimal (rare)</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // B-Roll Strategy
+            var bRollStrategy = state.assembly.bRollStrategy || '';
+            html += '<div style="margin-bottom: 0.75rem;">';
+            html += '<label style="display: block; font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">B-Roll Strategy</label>';
+            html += '<select onchange="setBRollStrategy(this.value)" style="width: 100%; padding: 0.5rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.4rem; color: white; font-size: 0.75rem;">';
+            html += '<option value="">Auto (from genre)</option>';
+            html += '<option value="aggressive"' + (bRollStrategy === 'aggressive' ? ' selected' : '') + '>⚡ Aggressive (50-70%)</option>';
+            html += '<option value="moderate"' + (bRollStrategy === 'moderate' ? ' selected' : '') + '>📊 Moderate (30-50%)</option>';
+            html += '<option value="minimal"' + (bRollStrategy === 'minimal' ? ' selected' : '') + '>🔹 Minimal (10-30%)</option>';
+            html += '<option value="talking-head"' + (bRollStrategy === 'talking-head' ? ' selected' : '') + '>🎙️ Talking Head Focus</option>';
+            html += '<option value="montage"' + (bRollStrategy === 'montage' ? ' selected' : '') + '>🎬 Montage Heavy (70%+)</option>';
+            html += '</select>';
+            html += '</div>';
+
+            // Smart Assembly Tips
+            var tipMessages = {
+                'youtube-engaging': 'Hook in first 5s, pattern breaks every 45-60s, visual variety',
+                'tiktok-viral': 'Rapid cuts, text overlays, trending transitions, high energy',
+                'cinematic-film': 'Motivated cuts, emotional pacing, film language transitions',
+                'documentary': 'Evidence-based cuts, archival integration, interview rhythm',
+                'music-video': 'Beat-synced cuts, creative transitions, performance focus',
+                'commercial-ad': 'Feature highlights, call-to-action timing, brand reveals',
+                'educational': 'Concept reinforcement, visual aids timing, retention points',
+                'asmr-relaxation': 'Slow dissolves, minimal cuts, ambient flow'
+            };
+            if (assemblyPreset && tipMessages[assemblyPreset]) {
+                html += '<div style="padding: 0.5rem; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 0.4rem; margin-top: 0.5rem;">';
+                html += '<div style="font-size: 0.65rem; color: #22d3ee;">💡 ' + tipMessages[assemblyPreset] + '</div>';
+                html += '</div>';
+            }
+
+            // Get AI Recommendations Button
+            html += '<button onclick="getAssemblyRecommendationsForProject()" style="width: 100%; margin-top: 0.75rem; padding: 0.6rem; background: linear-gradient(135deg, rgba(6,182,212,0.2), rgba(139,92,246,0.2)); border: 1px solid rgba(6,182,212,0.4); border-radius: 0.4rem; color: white; font-size: 0.7rem; cursor: pointer; transition: all 0.2s;" onmouseenter="this.style.background=\'linear-gradient(135deg, rgba(6,182,212,0.3), rgba(139,92,246,0.3))\'" onmouseleave="this.style.background=\'linear-gradient(135deg, rgba(6,182,212,0.2), rgba(139,92,246,0.2))\'">';
+            html += '✨ Get AI Assembly Recommendations';
+            html += '</button>';
+
+            html += '</div>'; // Close Smart Assembly section
+
             return html;
         }
 
@@ -10965,6 +11071,161 @@
                 console.error('Failed to get audio recommendations:', error);
             }
             return null;
+        }
+
+        // Phase 3E: Smart Assembly Intelligence Functions
+        function setAssemblyPreset(preset) {
+            state.assembly.assemblyPreset = preset || null;
+
+            const presetNames = {
+                'youtube-engaging': 'YouTube Engaging - Hook-driven, pattern breaks',
+                'tiktok-viral': 'TikTok Viral - Rapid cuts, trending style',
+                'cinematic-film': 'Cinematic Film - Motivated cuts, film language',
+                'documentary': 'Documentary - Evidence-based, interview rhythm',
+                'music-video': 'Music Video - Beat-synced, creative transitions',
+                'commercial-ad': 'Commercial/Ad - Feature highlights, CTA timing',
+                'educational': 'Educational - Concept reinforcement, retention',
+                'asmr-relaxation': 'ASMR/Relaxation - Slow dissolves, ambient'
+            };
+
+            if (preset) {
+                showToast(`Assembly preset: ${presetNames[preset] || preset}`, 'success');
+            } else {
+                showToast('Assembly preset: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setPacingProfile(profile) {
+            state.assembly.pacingProfile = profile || null;
+
+            const profileNames = {
+                'rapid-fire': 'Rapid Fire (1-2s cuts)',
+                'fast': 'Fast (2-3s cuts)',
+                'dynamic': 'Dynamic (varies with content)',
+                'balanced': 'Balanced (3-5s cuts)',
+                'contemplative': 'Contemplative (5-8s cuts)',
+                'cinematic': 'Cinematic (6-12s cuts)',
+                'episodic': 'Episodic (structured rhythm)'
+            };
+
+            if (profile) {
+                showToast(`Pacing: ${profileNames[profile] || profile}`, 'success');
+            } else {
+                showToast('Pacing: Auto (from preset)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setBeatSyncMode(mode) {
+            state.assembly.beatSyncMode = mode || 'off';
+
+            const modeNames = {
+                'off': 'Beat sync disabled',
+                'subtle': 'Subtle - Cut on musical phrases',
+                'moderate': 'Moderate - Cut on measures',
+                'aggressive': 'Aggressive - Cut on beats',
+                'music-video': 'Music Video - Every beat triggers cut'
+            };
+
+            showToast(`Beat sync: ${modeNames[mode] || mode}`, 'success');
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setPatternInterrupt(strategy) {
+            state.assembly.patternInterrupt = strategy || null;
+
+            const strategyNames = {
+                'youtube': 'YouTube - Pattern breaks every 45-60s',
+                'tiktok': 'TikTok - High frequency every 3-5s',
+                'instagram': 'Instagram - Medium frequency 15-20s',
+                'cinema': 'Cinema - Story beat driven',
+                'documentary': 'Documentary - Slower 90-120s',
+                'minimal': 'Minimal - Rare interrupts'
+            };
+
+            if (strategy) {
+                showToast(`Pattern interrupts: ${strategyNames[strategy] || strategy}`, 'success');
+            } else {
+                showToast('Pattern interrupts: Auto (from platform)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        function setBRollStrategy(strategy) {
+            state.assembly.bRollStrategy = strategy || null;
+
+            const strategyNames = {
+                'aggressive': 'Aggressive - 50-70% B-roll coverage',
+                'moderate': 'Moderate - 30-50% B-roll coverage',
+                'minimal': 'Minimal - 10-30% B-roll coverage',
+                'talking-head': 'Talking Head Focus - Minimal cutaways',
+                'montage': 'Montage Heavy - 70%+ visual sequences'
+            };
+
+            if (strategy) {
+                showToast(`B-Roll: ${strategyNames[strategy] || strategy}`, 'success');
+            } else {
+                showToast('B-Roll strategy: Auto (from genre)', 'info');
+            }
+
+            scheduleAutoSave();
+            render();
+        }
+
+        async function getAssemblyRecommendationsForProject() {
+            showToast('Analyzing project for assembly recommendations...', 'info');
+
+            try {
+                const functions = firebase.functions();
+                const buildPlan = functions.httpsCallable('creationWizardBuildAssemblyPlan');
+                const result = await buildPlan({
+                    genre: state.content.genre,
+                    platform: state.export?.platform || 'youtube',
+                    duration: calculateTotalDuration(),
+                    sceneCount: (state.script.scenes || []).length,
+                    mood: state.assembly.audioMood || state.storyboard.visualStyle?.mood,
+                    preset: state.assembly.assemblyPreset,
+                    hasMusic: state.assembly.music?.enabled,
+                    tempo: state.assembly.music?.tempo || 120
+                });
+
+                if (result.data.success && result.data.plan) {
+                    const plan = result.data.plan;
+
+                    // Apply recommendations
+                    if (plan.preset && !state.assembly.assemblyPreset) {
+                        state.assembly.assemblyPreset = plan.preset;
+                    }
+                    if (plan.pacing && !state.assembly.pacingProfile) {
+                        state.assembly.pacingProfile = plan.pacing.profile;
+                    }
+                    if (plan.beatSync && !state.assembly.beatSyncMode) {
+                        state.assembly.beatSyncMode = plan.beatSync.mode;
+                    }
+
+                    showToast(`AI recommendations applied! Preset: ${plan.preset || 'custom'}`, 'success');
+                    render();
+                } else {
+                    showToast('Using default assembly settings', 'info');
+                }
+            } catch (error) {
+                console.error('Failed to get assembly recommendations:', error);
+                showToast('Could not get AI recommendations', 'error');
+            }
+        }
+
+        function calculateTotalDuration() {
+            const scenes = state.script.scenes || [];
+            return scenes.reduce((total, scene) => total + (scene.duration || 5), 0);
         }
 
         // Helper functions to update preview settings
