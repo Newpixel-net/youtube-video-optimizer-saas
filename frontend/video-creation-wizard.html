@@ -6112,20 +6112,46 @@
             try {
                 const generateScriptFn = functions.httpsCallable('creationWizardGenerateScript');
 
-                // Build enriched concept data from AI improvement if available
-                const conceptEnrichment = state.concept?.improvedData ? {
-                    improvedConcept: state.concept.improvedData.improvedConcept || null,
-                    characters: state.concept.improvedData.characters || [],
-                    worldBuilding: state.concept.improvedData.worldBuilding || null,
-                    keyElements: state.concept.improvedData.keyElements || [],
-                    visualSignature: state.concept.improvedData.visualSignature || null,
-                    genreFusion: state.concept.improvedData.genreFusion || null,
-                    hookLine: state.concept.improvedData.hookLine || null,
-                    extractedStyles: state.concept.improvedData.extractedStyles || [],
-                    thingsToAvoid: state.concept.improvedData.thingsToAvoid || [],
-                    suggestedMood: state.concept.improvedData.suggestedMood || null,
-                    suggestedTone: state.concept.improvedData.suggestedTone || null
-                } : null;
+                // Build enriched concept data from AI improvement AND selected concept
+                // Merge data from: improvedData (AI enhancement) + refinedConcept (selected idea) + characterIntelligence
+                const selectedConcept = state.concept?.refinedConcept || null;
+                const improvedData = state.concept?.improvedData || null;
+
+                const conceptEnrichment = {
+                    // From AI Improvement (improveConceptIdea)
+                    improvedConcept: improvedData?.improvedConcept || null,
+                    characters: improvedData?.characters || [],
+                    worldBuilding: improvedData?.worldBuilding || null,
+                    keyElements: improvedData?.keyElements || [],
+                    visualSignature: improvedData?.visualSignature || null,
+                    genreFusion: improvedData?.genreFusion || null,
+                    hookLine: improvedData?.hookLine || null,
+                    extractedStyles: improvedData?.extractedStyles || [],
+                    thingsToAvoid: improvedData?.thingsToAvoid || [],
+                    suggestedMood: improvedData?.suggestedMood || selectedConcept?.mood || null,
+                    suggestedTone: improvedData?.suggestedTone || selectedConcept?.tone || null,
+
+                    // From Selected Concept (creationWizardGenerateConcepts)
+                    selectedConcept: selectedConcept ? {
+                        title: selectedConcept.title,
+                        logline: selectedConcept.logline || selectedConcept.description,
+                        uniqueElements: selectedConcept.uniqueElements || [],
+                        mood: selectedConcept.mood,
+                        tone: selectedConcept.tone,
+                        visualApproach: selectedConcept.visualApproach
+                    } : null,
+
+                    // From Character Intelligence UI
+                    characterIntelligence: {
+                        narrationMode: state.characterIntelligence?.narrationMode || 'voiceover',
+                        suggestedCount: state.characterIntelligence?.suggestedCount || 0,
+                        characterTypes: state.characterIntelligence?.characterTypes || []
+                    }
+                };
+
+                // Only include if we have SOME enrichment data
+                const hasEnrichment = improvedData || selectedConcept ||
+                    (state.characterIntelligence?.suggestedCount > 0);
 
                 const config = {
                     platform: state.platform.selected,
@@ -6147,7 +6173,8 @@
                     videoModel: state.content.videoModel || { duration: '6s', resolution: '1080p' },
                     additionalInstructions,
                     // Phase 5: AI Concept Enhancement Data - Deep Story Architecture
-                    conceptEnrichment
+                    // Includes: improvedData + selectedConcept + characterIntelligence
+                    conceptEnrichment: hasEnrichment ? conceptEnrichment : null
                 };
 
                 const result = await generateScriptFn({
