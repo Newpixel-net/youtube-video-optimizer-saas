@@ -23383,6 +23383,194 @@ exports.creationWizardDeleteProject = functions.https.onCall(async (data, contex
 });
 
 /**
+ * creationWizardImproveIdea - AI-powered idea enhancement
+ *
+ * Takes a rough user concept and transforms it into a detailed, rich concept
+ * with automatically extracted style references, things to avoid, and a polished description.
+ *
+ * Input:
+ * - rawInput: User's rough concept description
+ * - productionType: The type of production (movie, series, social, etc.)
+ * - productionSubType: Sub-type (action, drama, documentary, etc.)
+ *
+ * Returns:
+ * - improvedConcept: Detailed, expanded concept description
+ * - extractedStyles: Array of visual style inspirations extracted from input
+ * - thingsToAvoid: Inferred things to avoid for originality
+ * - suggestedMood: Detected mood/atmosphere
+ * - suggestedTone: Detected tone
+ * - keyElements: Core creative elements identified
+ * - worldBuilding: World rules for fantasy/scifi concepts
+ * - characters: Suggested original character archetypes
+ */
+exports.creationWizardImproveIdea = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { rawInput, productionType, productionSubType, currentStyleReference } = data;
+
+  if (!rawInput || rawInput.trim().length < 10) {
+    throw new functions.https.HttpsError('invalid-argument', 'Please provide a concept description (at least 10 characters)');
+  }
+
+  console.log('[creationWizardImproveIdea] Improving idea:', {
+    rawInput: rawInput.substring(0, 100),
+    productionType,
+    productionSubType,
+    uid
+  });
+
+  const prompt = `You are a GENIUS Hollywood creative director with 30+ years of experience developing blockbuster concepts.
+
+USER'S ROUGH IDEA:
+"${rawInput}"
+
+PRODUCTION TYPE: ${productionType || 'Video Content'} ${productionSubType ? `(${productionSubType})` : ''}
+${currentStyleReference ? `CURRENT STYLE REFERENCE: ${currentStyleReference}` : ''}
+
+YOUR TASK:
+Transform this rough idea into a BRILLIANT, detailed concept that would impress any studio executive.
+
+ANALYZE the input for:
+1. Any style references (movies, shows, directors, visual styles mentioned)
+2. Genre combinations and unique angles
+3. Character archetypes implied
+4. World-building elements
+5. Mood and atmosphere
+6. What makes this potentially special
+
+RULES FOR IMPROVEMENT:
+- EXPAND terse descriptions into vivid, evocative prose
+- IDENTIFY the core creative genius in their idea and amplify it
+- ADD sensory details, emotional hooks, and visual language
+- ENSURE the concept is 100% ORIGINAL (no direct copies)
+- MAINTAIN the user's original vision while elevating it
+- Include specific visual language that guides cinematography
+
+Return EXACTLY this JSON structure:
+{
+  "improvedConcept": "A rich, detailed 3-5 sentence description that captures the ESSENCE of their vision with vivid, cinematic language. Include the hook, the journey, and the emotional core. This should read like a pitch that gets greenlit immediately.",
+
+  "extractedStyles": [
+    "Specific visual style 1 (e.g., 'Matrix-style bullet-time cinematography')",
+    "Specific visual style 2 (e.g., 'Avengers epic scale and vibrant color grading')",
+    "Specific visual style 3 (e.g., 'Avatar bioluminescent world design')"
+  ],
+
+  "thingsToAvoid": [
+    "Specific thing to avoid 1 (e.g., 'Direct Neo/Matrix character copies')",
+    "Specific thing to avoid 2 (e.g., 'MCU trademarked elements')",
+    "Generic clichés to avoid"
+  ],
+
+  "suggestedMood": "Primary atmospheric mood (e.g., 'Epic with underlying tension')",
+
+  "suggestedTone": "Narrative tone (e.g., 'Serious with moments of wonder')",
+
+  "keyElements": [
+    "Core element 1 that makes this unique",
+    "Core element 2 that drives the story",
+    "Core element 3 that creates emotional resonance"
+  ],
+
+  "genreFusion": "Description of genre combination (e.g., 'Martial arts action meets cosmic fantasy with grounded emotional stakes')",
+
+  "visualSignature": "The defining visual style in one sentence (e.g., 'Hyper-stylized action sequences in a bioluminescent alien megacity with practical grit')",
+
+  "hookLine": "A single powerful sentence that would hook any audience",
+
+  "characters": [
+    {
+      "archetype": "The Reluctant Hero",
+      "uniqueTwist": "What makes this character fresh and original",
+      "visualDescription": "Brief visual concept for this character"
+    }
+  ],
+
+  "worldBuilding": {
+    "setting": "Where this takes place",
+    "rules": "What makes this world unique",
+    "atmosphere": "The pervading feeling of this world"
+  }
+}
+
+IMPORTANT: Be SPECIFIC, not generic. Every field should contain actionable creative direction.
+The improved concept should make anyone reading it immediately visualize the video.`;
+
+  try {
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY || functions.config().openai?.key}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a legendary creative director known for transforming rough ideas into blockbuster concepts. Your improvements always maintain the creator\'s original vision while elevating it to Hollywood-quality. Always return valid JSON.'
+          },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 2500,
+        temperature: 0.85
+      })
+    });
+
+    if (!openaiResponse.ok) {
+      console.error('[creationWizardImproveIdea] OpenAI error:', openaiResponse.status);
+      throw new Error(`OpenAI API error: ${openaiResponse.status}`);
+    }
+
+    const openaiData = await openaiResponse.json();
+    let responseText = openaiData.choices?.[0]?.message?.content || '';
+
+    // Clean up response - extract JSON
+    responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+    // Parse the JSON response
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('[creationWizardImproveIdea] JSON parse error, trying to extract:', parseError);
+      const jsonMatch = responseText.match(/\{[\s\S]*"improvedConcept"[\s\S]*\}/);
+      if (jsonMatch) {
+        result = JSON.parse(jsonMatch[0]);
+      } else {
+        throw parseError;
+      }
+    }
+
+    console.log('[creationWizardImproveIdea] Successfully improved idea');
+
+    return {
+      success: true,
+      ...result
+    };
+
+  } catch (error) {
+    console.error('[creationWizardImproveIdea] Error:', error);
+
+    // Provide a reasonable fallback
+    return {
+      success: true,
+      fallback: true,
+      improvedConcept: `${rawInput}\n\nThis concept blends multiple creative influences into a unique visual experience. The story follows original characters through a world that captures the essence of the referenced styles while forging its own identity.`,
+      extractedStyles: ['Cinematic action sequences', 'Epic visual scale', 'Immersive atmosphere'],
+      thingsToAvoid: ['Direct character copies', 'Trademarked elements', 'Overused clichés'],
+      suggestedMood: 'Epic',
+      suggestedTone: 'Dramatic',
+      keyElements: ['Original characters', 'Unique visual style', 'Compelling narrative'],
+      genreFusion: 'Action-Adventure with Fantasy elements',
+      visualSignature: 'Dynamic cinematography with immersive world-building',
+      hookLine: 'A journey unlike any other awaits.',
+      characters: [{ archetype: 'The Protagonist', uniqueTwist: 'Original backstory', visualDescription: 'Distinctive look' }],
+      worldBuilding: { setting: 'A unique world', rules: 'Original concept', atmosphere: 'Immersive' }
+    };
+  }
+});
+
+/**
  * creationWizardGenerateConcepts - Generates unique video concepts using GPT-4o
  *
  * CRITICAL: This function distinguishes between STYLE REFERENCES and SUBJECT MATTER

@@ -3645,7 +3645,14 @@
                 uniqueElements: [],         // What makes this unique
                 avoidElements: [],          // What to explicitly avoid (like direct copies)
                 logline: '',                // One-line summary
-                worldBuilding: null         // For fantasy/scifi: world rules and elements
+                worldBuilding: null,        // For fantasy/scifi: world rules and elements
+                // AI Improvement Feature
+                isImproving: false,         // True when AI is enhancing the idea
+                improvedData: null,         // Full AI enhancement result
+                suggestedMood: null,        // AI-detected mood
+                suggestedTone: null,        // AI-detected tone
+                keyElements: [],            // Core creative elements
+                characters: []              // Suggested character archetypes
             },
 
             // Step 3 (New): Character Intelligence
@@ -4424,6 +4431,88 @@
                 // Also update legacy content.topic for compatibility
                 state.content.topic = idea.title + ': ' + (idea.logline || idea.description || '');
             }
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * AI-Powered Idea Improvement
+         * Takes rough user input and transforms it into a genius, detailed concept
+         * Auto-fills all fields with extracted and enhanced information
+         */
+        async function improveConceptIdea() {
+            const rawInput = state.concept.rawInput;
+
+            if (!rawInput || rawInput.trim().length < 10) {
+                showToast('Please enter at least a brief concept idea to enhance', 'warning');
+                return;
+            }
+
+            state.concept.isImproving = true;
+            render();
+
+            try {
+                const improveIdea = firebase.functions().httpsCallable('creationWizardImproveIdea');
+                const result = await improveIdea({
+                    rawInput: rawInput,
+                    productionType: state.production.typeConfig?.name || state.production.type,
+                    productionSubType: state.production.subTypeConfig?.name || state.production.subType,
+                    currentStyleReference: state.concept.styleReference
+                });
+
+                if (result.data.success) {
+                    const data = result.data;
+
+                    // Update the concept description with the improved version
+                    if (data.improvedConcept) {
+                        state.concept.rawInput = data.improvedConcept;
+                        // Update the textarea directly for immediate feedback
+                        const textarea = document.getElementById('concept-input');
+                        if (textarea) textarea.value = data.improvedConcept;
+                    }
+
+                    // Auto-fill style reference from extracted styles
+                    if (data.extractedStyles && data.extractedStyles.length > 0) {
+                        state.concept.styleReference = data.extractedStyles.join(', ');
+                        const styleInput = document.getElementById('style-reference-input');
+                        if (styleInput) styleInput.value = state.concept.styleReference;
+                    }
+
+                    // Auto-fill things to avoid
+                    if (data.thingsToAvoid && data.thingsToAvoid.length > 0) {
+                        state.concept.avoidElements = data.thingsToAvoid;
+                        const avoidInput = document.getElementById('avoid-input');
+                        if (avoidInput) avoidInput.value = data.thingsToAvoid.join(', ');
+                    }
+
+                    // Store additional enhancement data
+                    state.concept.improvedData = data;
+                    state.concept.suggestedMood = data.suggestedMood;
+                    state.concept.suggestedTone = data.suggestedTone;
+                    state.concept.keyElements = data.keyElements || [];
+                    state.concept.worldBuilding = data.worldBuilding;
+                    state.concept.characters = data.characters || [];
+
+                    // Update content state for compatibility
+                    if (data.suggestedMood) {
+                        state.content.mood = data.suggestedMood;
+                    }
+                    if (data.suggestedTone) {
+                        state.content.tone = data.suggestedTone.toLowerCase();
+                    }
+
+                    showToast('✨ Idea enhanced! All fields have been auto-filled with genius content.', 'success');
+                    console.log('[improveConceptIdea] Enhancement result:', data);
+                } else {
+                    showToast('Enhancement completed with limited results', 'info');
+                }
+
+            } catch (error) {
+                console.error('[improveConceptIdea] Error:', error);
+                showToast('Failed to enhance idea. Please try again.', 'error');
+            }
+
+            state.concept.isImproving = false;
             render();
             scheduleAutoSave();
         }
@@ -8519,10 +8608,56 @@
 • A mysterious figure discovers an ancient power
 • The untold story of a small town's greatest secret
 • A journey through impossible landscapes
-• An entrepreneur's rise from nothing"
-                                  style="width: 100%; min-height: 100px; padding: 0.75rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: vertical;"
-                                  onchange="updateConceptInput(this.value)">${concept.rawInput || ''}</textarea>
+• An entrepreneur's rise from nothing
+
+💡 PRO TIP: You can write a rough idea mixing styles, references, and genres - then click 'Enhance with AI' to transform it into a genius concept!"
+                                  style="width: 100%; min-height: 120px; padding: 0.75rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: vertical;"
+                                  onchange="updateConceptInput(this.value)"
+                                  oninput="updateConceptInput(this.value)">${concept.rawInput || ''}</textarea>
+
+                        <!-- IMPROVE IDEA BUTTON - AI Enhancement -->
+                        <button onclick="improveConceptIdea()"
+                                ${concept.isImproving ? 'disabled' : ''}
+                                style="margin-top: 0.5rem; padding: 0.5rem 1rem; background: ${concept.isImproving ? 'rgba(139, 92, 246, 0.3)' : 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2))'}; border: 1px solid rgba(139, 92, 246, 0.5); border-radius: 0.5rem; color: ${concept.isImproving ? 'rgba(255,255,255,0.5)' : '#a78bfa'}; font-weight: 500; font-size: 0.8rem; cursor: ${concept.isImproving ? 'wait' : 'pointer'}; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.2s;"
+                                onmouseover="if(!this.disabled) this.style.background='linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(236, 72, 153, 0.4))'"
+                                onmouseout="if(!this.disabled) this.style.background='linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2))'">
+                            ${concept.isImproving ? `
+                                <span style="animation: spin 1s linear infinite;">🪄</span>
+                                <span>Enhancing your idea...</span>
+                            ` : `
+                                <span>🪄</span>
+                                <span>Enhance with AI</span>
+                            `}
+                        </button>
+                        <span style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-left: 0.5rem;">
+                            Auto-extracts styles & fills all fields
+                        </span>
                     </div>
+
+                    ${concept.improvedData ? `
+                    <!-- AI Enhancement Results Preview -->
+                    <div style="margin-bottom: 1rem; padding: 0.75rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.05)); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.9rem;">✨</span>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: #a78bfa;">AI Enhancement Applied</span>
+                        </div>
+                        ${concept.improvedData.hookLine ? `
+                        <div style="font-size: 0.8rem; color: rgba(255,255,255,0.9); font-style: italic; margin-bottom: 0.5rem;">
+                            "${concept.improvedData.hookLine}"
+                        </div>
+                        ` : ''}
+                        ${concept.improvedData.genreFusion ? `
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">
+                            <span style="color: #8b5cf6;">Genre:</span> ${concept.improvedData.genreFusion}
+                        </div>
+                        ` : ''}
+                        ${concept.improvedData.visualSignature ? `
+                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.6); margin-top: 0.25rem;">
+                            <span style="color: #ec4899;">Visual:</span> ${concept.improvedData.visualSignature}
+                        </div>
+                        ` : ''}
+                    </div>
+                    ` : ''}
 
                     <!-- CRITICAL: Style Reference (NOT subject matter) -->
                     <div style="margin-bottom: 1rem;">
