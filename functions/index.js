@@ -24556,9 +24556,20 @@ ${ANTI_GENERIC_RULES.slice(0, 6).map(r => `- ${r}`).join('\n')}`;
     if (conceptEnrichment) {
       console.log('[creationWizardGenerateScript] Applying Deep Story Architecture from concept enrichment');
 
+      // Extract character intelligence settings
+      const charIntel = conceptEnrichment.characterIntelligence || {};
+      const requestedCharacterCount = charIntel.suggestedCount || 0;
+      const narrationMode = charIntel.narrationMode || 'voiceover';
+      const hasPreDefinedCharacters = conceptEnrichment.characters && conceptEnrichment.characters.length > 0;
+
+      // Extract selected concept data
+      const selectedConcept = conceptEnrichment.selectedConcept || null;
+
       // Build character bible section
       let characterBible = '';
-      if (conceptEnrichment.characters && conceptEnrichment.characters.length > 0) {
+
+      if (hasPreDefinedCharacters) {
+        // Use pre-defined characters from AI enhancement
         characterBible = `
 
 🎭 CHARACTER BIBLE - REQUIRED CHARACTERS
@@ -24576,6 +24587,49 @@ CHARACTER DISTRIBUTION REQUIREMENTS:
 - Characters should interact or their stories should interweave
 - Show character growth/change between their first and last appearance
 - Reference character visual descriptions EXACTLY in every visualPrompt they appear in`;
+      } else if (requestedCharacterCount > 0) {
+        // Generate character requirements based on requested count
+        characterBible = `
+
+🎭 CHARACTER GENERATION REQUIRED
+You MUST create EXACTLY ${requestedCharacterCount} distinct, memorable characters for this story.
+
+CHARACTER CREATION REQUIREMENTS:
+${Array.from({ length: requestedCharacterCount }, (_, i) => `
+CHARACTER ${i + 1}:
+- Create a unique archetype (e.g., The Reluctant Hero, The Wise Mentor, The Hidden Villain)
+- Give them a distinctive visual appearance (specific clothing, features, mannerisms)
+- Define their role in the story and their motivation
+- They MUST appear in at least ${Math.max(2, Math.ceil(sceneCount / requestedCharacterCount))} scenes`).join('\n')}
+
+MANDATORY CHARACTER RULES:
+- Each character MUST have a UNIQUE, DETAILED visual description
+- Use EXACT SAME description every time a character appears (visual consistency)
+- Characters must interact with each other - no isolated character arcs
+- Show character development/growth across their appearances
+- Include diverse character types - not all heroes or all villains
+- Each character needs clear motivations that drive their actions
+
+NARRATION MODE: ${narrationMode.toUpperCase()}
+${narrationMode === 'dialogue' ? '- Include character dialogue in narration - characters should speak to each other' : ''}
+${narrationMode === 'voiceover' ? '- Use third-person narration describing character actions and thoughts' : ''}
+${narrationMode === 'narrator' ? '- Use an omniscient narrator who knows all characters\' thoughts and feelings' : ''}`;
+      }
+
+      // Build selected concept section
+      let selectedConceptSection = '';
+      if (selectedConcept) {
+        selectedConceptSection = `
+
+📋 SELECTED CONCEPT - THE CORE STORY
+Title: "${selectedConcept.title}"
+Logline: ${selectedConcept.logline}
+${selectedConcept.uniqueElements && selectedConcept.uniqueElements.length > 0 ? `
+Unique Elements that MUST appear:
+${selectedConcept.uniqueElements.map((elem, idx) => `${idx + 1}. ${elem}`).join('\n')}` : ''}
+${selectedConcept.visualApproach ? `Visual Approach: ${selectedConcept.visualApproach}` : ''}
+
+This concept is THE FOUNDATION of your script. Every scene must serve this story.`;
       }
 
       // Build world-building section
@@ -24674,6 +24728,7 @@ Your opening scene/hook should capture this energy and promise.`;
 ============================================================
 This content has been enriched with AI-powered concept development.
 You MUST use this information to create a COMPLEX, MULTI-LAYERED story.
+${selectedConceptSection}
 
 ENHANCED CONCEPT VISION:
 ${conceptEnrichment.improvedConcept || topic}
@@ -24698,13 +24753,19 @@ DEEP STORY QUALITY REQUIREMENTS
 5. MEMORABLE MOMENTS: Include at least 2-3 "iconic" visual moments that could be movie posters
 6. THEMATIC UNITY: A central theme should thread through every scene
 7. CINEMATIC INTELLIGENCE: This should feel like a trailer for a $100M production
-
+${requestedCharacterCount > 0 ? `
+⚠️ CRITICAL CHARACTER COUNT REQUIREMENT:
+You MUST include EXACTLY ${requestedCharacterCount} distinct characters in this story.
+Each character MUST have a unique name, visual appearance, and role.
+Failure to include ${requestedCharacterCount} characters is NOT acceptable.
+` : ''}
 DO NOT CREATE:
 - Generic, surface-level content
 - Disconnected scenes that don't build on each other
 - Characters that appear once and disappear
 - Visuals that could be from any random video
 - Cookie-cutter stories without unique identity
+${requestedCharacterCount > 0 ? `- Stories with fewer than ${requestedCharacterCount} characters` : ''}
 ============================================================
 `;
     }
@@ -24906,10 +24967,21 @@ Return ONLY valid JSON:
 {
   "title": "Compelling ${productionSettings.name} style title (50-70 chars)",
   "hook": "The attention-grabbing first line (this IS narration)",
+  "characters": [
+    {
+      "name": "Character's name",
+      "archetype": "The archetype (e.g., Reluctant Hero, Wise Mentor, Hidden Villain)",
+      "visualDescription": "DETAILED visual description - exact appearance, clothing, features, distinguishing marks",
+      "role": "Their role in the story",
+      "motivation": "What drives this character",
+      "firstAppearance": 1,
+      "sceneAppearances": [1, 3, 5]
+    }
+  ],
   "scenes": [
     {
       "id": 1,
-      "visualPrompt": "[Camera Movement] Detailed visual description for AI video generation - what we SEE",
+      "visualPrompt": "[Camera Movement] Detailed visual description for AI video generation - what we SEE. MUST include exact character visual descriptions when characters appear.",
       "narration": "What we HEAR - voiceover text that complements the visual, or null for music-only scenes",
       "visual": "[Camera Movement] Same as visualPrompt for backwards compatibility",
       "duration": ${visualDuration},
@@ -24918,7 +24990,7 @@ Return ONLY valid JSON:
       "cameraMovement": ["Push in"],
       "mood": "contemplative|tense|uplifting|mysterious|etc",
       "transition": "cut|fade|dissolve|zoom",
-      "charactersInScene": ["Character archetype names that appear in this scene - from CHARACTER BIBLE if provided"],
+      "charactersInScene": ["Character names that appear in this scene - MUST match names from characters array"],
       "sceneRole": "What role this scene plays in the story arc (setup/escalation/climax/resolution)"
     }
   ],
@@ -24944,10 +25016,27 @@ Return ONLY valid JSON:
     "iconicMoments": ["Scene IDs that contain memorable/iconic visual moments"],
     "storyComplexity": "simple|layered|complex - self-assessment of narrative depth"
   }
-}`;
+}
+
+CRITICAL: The "characters" array MUST contain ALL characters in your story with complete visual descriptions.
+When a character appears in a scene's visualPrompt, use their EXACT visual description from the characters array.`;
+
+    // Log enrichment data for debugging
+    if (conceptEnrichment) {
+      console.log('[creationWizardGenerateScript] Deep Story Architecture active:', {
+        hasImprovedConcept: !!conceptEnrichment.improvedConcept,
+        hasSelectedConcept: !!conceptEnrichment.selectedConcept,
+        preDefinedCharacters: conceptEnrichment.characters?.length || 0,
+        requestedCharacterCount: conceptEnrichment.characterIntelligence?.suggestedCount || 0,
+        narrationMode: conceptEnrichment.characterIntelligence?.narrationMode || 'voiceover',
+        hasWorldBuilding: !!conceptEnrichment.worldBuilding,
+        hasVisualSignature: !!conceptEnrichment.visualSignature,
+        keyElements: conceptEnrichment.keyElements?.length || 0
+      });
+    }
 
     // Call GPT-4o for script generation
-    // Note: max_tokens increased to 4500 to accommodate deep story architecture with characters and world-building
+    // Note: max_tokens increased to 5500 to accommodate deep story architecture with full character definitions
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
@@ -24955,7 +25044,7 @@ Return ONLY valid JSON:
         { role: 'user', content: userPrompt }
       ],
       temperature: conceptEnrichment ? 0.85 : 0.8, // Slightly higher creativity for enriched concepts
-      max_tokens: conceptEnrichment ? 4500 : 3000 // More tokens for complex stories
+      max_tokens: conceptEnrichment ? 5500 : 3000 // More tokens for complex stories with character definitions
     });
 
     // Parse the response
