@@ -4298,6 +4298,16 @@
                     negative: 'blurry, low quality, watermark, text, logo, deformed, extra fingers, bad anatomy'
                 };
             }
+            // Phase 8-11: Initialize Prompt Chain Architecture defaults
+            if (!state.storyboard.promptChain) {
+                state.storyboard.promptChain = {
+                    enabled: true,
+                    status: 'idle',
+                    processedAt: null,
+                    scenes: [],
+                    config: null
+                };
+            }
         }
 
         // Style Bible Management
@@ -4958,6 +4968,9 @@
                     state.storyboard.promptChain.processedAt = new Date().toISOString();
                     state.storyboard.promptChain.scenes = result.data.scenes;
 
+                    // Auto-apply prompt chain transitions to assembly
+                    applyPromptChainTransitions();
+
                     showToast(`Prompt chain processed: ${result.data.summary.successful}/${result.data.summary.total} scenes`, 'success');
                     console.log('[Prompt Chain] Processed scenes:', result.data);
                     scheduleAutoSave();
@@ -5098,6 +5111,57 @@
             console.log('Audio Blueprint:', chainData.audioBlueprint);
 
             showToast('Prompt chain data logged to console (F12)', 'info');
+        }
+
+        /**
+         * Apply prompt chain transitions to assembly state
+         * Maps intelligent transition recommendations to assembly transitions
+         */
+        function applyPromptChainTransitions() {
+            if (!state.storyboard.promptChain?.scenes || state.storyboard.promptChain.scenes.length === 0) {
+                return;
+            }
+
+            // Map prompt chain transition types to assembly transition types
+            const transitionMap = {
+                'cut': 'cut',
+                'hard-cut': 'cut',
+                'dissolve': 'dissolve',
+                'fade': 'dissolve',
+                'match-cut': 'dissolve',  // Match cuts rendered as dissolves
+                'j-cut': 'cut',           // J-cut is handled by audio, visual is cut
+                'l-cut': 'cut',           // L-cut is handled by audio, visual is cut
+                'fade-to-black': 'fade',
+                'fade-from-black': 'fade',
+                'wipe': 'wipe'
+            };
+
+            let appliedCount = 0;
+
+            state.storyboard.promptChain.scenes.forEach(chainScene => {
+                const sceneId = chainScene.sceneId;
+                const transition = chainScene.transition;
+
+                if (transition && transition.cutType && transition.cutType.type) {
+                    const chainType = transition.cutType.type;
+                    const assemblyType = transitionMap[chainType] || 'cut';
+
+                    // Apply to assembly transitions
+                    if (!state.assembly.transitions) {
+                        state.assembly.transitions = {};
+                    }
+                    state.assembly.transitions[sceneId] = {
+                        type: assemblyType,
+                        chainType: chainType,  // Store original chain type for reference
+                        chainReason: transition.cutType.instruction || null
+                    };
+                    appliedCount++;
+                }
+            });
+
+            if (appliedCount > 0) {
+                console.log(`[Prompt Chain] Applied ${appliedCount} intelligent transitions`);
+            }
         }
 
         function applyTopicSuggestion(topic) {
@@ -10593,8 +10657,23 @@
             render();
 
             try {
-                // Build visual prompt from storyboard + script
-                var visualPrompt = (storyboardScene.prompt || '') + ' ' + (scriptScene.visualDescription || scriptScene.narration || '');
+                // Phase 8-11: Check for prompt chain video prompt template
+                var chainData = getPromptChainForScene(sceneId);
+                var visualPrompt;
+                var videoPromptSource = 'assembled';
+
+                if (chainData && chainData.videoPromptTemplate && state.storyboard.promptChain?.enabled) {
+                    // Use the prompt chain video prompt template
+                    visualPrompt = chainData.videoPromptTemplate.prompt || '';
+                    // Replace placeholder with actual image URL
+                    visualPrompt = visualPrompt.replace('[reference_image]', storyboardScene.imageUrl);
+                    visualPrompt = visualPrompt.replace('[GENERATED_IMAGE_URL]', storyboardScene.imageUrl);
+                    videoPromptSource = 'prompt-chain';
+                    console.log('[Scene ' + sceneId + '] Using Prompt Chain video prompt');
+                } else {
+                    // Fallback: Build visual prompt from storyboard + script
+                    visualPrompt = (storyboardScene.prompt || '') + ' ' + (scriptScene.visualDescription || scriptScene.narration || '');
+                }
 
                 // Call Minimax API via cloud function
                 var generateMinimaxVideoFn = firebase.functions().httpsCallable('creationWizardGenerateMinimaxVideo');
@@ -10607,7 +10686,10 @@
                     duration: videoModel.duration,
                     resolution: videoModel.resolution,
                     cameraMovements: sceneCameraMovements,
-                    promptOptimizer: true
+                    promptOptimizer: true,
+                    // Phase 8-11: Pass prompt chain metadata
+                    promptChainSource: videoPromptSource,
+                    promptChainMetadata: chainData ? chainData.videoPromptTemplate?.metadata : null
                 });
 
                 if (result.data.success) {
