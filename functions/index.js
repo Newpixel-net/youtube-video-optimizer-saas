@@ -30603,6 +30603,602 @@ exports.creationWizardGetGenres = functions.https.onCall(async (data, context) =
 // CREATION WIZARD - PHASE 5: ASSEMBLY
 // ==============================================
 
+// ==============================================
+// AUDIO INTELLIGENCE SYSTEM - Phase 1
+// ==============================================
+
+/**
+ * Genre to Audio Mapping - Maps video genres to audio characteristics
+ * Used by the Audio Intelligence Engine to auto-select appropriate audio
+ */
+const GENRE_AUDIO_MAPPING = {
+  // Horror & Thriller
+  'horror': {
+    musicMoods: ['dark', 'tense', 'suspenseful', 'eerie'],
+    musicCategories: ['cinematic', 'dark'],
+    sfxStyle: 'horror',
+    sfxTypes: ['impact-deep', 'whoosh-dark', 'tension-rise', 'heartbeat'],
+    ambienceTypes: ['wind-howling', 'creaking', 'distant-thunder', 'whispers'],
+    bpmRange: { min: 60, max: 100 },
+    energyCurve: 'building-tension',
+    recommendedVolumes: { music: 35, sfx: 50, ambience: 25 }
+  },
+  'thriller': {
+    musicMoods: ['tense', 'suspenseful', 'dramatic', 'urgent'],
+    musicCategories: ['cinematic', 'dramatic'],
+    sfxStyle: 'cinematic',
+    sfxTypes: ['impact-dramatic', 'whoosh-heavy', 'bass-drop', 'tension-hit'],
+    ambienceTypes: ['urban-night', 'rain-heavy', 'wind'],
+    bpmRange: { min: 80, max: 130 },
+    energyCurve: 'escalating',
+    recommendedVolumes: { music: 40, sfx: 45, ambience: 20 }
+  },
+
+  // Documentary & Educational
+  'documentary': {
+    musicMoods: ['inspiring', 'emotional', 'epic', 'reflective'],
+    musicCategories: ['cinematic', 'orchestral', 'ambient'],
+    sfxStyle: 'subtle',
+    sfxTypes: ['whoosh-soft', 'transition-smooth', 'rise-gentle'],
+    ambienceTypes: ['nature', 'urban-light', 'room-tone'],
+    bpmRange: { min: 70, max: 110 },
+    energyCurve: 'narrative-wave',
+    recommendedVolumes: { music: 25, sfx: 30, ambience: 15 }
+  },
+  'educational': {
+    musicMoods: ['neutral', 'focus', 'light', 'positive'],
+    musicCategories: ['corporate', 'ambient', 'electronic-soft'],
+    sfxStyle: 'minimal',
+    sfxTypes: ['click-soft', 'notification', 'pop-light'],
+    ambienceTypes: ['quiet-room', 'library'],
+    bpmRange: { min: 80, max: 110 },
+    energyCurve: 'steady',
+    recommendedVolumes: { music: 20, sfx: 25, ambience: 10 }
+  },
+
+  // Tech & Innovation
+  'tech': {
+    musicMoods: ['modern', 'electronic', 'innovative', 'futuristic'],
+    musicCategories: ['electronic', 'corporate', 'modern'],
+    sfxStyle: 'tech',
+    sfxTypes: ['glitch', 'digital-beep', 'tech-swoosh', 'data-stream'],
+    ambienceTypes: ['digital-hum', 'server-room', 'subtle-electronic'],
+    bpmRange: { min: 100, max: 140 },
+    energyCurve: 'pulsing',
+    recommendedVolumes: { music: 35, sfx: 40, ambience: 15 }
+  },
+
+  // Business & Corporate
+  'corporate': {
+    musicMoods: ['professional', 'motivational', 'confident', 'uplifting'],
+    musicCategories: ['corporate', 'upbeat', 'inspiring'],
+    sfxStyle: 'clean',
+    sfxTypes: ['whoosh-medium', 'rise-corporate', 'success-ding'],
+    ambienceTypes: ['office-subtle', 'conference'],
+    bpmRange: { min: 100, max: 130 },
+    energyCurve: 'positive-build',
+    recommendedVolumes: { music: 30, sfx: 35, ambience: 10 }
+  },
+
+  // Motivational & Inspirational
+  'motivational': {
+    musicMoods: ['uplifting', 'powerful', 'triumphant', 'epic'],
+    musicCategories: ['cinematic', 'epic', 'inspiring'],
+    sfxStyle: 'powerful',
+    sfxTypes: ['impact-dramatic', 'rise-epic', 'boom', 'whoosh-heavy'],
+    ambienceTypes: ['crowd-cheer', 'stadium', 'nature-open'],
+    bpmRange: { min: 90, max: 140 },
+    energyCurve: 'hero-journey',
+    recommendedVolumes: { music: 45, sfx: 50, ambience: 20 }
+  },
+
+  // Lifestyle & Vlog
+  'lifestyle': {
+    musicMoods: ['chill', 'happy', 'acoustic', 'warm'],
+    musicCategories: ['acoustic', 'indie', 'chill'],
+    sfxStyle: 'playful',
+    sfxTypes: ['pop-soft', 'swoosh-light', 'spring', 'sparkle'],
+    ambienceTypes: ['cafe', 'nature-birds', 'city-day'],
+    bpmRange: { min: 90, max: 120 },
+    energyCurve: 'casual-flow',
+    recommendedVolumes: { music: 35, sfx: 30, ambience: 20 }
+  },
+
+  // Cinematic & Film
+  'cinematic': {
+    musicMoods: ['orchestral', 'epic', 'dramatic', 'emotional'],
+    musicCategories: ['cinematic', 'orchestral', 'epic'],
+    sfxStyle: 'cinematic',
+    sfxTypes: ['boom', 'whoosh-heavy', 'bass-drop', 'impact-cinematic'],
+    ambienceTypes: ['wind', 'rain', 'thunder', 'nature-dramatic'],
+    bpmRange: { min: 60, max: 120 },
+    energyCurve: 'cinematic-arc',
+    recommendedVolumes: { music: 50, sfx: 55, ambience: 30 }
+  },
+
+  // Comedy & Entertainment
+  'comedy': {
+    musicMoods: ['playful', 'quirky', 'fun', 'upbeat'],
+    musicCategories: ['comedy', 'quirky', 'upbeat'],
+    sfxStyle: 'comedic',
+    sfxTypes: ['boing', 'slide-whistle', 'pop-cartoon', 'fail-horn'],
+    ambienceTypes: ['laugh-track', 'applause'],
+    bpmRange: { min: 100, max: 150 },
+    energyCurve: 'bouncy',
+    recommendedVolumes: { music: 35, sfx: 60, ambience: 15 }
+  },
+
+  // Gaming
+  'gaming': {
+    musicMoods: ['energetic', 'electronic', 'intense', 'action'],
+    musicCategories: ['electronic', 'gaming', 'action'],
+    sfxStyle: 'gaming',
+    sfxTypes: ['power-up', 'hit-marker', 'level-up', 'explosion-8bit'],
+    ambienceTypes: ['digital-atmosphere', 'arcade'],
+    bpmRange: { min: 120, max: 180 },
+    energyCurve: 'high-energy',
+    recommendedVolumes: { music: 45, sfx: 55, ambience: 15 }
+  },
+
+  // Romance & Drama
+  'romance': {
+    musicMoods: ['romantic', 'emotional', 'soft', 'tender'],
+    musicCategories: ['romantic', 'piano', 'orchestral-soft'],
+    sfxStyle: 'delicate',
+    sfxTypes: ['sparkle', 'chime-soft', 'heartbeat-soft'],
+    ambienceTypes: ['wind-gentle', 'rain-soft', 'nature-peaceful'],
+    bpmRange: { min: 60, max: 90 },
+    energyCurve: 'emotional-wave',
+    recommendedVolumes: { music: 40, sfx: 25, ambience: 25 }
+  },
+
+  // Action & Sports
+  'action': {
+    musicMoods: ['intense', 'powerful', 'driving', 'aggressive'],
+    musicCategories: ['action', 'rock', 'electronic-hard'],
+    sfxStyle: 'action',
+    sfxTypes: ['impact-heavy', 'explosion', 'whoosh-fast', 'hit'],
+    ambienceTypes: ['engine-rev', 'crowd-intense', 'wind-rushing'],
+    bpmRange: { min: 130, max: 180 },
+    energyCurve: 'adrenaline',
+    recommendedVolumes: { music: 50, sfx: 60, ambience: 20 }
+  },
+
+  // News & Commentary
+  'news': {
+    musicMoods: ['serious', 'professional', 'urgent', 'neutral'],
+    musicCategories: ['news', 'corporate', 'minimal'],
+    sfxStyle: 'news',
+    sfxTypes: ['whoosh-news', 'transition-news', 'notification-urgent'],
+    ambienceTypes: ['newsroom', 'office'],
+    bpmRange: { min: 90, max: 120 },
+    energyCurve: 'professional',
+    recommendedVolumes: { music: 20, sfx: 35, ambience: 10 }
+  },
+
+  // Default/General
+  'general': {
+    musicMoods: ['neutral', 'light', 'positive'],
+    musicCategories: ['corporate', 'ambient'],
+    sfxStyle: 'subtle',
+    sfxTypes: ['whoosh-soft', 'transition-smooth'],
+    ambienceTypes: ['room-tone'],
+    bpmRange: { min: 80, max: 120 },
+    energyCurve: 'steady',
+    recommendedVolumes: { music: 25, sfx: 30, ambience: 15 }
+  }
+};
+
+/**
+ * Pacing to BPM Mapping - Correlates video pacing with music tempo
+ */
+const PACING_BPM_CONFIG = {
+  'fast': {
+    bpmRange: { min: 120, max: 160 },
+    preferredBPM: 140,
+    sceneTransitionSpeed: 'quick',
+    sfxIntensity: 'high',
+    recommendedMusicVolume: 40
+  },
+  'balanced': {
+    bpmRange: { min: 90, max: 120 },
+    preferredBPM: 105,
+    sceneTransitionSpeed: 'moderate',
+    sfxIntensity: 'medium',
+    recommendedMusicVolume: 30
+  },
+  'contemplative': {
+    bpmRange: { min: 60, max: 90 },
+    preferredBPM: 75,
+    sceneTransitionSpeed: 'slow',
+    sfxIntensity: 'low',
+    recommendedMusicVolume: 25
+  }
+};
+
+/**
+ * Emotional Journey Audio Curves - Maps narrative arcs to audio energy
+ */
+const EMOTIONAL_AUDIO_CURVES = {
+  'hero-journey': {
+    phases: [
+      { name: 'ordinary-world', position: 0.0, energy: 0.3, mood: 'neutral' },
+      { name: 'call-to-adventure', position: 0.15, energy: 0.5, mood: 'curious' },
+      { name: 'crossing-threshold', position: 0.25, energy: 0.6, mood: 'determined' },
+      { name: 'tests-allies', position: 0.4, energy: 0.7, mood: 'building' },
+      { name: 'ordeal', position: 0.6, energy: 0.9, mood: 'intense' },
+      { name: 'reward', position: 0.75, energy: 1.0, mood: 'triumphant' },
+      { name: 'return', position: 0.9, energy: 0.6, mood: 'reflective' },
+      { name: 'resolution', position: 1.0, energy: 0.5, mood: 'satisfied' }
+    ]
+  },
+  'problem-solution': {
+    phases: [
+      { name: 'problem-intro', position: 0.0, energy: 0.4, mood: 'concerned' },
+      { name: 'problem-deep', position: 0.2, energy: 0.6, mood: 'tense' },
+      { name: 'exploration', position: 0.4, energy: 0.5, mood: 'curious' },
+      { name: 'solution-reveal', position: 0.6, energy: 0.8, mood: 'hopeful' },
+      { name: 'implementation', position: 0.8, energy: 0.9, mood: 'confident' },
+      { name: 'success', position: 1.0, energy: 0.7, mood: 'satisfied' }
+    ]
+  },
+  'tension-release': {
+    phases: [
+      { name: 'setup', position: 0.0, energy: 0.3, mood: 'calm' },
+      { name: 'building', position: 0.3, energy: 0.6, mood: 'anticipation' },
+      { name: 'peak-tension', position: 0.6, energy: 1.0, mood: 'intense' },
+      { name: 'release', position: 0.8, energy: 0.4, mood: 'relief' },
+      { name: 'resolution', position: 1.0, energy: 0.5, mood: 'peaceful' }
+    ]
+  },
+  'steady': {
+    phases: [
+      { name: 'intro', position: 0.0, energy: 0.5, mood: 'neutral' },
+      { name: 'main', position: 0.5, energy: 0.5, mood: 'consistent' },
+      { name: 'outro', position: 1.0, energy: 0.5, mood: 'neutral' }
+    ]
+  },
+  'building-climax': {
+    phases: [
+      { name: 'intro', position: 0.0, energy: 0.3, mood: 'calm' },
+      { name: 'rising', position: 0.3, energy: 0.5, mood: 'building' },
+      { name: 'intensifying', position: 0.6, energy: 0.7, mood: 'intense' },
+      { name: 'climax', position: 0.85, energy: 1.0, mood: 'peak' },
+      { name: 'resolution', position: 1.0, energy: 0.6, mood: 'satisfied' }
+    ]
+  }
+};
+
+/**
+ * Sound Effects Library - Categorized SFX for different use cases
+ */
+const SFX_LIBRARY = [
+  // Transitions - Whooshes
+  { id: 'whoosh-soft', name: 'Soft Whoosh', category: 'transition', intensity: 'low', duration: 0.8, tags: ['subtle', 'smooth'] },
+  { id: 'whoosh-medium', name: 'Medium Whoosh', category: 'transition', intensity: 'medium', duration: 0.6, tags: ['standard', 'clean'] },
+  { id: 'whoosh-heavy', name: 'Heavy Whoosh', category: 'transition', intensity: 'high', duration: 0.5, tags: ['dramatic', 'powerful'] },
+  { id: 'whoosh-dark', name: 'Dark Whoosh', category: 'transition', intensity: 'medium', duration: 0.7, tags: ['horror', 'mysterious'] },
+  { id: 'whoosh-fast', name: 'Fast Whoosh', category: 'transition', intensity: 'high', duration: 0.3, tags: ['quick', 'action'] },
+
+  // Transitions - Swooshes
+  { id: 'swoosh-magical', name: 'Magical Swoosh', category: 'transition', intensity: 'medium', duration: 1.0, tags: ['fantasy', 'sparkle'] },
+  { id: 'swoosh-light', name: 'Light Swoosh', category: 'transition', intensity: 'low', duration: 0.5, tags: ['gentle', 'airy'] },
+  { id: 'tech-swoosh', name: 'Tech Swoosh', category: 'transition', intensity: 'medium', duration: 0.6, tags: ['digital', 'modern'] },
+
+  // Impacts
+  { id: 'impact-dramatic', name: 'Dramatic Impact', category: 'impact', intensity: 'high', duration: 1.5, tags: ['cinematic', 'powerful'] },
+  { id: 'impact-deep', name: 'Deep Impact', category: 'impact', intensity: 'high', duration: 2.0, tags: ['bass', 'horror'] },
+  { id: 'impact-cinematic', name: 'Cinematic Impact', category: 'impact', intensity: 'high', duration: 1.8, tags: ['movie', 'epic'] },
+  { id: 'impact-light', name: 'Light Impact', category: 'impact', intensity: 'low', duration: 0.8, tags: ['subtle', 'accent'] },
+
+  // Tech & Digital
+  { id: 'glitch', name: 'Glitch', category: 'tech', intensity: 'medium', duration: 0.5, tags: ['digital', 'error', 'modern'] },
+  { id: 'digital-beep', name: 'Digital Beep', category: 'tech', intensity: 'low', duration: 0.3, tags: ['notification', 'ui'] },
+  { id: 'data-stream', name: 'Data Stream', category: 'tech', intensity: 'low', duration: 1.5, tags: ['cyber', 'processing'] },
+
+  // Rises & Builds
+  { id: 'rise-epic', name: 'Epic Rise', category: 'rise', intensity: 'high', duration: 3.0, tags: ['building', 'anticipation'] },
+  { id: 'rise-gentle', name: 'Gentle Rise', category: 'rise', intensity: 'low', duration: 2.0, tags: ['subtle', 'smooth'] },
+  { id: 'tension-rise', name: 'Tension Rise', category: 'rise', intensity: 'medium', duration: 2.5, tags: ['suspense', 'building'] },
+
+  // Bass & Drops
+  { id: 'bass-drop', name: 'Bass Drop', category: 'drop', intensity: 'high', duration: 1.5, tags: ['edm', 'powerful'] },
+  { id: 'sub-drop', name: 'Sub Drop', category: 'drop', intensity: 'high', duration: 2.0, tags: ['deep', 'cinematic'] },
+  { id: 'boom', name: 'Boom', category: 'drop', intensity: 'high', duration: 1.0, tags: ['explosion', 'dramatic'] },
+
+  // UI & Notifications
+  { id: 'click-soft', name: 'Soft Click', category: 'ui', intensity: 'low', duration: 0.1, tags: ['interface', 'subtle'] },
+  { id: 'notification', name: 'Notification', category: 'ui', intensity: 'low', duration: 0.5, tags: ['alert', 'ping'] },
+  { id: 'success-ding', name: 'Success Ding', category: 'ui', intensity: 'low', duration: 0.6, tags: ['positive', 'complete'] },
+  { id: 'pop-soft', name: 'Soft Pop', category: 'ui', intensity: 'low', duration: 0.2, tags: ['bubble', 'light'] },
+
+  // Playful & Comedy
+  { id: 'boing', name: 'Boing', category: 'comedy', intensity: 'medium', duration: 0.5, tags: ['cartoon', 'bounce'] },
+  { id: 'spring', name: 'Spring', category: 'comedy', intensity: 'medium', duration: 0.4, tags: ['playful', 'fun'] },
+  { id: 'sparkle', name: 'Sparkle', category: 'magic', intensity: 'low', duration: 0.8, tags: ['magical', 'shine'] },
+
+  // Tape & Vinyl
+  { id: 'tape-stop', name: 'Tape Stop', category: 'retro', intensity: 'medium', duration: 1.0, tags: ['vinyl', 'slowdown'] },
+  { id: 'record-scratch', name: 'Record Scratch', category: 'retro', intensity: 'medium', duration: 0.5, tags: ['vinyl', 'interrupt'] }
+];
+
+/**
+ * Ambience Library - Background atmosphere sounds
+ */
+const AMBIENCE_LIBRARY = [
+  // Nature
+  { id: 'nature-forest', name: 'Forest Ambience', category: 'nature', loopable: true, tags: ['peaceful', 'birds', 'trees'] },
+  { id: 'nature-ocean', name: 'Ocean Waves', category: 'nature', loopable: true, tags: ['beach', 'calm', 'water'] },
+  { id: 'nature-rain', name: 'Rain', category: 'nature', loopable: true, tags: ['weather', 'cozy', 'relaxing'] },
+  { id: 'nature-rain-heavy', name: 'Heavy Rain', category: 'nature', loopable: true, tags: ['storm', 'intense'] },
+  { id: 'nature-thunder', name: 'Distant Thunder', category: 'nature', loopable: true, tags: ['storm', 'dramatic'] },
+  { id: 'nature-wind', name: 'Wind', category: 'nature', loopable: true, tags: ['air', 'movement'] },
+  { id: 'nature-wind-howling', name: 'Howling Wind', category: 'nature', loopable: true, tags: ['eerie', 'horror'] },
+  { id: 'nature-birds', name: 'Bird Songs', category: 'nature', loopable: true, tags: ['morning', 'peaceful'] },
+
+  // Urban
+  { id: 'urban-city', name: 'City Ambience', category: 'urban', loopable: true, tags: ['traffic', 'busy', 'street'] },
+  { id: 'urban-night', name: 'City Night', category: 'urban', loopable: true, tags: ['quiet', 'distant', 'evening'] },
+  { id: 'urban-cafe', name: 'Cafe Ambience', category: 'urban', loopable: true, tags: ['coffee', 'chatter', 'cozy'] },
+  { id: 'urban-office', name: 'Office', category: 'urban', loopable: true, tags: ['typing', 'quiet', 'professional'] },
+
+  // Indoor
+  { id: 'room-tone', name: 'Room Tone', category: 'indoor', loopable: true, tags: ['quiet', 'neutral', 'subtle'] },
+  { id: 'library', name: 'Library', category: 'indoor', loopable: true, tags: ['quiet', 'pages', 'study'] },
+
+  // Tech
+  { id: 'tech-server', name: 'Server Room', category: 'tech', loopable: true, tags: ['hum', 'fans', 'digital'] },
+  { id: 'tech-digital', name: 'Digital Atmosphere', category: 'tech', loopable: true, tags: ['electronic', 'subtle'] },
+
+  // Crowds
+  { id: 'crowd-cheer', name: 'Crowd Cheering', category: 'crowd', loopable: true, tags: ['celebration', 'victory'] },
+  { id: 'crowd-applause', name: 'Applause', category: 'crowd', loopable: false, tags: ['clapping', 'approval'] },
+
+  // Special
+  { id: 'heartbeat', name: 'Heartbeat', category: 'special', loopable: true, tags: ['tension', 'suspense', 'horror'] },
+  { id: 'clock-ticking', name: 'Clock Ticking', category: 'special', loopable: true, tags: ['time', 'suspense', 'pressure'] }
+];
+
+/**
+ * analyzeContentForAudio - Analyzes video content and returns comprehensive audio recommendations
+ * This is the core Audio Intelligence Engine function
+ */
+exports.analyzeContentForAudio = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+
+  const {
+    genre,
+    mood: contentMood,
+    pacing,
+    scenes,
+    totalDuration,
+    narrativeArc,
+    emotionalJourney,
+    platform,
+    style
+  } = data;
+
+  try {
+    // 1. Get genre-specific audio mapping
+    const genreConfig = GENRE_AUDIO_MAPPING[genre] || GENRE_AUDIO_MAPPING['general'];
+    const pacingConfig = PACING_BPM_CONFIG[pacing] || PACING_BPM_CONFIG['balanced'];
+
+    // 2. Calculate optimal BPM range (intersection of genre and pacing)
+    const optimalBPM = {
+      min: Math.max(genreConfig.bpmRange.min, pacingConfig.bpmRange.min),
+      max: Math.min(genreConfig.bpmRange.max, pacingConfig.bpmRange.max),
+      preferred: Math.round((pacingConfig.preferredBPM + (genreConfig.bpmRange.min + genreConfig.bpmRange.max) / 2) / 2)
+    };
+
+    // 3. Get emotional curve for the narrative
+    const emotionalCurve = EMOTIONAL_AUDIO_CURVES[emotionalJourney] ||
+                          EMOTIONAL_AUDIO_CURVES[narrativeArc] ||
+                          EMOTIONAL_AUDIO_CURVES['steady'];
+
+    // 4. Calculate per-scene audio assignments
+    const sceneAudioAssignments = (scenes || []).map((scene, index) => {
+      const scenePosition = scenes.length > 1 ? index / (scenes.length - 1) : 0.5;
+
+      // Find the emotional phase for this scene position
+      const phases = emotionalCurve.phases;
+      let currentPhase = phases[0];
+      for (const phase of phases) {
+        if (scenePosition >= phase.position) {
+          currentPhase = phase;
+        }
+      }
+
+      // Select appropriate SFX based on genre and intensity
+      const isLastScene = index === scenes.length - 1;
+      const sfxIntensity = currentPhase.energy > 0.7 ? 'high' : currentPhase.energy > 0.4 ? 'medium' : 'low';
+
+      // Find matching transition SFX
+      const transitionSfx = !isLastScene ? selectBestSfx(genreConfig.sfxTypes, sfxIntensity) : null;
+
+      // Find scene-appropriate ambience
+      const sceneAmbience = selectBestAmbience(genreConfig.ambienceTypes, scene, currentPhase.mood);
+
+      return {
+        sceneId: scene.id,
+        sceneIndex: index,
+        position: scenePosition,
+        emotionalPhase: currentPhase.name,
+        energy: currentPhase.energy,
+        mood: currentPhase.mood,
+        transitionSfx: transitionSfx,
+        ambience: sceneAmbience,
+        suggestedMusicVolume: Math.round(genreConfig.recommendedVolumes.music * currentPhase.energy)
+      };
+    });
+
+    // 5. Build music search criteria
+    const musicCriteria = {
+      moods: genreConfig.musicMoods,
+      categories: genreConfig.musicCategories,
+      bpmRange: optimalBPM,
+      minDuration: (totalDuration || 60) + 10, // Add 10s buffer for fade
+      loopable: (totalDuration || 60) > 180,
+      tags: [genre, contentMood, style].filter(Boolean)
+    };
+
+    // 6. Find best matching tracks from library
+    const recommendedTracks = findMatchingTracks(musicCriteria, MUSIC_LIBRARY);
+
+    // 7. Calculate global mix settings
+    const mixSettings = {
+      voiceVolume: 100,
+      musicVolume: pacingConfig.recommendedMusicVolume,
+      sfxVolume: genreConfig.recommendedVolumes.sfx,
+      ambienceVolume: genreConfig.recommendedVolumes.ambience,
+      // Auto-duck music during speech
+      autoDuck: true,
+      duckLevel: 0.4, // Duck to 40% during speech
+      duckAttack: 200, // 200ms fade down
+      duckRelease: 500 // 500ms fade up
+    };
+
+    // 8. Compile full audio profile
+    const audioProfile = {
+      // Overall characteristics
+      genre: genre,
+      pacing: pacing,
+      energyCurve: genreConfig.energyCurve,
+
+      // Music recommendations
+      music: {
+        criteria: musicCriteria,
+        recommendedTracks: recommendedTracks.slice(0, 5), // Top 5 matches
+        topPick: recommendedTracks[0] || null,
+        bpmRange: optimalBPM,
+        fadeIn: 2000,
+        fadeOut: 3000
+      },
+
+      // Per-scene audio
+      sceneAudio: sceneAudioAssignments,
+
+      // SFX style
+      sfx: {
+        style: genreConfig.sfxStyle,
+        availableTypes: genreConfig.sfxTypes,
+        intensity: pacingConfig.sfxIntensity
+      },
+
+      // Ambience
+      ambience: {
+        recommendedTypes: genreConfig.ambienceTypes,
+        primaryAmbience: genreConfig.ambienceTypes[0] || null
+      },
+
+      // Mix settings
+      mix: mixSettings,
+
+      // Emotional journey
+      emotionalCurve: emotionalCurve
+    };
+
+    return {
+      success: true,
+      audioProfile: audioProfile,
+      message: `Audio profile generated for ${genre} ${pacing} content`
+    };
+
+  } catch (error) {
+    console.error('[analyzeContentForAudio] Error:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to analyze content for audio');
+  }
+});
+
+/**
+ * Helper: Select best SFX based on types and intensity
+ */
+function selectBestSfx(sfxTypes, intensity) {
+  for (const sfxType of sfxTypes) {
+    const sfx = SFX_LIBRARY.find(s => s.id === sfxType || s.id.includes(sfxType));
+    if (sfx && (sfx.intensity === intensity || !intensity)) {
+      return sfx;
+    }
+  }
+  // Fallback to first type
+  return SFX_LIBRARY.find(s => s.id === sfxTypes[0]) || SFX_LIBRARY[0];
+}
+
+/**
+ * Helper: Select best ambience based on types and mood
+ */
+function selectBestAmbience(ambienceTypes, scene, mood) {
+  for (const ambienceType of ambienceTypes) {
+    const ambience = AMBIENCE_LIBRARY.find(a =>
+      a.id === ambienceType ||
+      a.id.includes(ambienceType) ||
+      a.tags.some(t => ambienceType.includes(t))
+    );
+    if (ambience) {
+      return ambience;
+    }
+  }
+  return null;
+}
+
+/**
+ * Helper: Find tracks matching criteria
+ */
+function findMatchingTracks(criteria, library) {
+  return library
+    .map(track => {
+      let score = 0;
+
+      // Mood matching
+      if (criteria.moods) {
+        const trackMoodLower = (track.mood || '').toLowerCase();
+        for (const mood of criteria.moods) {
+          if (trackMoodLower.includes(mood.toLowerCase())) {
+            score += 20;
+          }
+        }
+      }
+
+      // Category matching
+      if (criteria.categories && track.category) {
+        if (criteria.categories.includes(track.category)) {
+          score += 15;
+        }
+      }
+
+      // BPM matching
+      if (criteria.bpmRange && track.bpm) {
+        if (track.bpm >= criteria.bpmRange.min && track.bpm <= criteria.bpmRange.max) {
+          score += 25;
+          // Bonus for being close to preferred
+          if (criteria.bpmRange.preferred) {
+            const bpmDiff = Math.abs(track.bpm - criteria.bpmRange.preferred);
+            score += Math.max(0, 10 - bpmDiff / 5);
+          }
+        }
+      }
+
+      // Duration matching
+      if (criteria.minDuration && track.duration) {
+        if (track.duration >= criteria.minDuration) {
+          score += 10;
+        }
+      }
+
+      // Tag matching
+      if (criteria.tags && track.tags) {
+        for (const tag of criteria.tags) {
+          if (tag && track.tags.some(t => t.toLowerCase().includes(tag.toLowerCase()))) {
+            score += 5;
+          }
+        }
+      }
+
+      return { ...track, matchScore: score };
+    })
+    .filter(track => track.matchScore > 0)
+    .sort((a, b) => b.matchScore - a.matchScore);
+}
+
 /**
  * Royalty-free music library for video creation
  * These are curated tracks that can be used freely
