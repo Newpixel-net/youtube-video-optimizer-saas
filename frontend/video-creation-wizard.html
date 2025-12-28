@@ -4130,13 +4130,14 @@
 
                 // Use Gemini (NanoBanana Pro) for best quality portraits
                 const generateFn = functions.httpsCallable('generateCreativeImage');
+                // Note: Gemini doesn't support negativePrompt as a parameter
+                // The backend embeds negative prompts in the prompt text for Gemini
                 const result = await generateFn({
-                    prompt: portraitPrompt,
+                    prompt: portraitPrompt + '\n\nIMPORTANT: Avoid background elements, scenery, props, furniture, other people, crowds. Use clean white background. Avoid text, watermark, blurry, low quality, deformed, bad anatomy, extra limbs.',
                     model: 'nano-banana-pro', // Gemini - supports reference images
                     quantity: 1,
                     aspectRatio: '3:4', // Portrait orientation
-                    quality: 'hd',
-                    negativePrompt: 'background elements, scenery, props, furniture, other people, crowds, text, watermark, blurry, low quality, deformed, bad anatomy, extra limbs'
+                    quality: 'hd'
                 });
 
                 if (result.data.success && result.data.images && result.data.images.length > 0) {
@@ -4304,6 +4305,104 @@
             }
 
             return null;
+        }
+
+        // ==========================================
+        // AUTO-EXTRACT CHARACTERS FROM SCRIPT
+        // Analyzes the script and creates character entries automatically
+        // ==========================================
+
+        async function extractCharactersFromScript() {
+            if (!state.script.scenes || state.script.scenes.length === 0) {
+                console.log('[Auto-Extract] No scenes to analyze');
+                return { success: false, count: 0 };
+            }
+
+            console.log('[Auto-Extract] Starting character extraction from script...');
+
+            try {
+                const extractFn = functions.httpsCallable('creationWizardExtractCharacters');
+                const result = await extractFn({
+                    script: {
+                        title: state.script.title,
+                        scenes: state.script.scenes
+                    },
+                    genre: state.content.genre || null,
+                    productionMode: state.content.productionMode || 'standard',
+                    styleBible: state.storyboard.styleBible?.enabled ? state.storyboard.styleBible : null
+                });
+
+                if (result.data.success && result.data.characters && result.data.characters.length > 0) {
+                    // Initialize Scene Memory if needed
+                    initSceneMemory();
+
+                    // Enable Character Bible
+                    state.storyboard.characterBible.enabled = true;
+
+                    // Add extracted characters (avoid duplicates by name)
+                    const existingNames = state.storyboard.characterBible.characters.map(c => c.name.toLowerCase());
+
+                    let addedCount = 0;
+                    for (const char of result.data.characters) {
+                        if (!existingNames.includes(char.name.toLowerCase())) {
+                            state.storyboard.characterBible.characters.push(char);
+                            existingNames.push(char.name.toLowerCase());
+                            addedCount++;
+                        }
+                    }
+
+                    console.log(`[Auto-Extract] Added ${addedCount} characters to Character Bible`);
+
+                    if (result.data.suggestedStyleNote) {
+                        console.log(`[Auto-Extract] Style note: ${result.data.suggestedStyleNote}`);
+                    }
+
+                    return {
+                        success: true,
+                        count: addedCount,
+                        total: result.data.characters.length,
+                        hasHumanCharacters: result.data.hasHumanCharacters
+                    };
+                } else if (!result.data.hasHumanCharacters) {
+                    console.log('[Auto-Extract] No human characters detected in script');
+                    return {
+                        success: true,
+                        count: 0,
+                        hasHumanCharacters: false,
+                        note: result.data.suggestedStyleNote
+                    };
+                }
+
+                return { success: false, count: 0 };
+
+            } catch (error) {
+                console.error('[Auto-Extract] Error extracting characters:', error);
+                return { success: false, count: 0, error: error.message };
+            }
+        }
+
+        // Manual trigger to re-analyze script for characters
+        async function reanalyzeScriptForCharacters() {
+            if (!state.script.scenes || state.script.scenes.length === 0) {
+                showToast('Generate a script first before analyzing for characters', 'warning');
+                return;
+            }
+
+            showToast('Analyzing script for characters...', 'info');
+
+            const result = await extractCharactersFromScript();
+
+            if (result.success && result.count > 0) {
+                showToast(`Found ${result.count} character(s) and added to Character Bible!`, 'success');
+                render();
+                scheduleAutoSave();
+            } else if (result.success && !result.hasHumanCharacters) {
+                showToast('No human characters detected in this script', 'info');
+            } else if (result.success && result.count === 0) {
+                showToast('Characters already in Bible or no new characters found', 'info');
+            } else {
+                showToast('Could not analyze script for characters', 'error');
+            }
         }
 
         // Refresh character portrait base64 from URLs after project load
@@ -4511,6 +4610,28 @@
 
                     showToast('Script generated successfully!', 'success');
                     scheduleAutoSave();
+                    render();
+
+                    // ==========================================
+                    // AUTO-EXTRACT CHARACTERS FROM SCRIPT
+                    // Phase 4: Scene Memory System Integration
+                    // ==========================================
+                    try {
+                        showToast('Analyzing script for characters...', 'info');
+                        const extractResult = await extractCharactersFromScript();
+
+                        if (extractResult.success && extractResult.count > 0) {
+                            showToast(`✨ Found ${extractResult.count} character(s) - Added to Character Bible!`, 'success');
+                            render();
+                            scheduleAutoSave();
+                        } else if (extractResult.success && !extractResult.hasHumanCharacters) {
+                            console.log('[Script] No human characters in this script');
+                        }
+                    } catch (extractError) {
+                        console.warn('[Script] Character extraction optional step failed:', extractError);
+                        // Don't show error to user - this is an optional enhancement
+                    }
+
                 } else {
                     throw new Error('Script generation failed');
                 }
@@ -4905,9 +5026,15 @@
                         model: modelId,
                         quantity: 1,
                         aspectRatio: aspectRatioMap[state.platform.aspectRatio] || '16:9',
-                        quality: modelId === 'nanobanana-pro' ? 'hd' : 'basic',
-                        negativePrompt: assembled.negativePrompt || 'blurry, low quality, watermark, text, deformed'
+                        quality: modelId === 'nanobanana-pro' ? 'hd' : 'basic'
                     };
+
+                    // Only add negativePrompt for models that support it (not Gemini)
+                    // Gemini models handle negative prompts by embedding in the prompt text
+                    const isGeminiModel = ['nanobanana-pro', 'nanobanana', 'nano-banana-pro', 'nano-banana'].includes(modelId);
+                    if (!isGeminiModel && assembled.negativePrompt) {
+                        requestData.negativePrompt = assembled.negativePrompt;
+                    }
 
                     // Add character reference image if available
                     // This enables visual consistency across scenes!
@@ -8138,13 +8265,22 @@
                         <div style="display: flex; flex: 1; overflow: hidden;">
                             <!-- Character List (Left Panel) - Now with thumbnails -->
                             <div style="width: 220px; border-right: 1px solid rgba(255,255,255,0.1); padding: 1rem; overflow-y: auto;">
-                                <button onclick="addCharacter()" style="width: 100%; padding: 0.6rem; background: rgba(6, 182, 212, 0.2); border: 1px dashed rgba(6, 182, 212, 0.5); border-radius: 0.5rem; color: #06b6d4; font-size: 0.75rem; cursor: pointer; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+                                <button onclick="addCharacter()" style="width: 100%; padding: 0.6rem; background: rgba(6, 182, 212, 0.2); border: 1px dashed rgba(6, 182, 212, 0.5); border-radius: 0.5rem; color: #06b6d4; font-size: 0.75rem; cursor: pointer; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
                                     <span style="font-size: 1.2rem;">+</span> Add Character
                                 </button>
 
+                                <!-- Auto-extract characters from script -->
+                                ${state.script.scenes && state.script.scenes.length > 0 ? `
+                                <button onclick="reanalyzeScriptForCharacters()" style="width: 100%; padding: 0.5rem; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.5rem; color: #a78bfa; font-size: 0.7rem; cursor: pointer; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+                                    <span>🔍</span> Auto-detect from Script
+                                </button>
+                                ` : ''}
+
                                 ${characters.length === 0 ? `
                                     <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 0.75rem; padding: 1rem;">
-                                        No characters yet.<br>Add one to get started.
+                                        ${state.script.scenes && state.script.scenes.length > 0 ?
+                                            'No characters yet.<br>Click "Auto-detect" to analyze your script.' :
+                                            'No characters yet.<br>Add one to get started.'}
                                     </div>
                                 ` : characters.map(char => `
                                     <div onclick="editCharacter('${char.id}')"

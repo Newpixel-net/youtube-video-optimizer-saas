@@ -11235,7 +11235,8 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
 
   // Gemini Image models (use generateContent API with image output)
   // These models support reference images via multimodal input
-  const geminiImageModels = ['nano-banana-pro', 'nano-banana'];
+  // Include aliases without hyphens for backwards compatibility
+  const geminiImageModels = ['nano-banana-pro', 'nano-banana', 'nanobanana-pro', 'nanobanana'];
   const isGeminiImageModel = geminiImageModels.includes(model);
 
   // Gemini Image model mapping (uses generateContent with responseModalities)
@@ -11244,7 +11245,10 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
   const geminiImageModelMap = {
     'auto': 'gemini-3-pro-image-preview',
     'nano-banana-pro': 'gemini-3-pro-image-preview',
-    'nano-banana': 'gemini-2.0-flash-exp'  // Was gemini-2.5-flash-image which doesn't exist!
+    'nano-banana': 'gemini-2.0-flash-exp',  // Was gemini-2.5-flash-image which doesn't exist!
+    // Aliases without hyphens for backwards compatibility
+    'nanobanana-pro': 'gemini-3-pro-image-preview',
+    'nanobanana': 'gemini-2.0-flash-exp'
   };
 
   // Imagen model mapping (uses ai.models.generateImages)
@@ -24461,6 +24465,163 @@ Return ONLY valid JSON:
     console.error('[creationWizardGenerateScript] Error:', error);
     if (error instanceof functions.https.HttpsError) throw error;
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate script'));
+  }
+});
+
+/**
+ * creationWizardExtractCharacters - Analyzes script and extracts character descriptions
+ *
+ * This enables the Scene Memory System's Character Bible to be auto-populated
+ * based on the script content, ensuring visual consistency across scenes.
+ */
+exports.creationWizardExtractCharacters = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { script, genre, productionMode, styleBible } = data;
+
+  if (!script || !script.scenes || !Array.isArray(script.scenes)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Valid script with scenes required');
+  }
+
+  try {
+    // Combine all scene content for analysis
+    const sceneContent = script.scenes.map((scene, idx) =>
+      `Scene ${idx + 1}:\nNarration: ${scene.narration || 'No narration'}\nVisual: ${scene.visual || scene.visualPrompt || 'No visual description'}`
+    ).join('\n\n');
+
+    const systemPrompt = `You are an expert at analyzing video scripts and identifying characters for visual consistency.
+Your task is to extract all characters that appear in the script and create detailed visual descriptions for AI image generation.
+
+CRITICAL RULES:
+1. Focus on characters that APPEAR VISUALLY in the video (not just mentioned in narration)
+2. Create SPECIFIC, CONSISTENT descriptions that can be used across all scenes
+3. Include: age, gender, ethnicity, build, hair, eyes, distinctive features, clothing
+4. Make descriptions CONCRETE, not vague (e.g., "short dark brown hair" not "dark hair")
+5. Consider the genre and style to match character descriptions appropriately
+6. If the script is abstract/conceptual with no human characters, return empty array
+7. Maximum 5 characters (focus on main/recurring characters)
+
+GENRE CONSIDERATIONS:
+- Corporate/Business: Professional attire, polished appearance
+- Action/Adventure: Practical clothing, battle-ready look
+- Fantasy: Period-appropriate or magical attire
+- Sci-Fi: Futuristic clothing, tech accessories
+- Documentary: Natural, authentic appearance
+- Lifestyle: Contemporary casual or stylish clothing
+
+Return valid JSON only, no markdown formatting.`;
+
+    const userPrompt = `Analyze this script and extract character descriptions for visual consistency.
+
+=== SCRIPT CONTENT ===
+Title: ${script.title || 'Untitled'}
+Genre: ${genre || 'General'}
+Production Mode: ${productionMode || 'standard'}
+
+${sceneContent}
+
+${styleBible?.enabled ? `
+=== STYLE BIBLE (match characters to this style) ===
+Style: ${styleBible.style || 'cinematic'}
+Color Grade: ${styleBible.colorGrade || 'natural'}
+Atmosphere: ${styleBible.atmosphere || 'standard'}
+` : ''}
+
+=== REQUIRED OUTPUT FORMAT ===
+{
+  "characters": [
+    {
+      "name": "Character Name or Role (e.g., 'The Protagonist', 'Sarah', 'The CEO')",
+      "description": "Detailed physical description for AI image generation: age, gender, ethnicity, build, hair color and style, eye color, distinctive features, specific clothing and accessories. Be very specific and concrete.",
+      "role": "Main/Supporting/Background",
+      "appearsInScenes": [1, 2, 5],
+      "traits": ["confident", "mysterious", "professional"]
+    }
+  ],
+  "hasHumanCharacters": true,
+  "suggestedStyleNote": "Optional note about character style recommendations"
+}
+
+If there are no human characters or the video is purely abstract/conceptual/nature footage, return:
+{
+  "characters": [],
+  "hasHumanCharacters": false,
+  "suggestedStyleNote": "This script focuses on [type of content] without human characters."
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000
+    });
+
+    const responseText = completion.choices[0].message.content;
+    console.log('[extractCharacters] Raw response:', responseText.substring(0, 500));
+
+    // Parse the response
+    let result;
+    try {
+      // Clean JSON if wrapped in markdown
+      let cleanJson = responseText.trim();
+      if (cleanJson.startsWith('```json')) {
+        cleanJson = cleanJson.slice(7);
+      } else if (cleanJson.startsWith('```')) {
+        cleanJson = cleanJson.slice(3);
+      }
+      if (cleanJson.endsWith('```')) {
+        cleanJson = cleanJson.slice(0, -3);
+      }
+      result = JSON.parse(cleanJson.trim());
+    } catch (parseError) {
+      console.error('[extractCharacters] Parse error:', parseError);
+      // Return empty result on parse error
+      result = {
+        characters: [],
+        hasHumanCharacters: false,
+        suggestedStyleNote: 'Could not analyze script for characters.'
+      };
+    }
+
+    // Normalize and validate the result
+    const characters = (result.characters || []).map((char, idx) => ({
+      id: `char-${Date.now()}-${idx}`,
+      name: char.name || `Character ${idx + 1}`,
+      description: char.description || '',
+      role: char.role || 'Supporting',
+      appearsInScenes: char.appearsInScenes || [],
+      traits: char.traits || [],
+      referenceImageUrl: null,
+      referenceImageBase64: null,
+      referenceImageMimeType: null,
+      referenceImageStatus: 'none',
+      appliedToScenes: char.appearsInScenes || []
+    }));
+
+    console.log(`[extractCharacters] Extracted ${characters.length} characters`);
+
+    return {
+      success: true,
+      characters,
+      hasHumanCharacters: result.hasHumanCharacters !== false,
+      suggestedStyleNote: result.suggestedStyleNote || null,
+      usage: {
+        promptTokens: completion.usage?.prompt_tokens || 0,
+        completionTokens: completion.usage?.completion_tokens || 0
+      }
+    };
+
+  } catch (error) {
+    console.error('[extractCharacters] Error:', error);
+    // Return empty result instead of throwing to not block the flow
+    return {
+      success: false,
+      characters: [],
+      hasHumanCharacters: false,
+      error: error.message
+    };
   }
 });
 
