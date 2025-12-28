@@ -3185,7 +3185,10 @@
                 pacingProfile: null,           // 'rapid-fire' | 'balanced' | 'cinematic' | etc.
                 beatSyncMode: 'off',           // 'off' | 'subtle' | 'moderate' | 'aggressive' | 'music-video'
                 patternInterrupt: null,        // 'youtube' | 'tiktok' | 'cinema' | etc.
-                bRollStrategy: null            // 'aggressive' | 'moderate' | 'minimal' | etc.
+                bRollStrategy: null,           // 'aggressive' | 'moderate' | 'minimal' | etc.
+                // Smart Audio AI (Phase 2)
+                audioProfile: null,            // AI-generated audio recommendations
+                audioAnalyzing: false          // Loading state for audio analysis
             },
 
             // Preview Engine State
@@ -10385,6 +10388,93 @@
 
             let html = '';
 
+            // Smart Audio AI Panel (Phase 2)
+            var audioProfile = state.assembly.audioProfile || null;
+            var audioAnalyzing = state.assembly.audioAnalyzing || false;
+
+            html += '<div style="margin-bottom: 1.25rem; padding: 1rem; background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(236,72,153,0.1)); border-radius: 0.75rem; border: 1px solid rgba(139,92,246,0.3);">';
+
+            // Header
+            html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">';
+            html += '<div style="display: flex; align-items: center; gap: 0.5rem;">';
+            html += '<span style="font-size: 1.1rem;">🤖</span>';
+            html += '<span style="font-size: 0.85rem; font-weight: 600; color: white;">Smart Audio</span>';
+            html += '<span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #8b5cf6, #ec4899); border-radius: 0.25rem; color: white; font-weight: 600;">AI</span>';
+            html += '</div>';
+
+            if (audioProfile) {
+                html += '<span style="font-size: 0.6rem; color: #10b981;">✓ Analyzed</span>';
+            }
+            html += '</div>';
+
+            // Description
+            html += '<div style="font-size: 0.7rem; color: rgba(255,255,255,0.6); margin-bottom: 0.75rem; line-height: 1.4;">';
+            html += 'AI analyzes your content genre, pacing, and mood to recommend perfect background music, sound effects, and mix settings.';
+            html += '</div>';
+
+            if (audioAnalyzing) {
+                // Loading state
+                html += '<div style="display: flex; align-items: center; justify-content: center; padding: 1rem; gap: 0.5rem;">';
+                html += '<div class="animate-spin" style="width: 20px; height: 20px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>';
+                html += '<span style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Analyzing content...</span>';
+                html += '</div>';
+            } else if (audioProfile) {
+                // Show recommendations
+                html += '<div style="background: rgba(0,0,0,0.2); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.75rem;">';
+
+                // Recommended Track
+                if (audioProfile.music && audioProfile.music.topPick) {
+                    var topPick = audioProfile.music.topPick;
+                    html += '<div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">';
+                    html += '<span style="font-size: 0.85rem;">🎵</span>';
+                    html += '<div style="flex: 1;">';
+                    html += '<div style="font-size: 0.75rem; font-weight: 600; color: white;">' + (topPick.name || 'Recommended Track') + '</div>';
+                    html += '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">' + (topPick.mood || '') + ' • ' + (topPick.bpm || '?') + ' BPM • ' + (topPick.matchScore || 0) + '% match</div>';
+                    html += '</div>';
+                    html += '</div>';
+                }
+
+                // Mix Settings
+                if (audioProfile.mix) {
+                    html += '<div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.5rem;">';
+                    html += '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);"><span style="color: #06b6d4;">●</span> Voice: ' + audioProfile.mix.voiceVolume + '%</div>';
+                    html += '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);"><span style="color: #8b5cf6;">●</span> Music: ' + audioProfile.mix.musicVolume + '%</div>';
+                    html += '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);"><span style="color: #f59e0b;">●</span> SFX: ' + audioProfile.mix.sfxVolume + '%</div>';
+                    html += '</div>';
+                }
+
+                // SFX & Ambience info
+                if (audioProfile.sfx) {
+                    html += '<div style="margin-top: 0.5rem; font-size: 0.6rem; color: rgba(255,255,255,0.5);">';
+                    html += 'SFX Style: <span style="color: #a78bfa;">' + (audioProfile.sfx.style || 'subtle') + '</span>';
+                    if (audioProfile.ambience && audioProfile.ambience.primaryAmbience) {
+                        html += ' • Ambience: <span style="color: #a78bfa;">' + audioProfile.ambience.primaryAmbience + '</span>';
+                    }
+                    html += '</div>';
+                }
+
+                html += '</div>';
+
+                // Action buttons
+                html += '<div style="display: flex; gap: 0.5rem;">';
+                html += '<button onclick="applySmartAudioRecommendations()" style="flex: 1; padding: 0.6rem; border-radius: 0.4rem; border: none; background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; font-size: 0.75rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.3rem;">';
+                html += '✨ Apply All Recommendations';
+                html += '</button>';
+                html += '<button onclick="analyzeContentForAudio()" style="padding: 0.6rem 0.75rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: rgba(255,255,255,0.7); font-size: 0.75rem; cursor: pointer;" title="Re-analyze">';
+                html += '🔄';
+                html += '</button>';
+                html += '</div>';
+
+            } else {
+                // No analysis yet - show analyze button
+                html += '<button onclick="analyzeContentForAudio()" style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: none; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; font-size: 0.8rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">';
+                html += '<span style="font-size: 1rem;">✨</span>';
+                html += 'Analyze & Get AI Recommendations';
+                html += '</button>';
+            }
+
+            html += '</div>';
+
             // Audio Mix Visualization
             html += '<div style="margin-bottom: 1.25rem; padding: 0.75rem; background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(139,92,246,0.1)); border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1);">';
             html += '<div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Audio Mix</div>';
@@ -11453,6 +11543,146 @@
                 previewEngine.musicVolume = volume / 100;
             }
             render();
+        }
+
+        // ==========================================
+        // SMART AUDIO - AI Analysis & Recommendations
+        // ==========================================
+
+        async function analyzeContentForAudio() {
+            // Gather content information
+            const genre = state.content.genre || state.content.niche || 'general';
+            const pacing = state.content.pacing || state.assembly.pacingProfile || 'balanced';
+            const mood = state.assembly.audioMood || state.content.mood || '';
+            const style = state.content.style || '';
+            const scenes = state.script.scenes || [];
+            const narrativeArc = state.content.narrativePreset || state.content.storyArc || '';
+            const emotionalJourney = state.content.emotionalJourney || '';
+            const platform = state.platform.selected || 'youtube';
+
+            // Calculate total duration
+            let totalDuration = 0;
+            scenes.forEach(scene => {
+                totalDuration += scene.duration || 8;
+            });
+
+            state.assembly.audioAnalyzing = true;
+            render();
+
+            try {
+                const analyzeAudio = firebase.functions().httpsCallable('analyzeContentForAudio');
+                const result = await analyzeAudio({
+                    genre: genre,
+                    mood: mood,
+                    pacing: pacing,
+                    scenes: scenes.map(s => ({ id: s.id, visual: s.visual, narration: s.narration })),
+                    totalDuration: totalDuration,
+                    narrativeArc: narrativeArc,
+                    emotionalJourney: emotionalJourney,
+                    platform: platform,
+                    style: style
+                });
+
+                if (result.data.success) {
+                    state.assembly.audioProfile = result.data.audioProfile;
+                    showToast('Audio analysis complete! Review recommendations.', 'success');
+                } else {
+                    throw new Error('Analysis failed');
+                }
+            } catch (error) {
+                console.error('[analyzeContentForAudio] Error:', error);
+                showToast('Failed to analyze audio. Please try again.', 'error');
+            } finally {
+                state.assembly.audioAnalyzing = false;
+                render();
+            }
+        }
+
+        function applySmartAudioRecommendations() {
+            const audioProfile = state.assembly.audioProfile;
+            if (!audioProfile) {
+                showToast('No audio recommendations available. Analyze content first.', 'error');
+                return;
+            }
+
+            // Apply music recommendation
+            if (audioProfile.music && audioProfile.music.topPick) {
+                const topPick = audioProfile.music.topPick;
+                state.assembly.music.enabled = true;
+                state.assembly.music.trackId = topPick.id;
+
+                // Apply fade settings from profile
+                if (audioProfile.music.fadeIn) {
+                    state.assembly.music.fadeIn = audioProfile.music.fadeIn / 1000; // Convert ms to seconds
+                }
+                if (audioProfile.music.fadeOut) {
+                    state.assembly.music.fadeOut = audioProfile.music.fadeOut / 1000;
+                }
+            }
+
+            // Apply mix settings
+            if (audioProfile.mix) {
+                state.assembly.audioMix = state.assembly.audioMix || {};
+                state.assembly.audioMix.voiceVolume = audioProfile.mix.voiceVolume;
+                state.assembly.music.volume = audioProfile.mix.musicVolume;
+
+                // Apply auto-duck settings
+                if (audioProfile.mix.autoDuck !== undefined) {
+                    state.assembly.audioMix.ducking = audioProfile.mix.autoDuck;
+                }
+            }
+
+            // Apply SFX style
+            if (audioProfile.sfx && audioProfile.sfx.style) {
+                // Map SFX style to transition sound
+                const sfxStyleMap = {
+                    'subtle': 'whoosh-soft',
+                    'cinematic': 'whoosh-heavy',
+                    'tech': 'glitch',
+                    'horror': 'whoosh-dark',
+                    'powerful': 'sub-drop',
+                    'playful': 'swoosh-magical',
+                    'action': 'whoosh-fast',
+                    'clean': 'whoosh-medium',
+                    'minimal': null,
+                    'comedic': 'boing'
+                };
+                state.assembly.transitionSound = sfxStyleMap[audioProfile.sfx.style] || 'whoosh-soft';
+            }
+
+            // Apply ambience
+            if (audioProfile.ambience && audioProfile.ambience.primaryAmbience) {
+                state.assembly.ambienceLayer = audioProfile.ambience.primaryAmbience;
+            }
+
+            // Apply audio mood
+            if (audioProfile.genre) {
+                // Map genre to audio mood
+                const genreMoodMap = {
+                    'horror': 'dark',
+                    'thriller': 'tense',
+                    'documentary': 'contemplative',
+                    'educational': 'professional',
+                    'tech': 'energetic',
+                    'corporate': 'professional',
+                    'motivational': 'epic',
+                    'lifestyle': 'intimate',
+                    'cinematic': 'epic',
+                    'comedy': 'energetic',
+                    'gaming': 'energetic',
+                    'romance': 'intimate',
+                    'action': 'energetic',
+                    'news': 'professional'
+                };
+                const suggestedMood = genreMoodMap[audioProfile.genre];
+                if (suggestedMood && !state.assembly.audioMood) {
+                    state.assembly.audioMood = suggestedMood;
+                }
+            }
+
+            scheduleAutoSave();
+            render();
+            showToast('Smart Audio recommendations applied!', 'success');
         }
 
         // Phase 3D: Audio Intelligence Functions
