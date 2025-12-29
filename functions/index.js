@@ -24214,7 +24214,12 @@ CRITICAL DIVERSITY CHECK before responding:
  * - Call-to-action
  * - Timing for each scene
  */
-exports.creationWizardGenerateScript = functions.https.onCall(async (data, context) => {
+exports.creationWizardGenerateScript = functions
+  .runWith({
+    timeoutSeconds: 300, // 5 minutes - needed for complex prompts with rich concept data
+    memory: '1GB' // Increase memory for large prompt processing
+  })
+  .https.onCall(async (data, context) => {
   try {
     const uid = await verifyAuth(context);
     const { projectId, config } = data;
