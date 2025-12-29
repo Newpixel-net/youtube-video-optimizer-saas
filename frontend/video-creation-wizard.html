@@ -3698,7 +3698,8 @@
 
             // Step 3: Script
             script: {
-                status: 'idle',
+                status: 'idle', // 'idle', 'generating', 'generated', 'error'
+                error: null,    // Error message if status is 'error'
                 title: '',
                 hook: '',
                 scenes: [],
@@ -3730,6 +3731,8 @@
                     status: 'idle',             // idle, decomposing, ready, error
                     error: null
                 },
+                // Active polling intervals for cleanup on navigation
+                activePollingIntervals: [],
                 styleReference: null,
                 modifyingScene: null,  // Scene ID being modified in modal
                 modifyPrompt: null,    // Current prompt in modify modal
@@ -4335,6 +4338,11 @@
                 cleanupPreviewEngine();
             }
 
+            // Cleanup polling intervals when leaving Storyboard step (where video generation happens)
+            if (state.currentStep === 4 && step !== 4) {
+                cleanupAllPollingIntervals();
+            }
+
             state.currentStep = step;
             if (step > state.maxReachedStep) {
                 state.maxReachedStep = step;
@@ -4451,6 +4459,18 @@
         }
 
         function selectConceptIdea(index) {
+            // Validate index is within bounds
+            if (!state.concept.ideas || !Array.isArray(state.concept.ideas)) {
+                console.error('[Step 2] No ideas array available for selection');
+                showToast('No ideas available to select', 'error');
+                return;
+            }
+            if (index < 0 || index >= state.concept.ideas.length) {
+                console.error(`[Step 2] Invalid idea index: ${index}, ideas length: ${state.concept.ideas.length}`);
+                showToast('Invalid idea selection', 'error');
+                return;
+            }
+
             state.concept.selectedIdea = index;
             const idea = state.concept.ideas[index];
             if (idea) {
@@ -4458,7 +4478,11 @@
                 state.concept.uniqueElements = idea.uniqueElements || [];
                 state.concept.refinedConcept = idea;
                 // Also update legacy content.topic for compatibility
-                state.content.topic = idea.title + ': ' + (idea.logline || idea.description || '');
+                const title = idea.title || 'Untitled';
+                const description = idea.logline || idea.description || '';
+                state.content.topic = title + (description ? ': ' + description : '');
+            } else {
+                console.error(`[Step 2] Idea at index ${index} is null/undefined`);
             }
             render();
             scheduleAutoSave();
@@ -4523,10 +4547,10 @@
                     state.concept.characters = data.characters || [];
 
                     // Update content state for compatibility
-                    if (data.suggestedMood) {
+                    if (data.suggestedMood && typeof data.suggestedMood === 'string') {
                         state.content.mood = data.suggestedMood;
                     }
-                    if (data.suggestedTone) {
+                    if (data.suggestedTone && typeof data.suggestedTone === 'string') {
                         state.content.tone = data.suggestedTone.toLowerCase();
                     }
 
@@ -6701,12 +6725,26 @@
                     }
 
                 } else {
-                    throw new Error('Script generation failed');
+                    throw new Error(result.data.error || 'Script generation failed');
                 }
             } catch (error) {
                 console.error('Script generation error:', error);
-                state.script.status = 'idle';
-                showToast('Failed to generate script. Please try again.', 'error');
+                state.script.status = 'error';
+                state.script.error = error.message || 'Unknown error';
+
+                // Provide more helpful error messages based on error type
+                let userMessage = 'Failed to generate script. Please try again.';
+                if (error.code === 'deadline-exceeded' || error.message?.includes('timeout')) {
+                    userMessage = 'Script generation timed out. Try a shorter duration or simpler concept.';
+                } else if (error.code === 'resource-exhausted' || error.message?.includes('quota')) {
+                    userMessage = 'API quota exceeded. Please try again later.';
+                } else if (error.code === 'unauthenticated') {
+                    userMessage = 'Session expired. Please refresh the page and try again.';
+                } else if (error.message) {
+                    userMessage = `Script generation failed: ${error.message}`;
+                }
+
+                showToast(userMessage, 'error');
             }
 
             render();
@@ -8341,13 +8379,16 @@
             if (processingShots.length === 0) return;
 
             let pollCount = 0;
+            let consecutiveErrors = 0;
             const maxPolls = 180; // 6 minutes max (2s intervals) - Minimax can take a while
+            const maxConsecutiveErrors = 10; // Stop after 10 consecutive errors
 
             const pollInterval = setInterval(async () => {
                 pollCount++;
 
                 if (pollCount > maxPolls) {
                     clearInterval(pollInterval);
+                    removePollingInterval(pollInterval);
                     processingShots.forEach(shot => {
                         if (shot.videoStatus === 'processing') {
                             shot.videoStatus = 'error';
@@ -8358,7 +8399,23 @@
                     return;
                 }
 
+                // Check if too many consecutive errors
+                if (consecutiveErrors >= maxConsecutiveErrors) {
+                    clearInterval(pollInterval);
+                    removePollingInterval(pollInterval);
+                    processingShots.forEach(shot => {
+                        if (shot.videoStatus === 'processing') {
+                            shot.videoStatus = 'error';
+                            shot.videoError = 'Too many errors checking status. Please retry.';
+                        }
+                    });
+                    showToast('⚠️ Video status check failed repeatedly. Please retry.', 'error');
+                    render();
+                    return;
+                }
+
                 const checkStatusFn = functions.httpsCallable('creationWizardCheckShotVideoStatus');
+                let hasSuccess = false;
 
                 for (const shot of processingShots) {
                     if (shot.videoStatus !== 'processing') continue;
@@ -8369,18 +8426,27 @@
                             shotId: shot.id
                         });
 
+                        hasSuccess = true; // At least one call succeeded
+
                         if (result.data.status === 'ready' && result.data.videoUrl) {
                             shot.videoUrl = result.data.videoUrl;
                             shot.videoStatus = 'ready';
                             showToast(`🎬 Shot ${shot.shotIndex + 1} video ready!`, 'success');
                         } else if (result.data.status === 'error') {
                             shot.videoStatus = 'error';
-                            shot.videoError = 'Generation failed';
+                            shot.videoError = result.data.error || 'Generation failed';
                         }
 
                     } catch (error) {
                         console.error('Poll error:', error);
                     }
+                }
+
+                // Reset or increment consecutive error count
+                if (hasSuccess) {
+                    consecutiveErrors = 0;
+                } else {
+                    consecutiveErrors++;
                 }
 
                 render();
@@ -8389,6 +8455,7 @@
                 const stillProcessing = decomposed.shots.filter(s => s.videoStatus === 'processing');
                 if (stillProcessing.length === 0) {
                     clearInterval(pollInterval);
+                    removePollingInterval(pollInterval);
 
                     const readyCount = decomposed.shots.filter(s => s.videoStatus === 'ready').length;
                     if (readyCount === decomposed.shots.length) {
@@ -8398,6 +8465,32 @@
                 }
 
             }, 2000);
+
+            // Track this polling interval for cleanup
+            state.storyboard.multiShotMode.activePollingIntervals.push(pollInterval);
+        }
+
+        /**
+         * Remove a polling interval from tracking
+         */
+        function removePollingInterval(interval) {
+            const intervals = state.storyboard.multiShotMode.activePollingIntervals;
+            const idx = intervals.indexOf(interval);
+            if (idx > -1) {
+                intervals.splice(idx, 1);
+            }
+        }
+
+        /**
+         * Clean up all active polling intervals
+         */
+        function cleanupAllPollingIntervals() {
+            const intervals = state.storyboard.multiShotMode.activePollingIntervals;
+            intervals.forEach(interval => {
+                clearInterval(interval);
+            });
+            state.storyboard.multiShotMode.activePollingIntervals = [];
+            console.log('[Polling] Cleaned up all polling intervals');
         }
 
         /**
@@ -8410,7 +8503,9 @@
             const shot = decomposed.shots[shotIndex];
             shot.videoPollCount = 0;
             shot.videoPollStartTime = Date.now();
+            shot.videoConsecutiveErrors = 0;
             const maxPolls = 150; // 5 minutes at 2s intervals - Minimax can take a while
+            const maxConsecutiveErrors = 10; // Stop after 10 consecutive errors
 
             const pollInterval = setInterval(async () => {
                 shot.videoPollCount = (shot.videoPollCount || 0) + 1;
@@ -8420,6 +8515,7 @@
 
                 if (shot.videoPollCount > maxPolls || shot.videoStatus !== 'processing') {
                     clearInterval(pollInterval);
+                    removePollingInterval(pollInterval);
                     if (shot.videoStatus === 'processing') {
                         shot.videoStatus = 'error';
                         shot.videoError = 'Video generation timed out after 5 minutes';
@@ -8427,6 +8523,24 @@
                         render();
                         renderShotDecompositionModal();
                     }
+                    delete shot.videoPollCount;
+                    delete shot.videoPollStartTime;
+                    delete shot.videoConsecutiveErrors;
+                    return;
+                }
+
+                // Check for too many consecutive errors
+                if ((shot.videoConsecutiveErrors || 0) >= maxConsecutiveErrors) {
+                    clearInterval(pollInterval);
+                    removePollingInterval(pollInterval);
+                    shot.videoStatus = 'error';
+                    shot.videoError = 'Too many errors checking status. Please retry.';
+                    delete shot.videoPollCount;
+                    delete shot.videoPollStartTime;
+                    delete shot.videoConsecutiveErrors;
+                    showToast(`⚠️ Shot ${shotIndex + 1} status check failed repeatedly. Please retry.`, 'error');
+                    render();
+                    renderShotDecompositionModal();
                     return;
                 }
 
@@ -8434,23 +8548,31 @@
                     const checkStatusFn = functions.httpsCallable('creationWizardCheckShotVideoStatus');
                     const result = await checkStatusFn({ taskId, shotId: shot.id });
 
+                    // Reset consecutive errors on success
+                    shot.videoConsecutiveErrors = 0;
+
                     console.log(`[Video Poll] Shot ${shotIndex + 1}, Poll #${shot.videoPollCount}: ${result.data.status}`);
 
                     if (result.data.status === 'ready' && result.data.videoUrl) {
                         clearInterval(pollInterval);
+                        removePollingInterval(pollInterval);
                         shot.videoUrl = result.data.videoUrl;
                         shot.videoStatus = 'ready';
                         delete shot.videoPollCount;
                         delete shot.videoPollStartTime;
+                        delete shot.videoConsecutiveErrors;
                         showToast(`🎬 Shot ${shotIndex + 1} video ready!`, 'success');
                         render();
                         renderShotDecompositionModal();
                         scheduleAutoSave();
                     } else if (result.data.status === 'error') {
                         clearInterval(pollInterval);
+                        removePollingInterval(pollInterval);
                         shot.videoStatus = 'error';
                         shot.videoError = result.data.error || 'Video generation failed';
                         delete shot.videoPollCount;
+                        delete shot.videoPollStartTime;
+                        delete shot.videoConsecutiveErrors;
                         showToast(`❌ Shot ${shotIndex + 1} video failed`, 'error');
                         render();
                         renderShotDecompositionModal();
@@ -8458,18 +8580,26 @@
 
                 } catch (error) {
                     console.error('Poll error:', error);
-                    // Don't stop polling on transient errors, but log them
-                    if (shot.videoPollCount > 5 && error.message?.includes('insufficient')) {
-                        // If we've polled several times and get balance error, stop
+                    shot.videoConsecutiveErrors = (shot.videoConsecutiveErrors || 0) + 1;
+
+                    // Stop immediately on balance/quota errors
+                    if (error.message?.includes('insufficient') || error.message?.includes('quota')) {
                         clearInterval(pollInterval);
+                        removePollingInterval(pollInterval);
                         shot.videoStatus = 'error';
                         shot.videoError = formatVideoGenerationError(error);
+                        delete shot.videoPollCount;
+                        delete shot.videoPollStartTime;
+                        delete shot.videoConsecutiveErrors;
                         render();
                         renderShotDecompositionModal();
                     }
                 }
 
             }, 2000);
+
+            // Track this polling interval for cleanup
+            state.storyboard.multiShotMode.activePollingIntervals.push(pollInterval);
         }
 
         /**
@@ -11439,6 +11569,11 @@
         // Helper function for new production flow
         function selectProductionFormat(formatId) {
             const formatConfig = FORMAT_PRESETS[formatId];
+            if (!formatConfig) {
+                console.error(`[Step 1] Invalid format ID: ${formatId}`);
+                showToast('Invalid format selected', 'error');
+                return;
+            }
             state.production.format = formatId;
             state.production.formatConfig = formatConfig;
             // Also update legacy platform state for compatibility
@@ -11448,18 +11583,38 @@
 
         function selectProductionType(typeId) {
             const typeConfig = PRODUCTION_TYPES[typeId];
+            if (!typeConfig) {
+                console.error(`[Step 1] Invalid production type ID: ${typeId}`);
+                showToast('Invalid production type selected', 'error');
+                return;
+            }
             state.production.type = typeId;
             state.production.typeConfig = typeConfig;
             state.production.subType = null;
             state.production.subTypeConfig = null;
             // Set initial duration based on production type
-            state.production.targetDuration = typeConfig.defaultDuration.min;
+            state.production.targetDuration = typeConfig.defaultDuration?.min || 180;
             render();
         }
 
         function selectProductionSubType(subTypeId) {
+            if (!state.production.type) {
+                console.error('[Step 1] Cannot select sub-type without selecting production type first');
+                showToast('Please select a production type first', 'warning');
+                return;
+            }
             const typeConfig = PRODUCTION_TYPES[state.production.type];
-            const subTypeConfig = typeConfig.subTypes[subTypeId];
+            if (!typeConfig) {
+                console.error(`[Step 1] Production type not found: ${state.production.type}`);
+                showToast('Production type configuration error', 'error');
+                return;
+            }
+            const subTypeConfig = typeConfig.subTypes?.[subTypeId];
+            if (!subTypeConfig) {
+                console.error(`[Step 1] Invalid sub-type ID: ${subTypeId} for type: ${state.production.type}`);
+                showToast('Invalid sub-type selected', 'error');
+                return;
+            }
             state.production.subType = subTypeId;
             state.production.subTypeConfig = subTypeConfig;
             // Update duration to sub-type's suggested range
@@ -11470,9 +11625,16 @@
         }
 
         function setProductionDuration(value) {
-            state.production.targetDuration = parseInt(value);
+            const duration = parseInt(value);
+            if (isNaN(duration) || duration < 0) {
+                console.error(`[Step 1] Invalid duration value: ${value}`);
+                return;
+            }
+            // Enforce reasonable bounds (1 second to 60 minutes)
+            const boundedDuration = Math.max(1, Math.min(duration, 3600));
+            state.production.targetDuration = boundedDuration;
             // Also update legacy state for compatibility
-            state.platform.targetDuration = parseInt(value);
+            state.platform.targetDuration = boundedDuration;
             render();
         }
 
@@ -12391,10 +12553,30 @@
         function renderStep3Script() {
             const hasScript = state.script.scenes && state.script.scenes.length > 0;
             const isGenerating = state.script.status === 'generating';
+            const hasError = state.script.status === 'error';
 
             let html = '<div class="fade-in">';
 
-            // If no script yet, show generation form
+            // Show error message if generation failed
+            if (hasError && state.script.error) {
+                html += `
+                    <div class="content-card" style="border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1);">
+                        <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                            <div style="font-size: 1.5rem;">⚠️</div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: #ef4444; margin-bottom: 0.25rem;">Script Generation Failed</div>
+                                <div style="color: rgba(255,255,255,0.7); font-size: 0.9rem;">${state.script.error}</div>
+                                <button onclick="state.script.status = 'idle'; state.script.error = null; render();"
+                                    style="margin-top: 0.75rem; padding: 0.5rem 1rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #ef4444; border-radius: 0.5rem; cursor: pointer;">
+                                    Try Again
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // If no script yet (or error), show generation form
             if (!hasScript && !isGenerating) {
                 html += renderScriptGenerationForm();
             }

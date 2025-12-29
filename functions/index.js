@@ -41670,6 +41670,72 @@ exports.creationWizardCheckShotVideoStatus = functions.https.onCall(async (data,
 });
 
 /**
+ * uploadBase64Image - Upload a base64 encoded image to Firebase Storage
+ * Used for frame transfer functionality in video wizard
+ */
+exports.uploadBase64Image = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { imageBase64, mimeType = 'image/png', filename } = data;
+
+  if (!imageBase64) {
+    throw new functions.https.HttpsError('invalid-argument', 'Image data is required');
+  }
+
+  try {
+    console.log(`[uploadBase64Image] Uploading image for user: ${uid}, filename: ${filename}`);
+
+    // Decode base64 to buffer
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+
+    // Validate image size (max 10MB)
+    if (imageBuffer.length > 10 * 1024 * 1024) {
+      throw new functions.https.HttpsError('invalid-argument', 'Image too large (max 10MB)');
+    }
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const extension = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : 'png';
+    const safeFilename = filename ? filename.replace(/[^a-zA-Z0-9_.-]/g, '_') : `frame_${timestamp}`;
+    const storagePath = `wizard_frames/${uid}/${timestamp}_${safeFilename}.${extension}`;
+
+    // Upload to Firebase Storage
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(storagePath);
+
+    await file.save(imageBuffer, {
+      metadata: {
+        contentType: mimeType,
+        metadata: {
+          uploadedBy: uid,
+          originalFilename: filename || 'frame',
+          uploadTimestamp: timestamp.toString()
+        }
+      }
+    });
+
+    // Make file publicly accessible
+    await file.makePublic();
+
+    // Generate public URL
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+
+    console.log(`[uploadBase64Image] Successfully uploaded to: ${publicUrl}`);
+
+    return {
+      success: true,
+      url: publicUrl,
+      filename: storagePath,
+      size: imageBuffer.length
+    };
+
+  } catch (error) {
+    console.error('[uploadBase64Image] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to upload image'));
+  }
+});
+
+/**
  * extractVideoFrame - Extract a frame from a video at a specific timestamp
  *
  * Since Firebase Storage videos may have CORS issues for canvas capture,
