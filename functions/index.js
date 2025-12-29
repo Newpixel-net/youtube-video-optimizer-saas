@@ -42065,3 +42065,915 @@ exports.creationWizardExportMultiShotProject = functions
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to create export manifest'));
   }
 });
+
+// =============================================================================
+// PHASE 12D: SHOT TRANSITIONS, AUDIO DUCKING & VIDEO EFFECTS
+// =============================================================================
+
+/**
+ * SHOT_TRANSITION_ENGINE
+ *
+ * Manages smooth transitions between shots within a scene.
+ * Different transition types convey different emotional meanings:
+ * - Cut: Direct, energetic, fast-paced (action, dialogue)
+ * - Dissolve: Passage of time, dreamy, reflective
+ * - Fade: Beginning/end of segments, dramatic pause
+ * - Wipe: Scene change, geographic shift, playful
+ */
+const SHOT_TRANSITION_ENGINE = {
+  // Transition type library
+  transitionTypes: {
+    'cut': {
+      name: 'Cut',
+      description: 'Instant transition, most common',
+      duration: 0,
+      ffmpegFilter: null, // No filter needed for cut
+      emotionalTone: ['energetic', 'action', 'dialogue', 'fast-paced'],
+      useFor: ['same location shots', 'dialogue exchanges', 'action sequences']
+    },
+    'dissolve': {
+      name: 'Cross Dissolve',
+      description: 'Gradual blend between shots',
+      duration: 0.5,
+      ffmpegFilter: 'xfade=transition=dissolve:duration={duration}:offset={offset}',
+      emotionalTone: ['dreamy', 'reflective', 'passage of time', 'romantic'],
+      useFor: ['time passage', 'memory sequences', 'emotional moments']
+    },
+    'fade_black': {
+      name: 'Fade to Black',
+      description: 'Fade out to black, then fade in',
+      duration: 0.8,
+      ffmpegFilter: 'xfade=transition=fadeblack:duration={duration}:offset={offset}',
+      emotionalTone: ['dramatic', 'conclusive', 'mysterious', 'serious'],
+      useFor: ['scene endings', 'dramatic pauses', 'chapter breaks']
+    },
+    'fade_white': {
+      name: 'Fade to White',
+      description: 'Fade out to white, then fade in',
+      duration: 0.8,
+      ffmpegFilter: 'xfade=transition=fadewhite:duration={duration}:offset={offset}',
+      emotionalTone: ['ethereal', 'heavenly', 'revelation', 'flashback'],
+      useFor: ['dream sequences', 'flashbacks', 'revelations']
+    },
+    'wipe_left': {
+      name: 'Wipe Left',
+      description: 'Next shot wipes in from right',
+      duration: 0.4,
+      ffmpegFilter: 'xfade=transition=wipeleft:duration={duration}:offset={offset}',
+      emotionalTone: ['playful', 'energetic', 'forward motion'],
+      useFor: ['location changes', 'montages', 'educational content']
+    },
+    'wipe_right': {
+      name: 'Wipe Right',
+      description: 'Next shot wipes in from left',
+      duration: 0.4,
+      ffmpegFilter: 'xfade=transition=wiperight:duration={duration}:offset={offset}',
+      emotionalTone: ['playful', 'backward glance', 'contrast'],
+      useFor: ['comparisons', 'before/after', 'location changes']
+    },
+    'slide_left': {
+      name: 'Slide Left',
+      description: 'Both shots slide together',
+      duration: 0.3,
+      ffmpegFilter: 'xfade=transition=slideleft:duration={duration}:offset={offset}',
+      emotionalTone: ['dynamic', 'modern', 'tech-forward'],
+      useFor: ['product showcases', 'feature reveals', 'modern content']
+    },
+    'zoom_in': {
+      name: 'Zoom In',
+      description: 'Zoom into next shot',
+      duration: 0.4,
+      ffmpegFilter: 'xfade=transition=smoothup:duration={duration}:offset={offset}',
+      emotionalTone: ['focus', 'importance', 'detail'],
+      useFor: ['detail reveals', 'emotional focus', 'key moments']
+    },
+    'blur': {
+      name: 'Blur Transition',
+      description: 'Blur out then blur in',
+      duration: 0.6,
+      ffmpegFilter: 'xfade=transition=pixelize:duration={duration}:offset={offset}',
+      emotionalTone: ['disorientation', 'time warp', 'confusion'],
+      useFor: ['dream sequences', 'intoxication', 'time travel']
+    }
+  },
+
+  // Recommend transition based on shot types
+  recommendTransition(fromShot, toShot, sceneContext = {}) {
+    const fromType = fromShot?.shotType || 'medium';
+    const toType = toShot?.shotType || 'medium';
+    const mood = sceneContext.mood || 'neutral';
+
+    // Special rules for shot type combinations
+    const shotCombinations = {
+      // Wide to close = dissolve (emotional buildup)
+      'establishing_wide->closeup': 'dissolve',
+      'wide->closeup': 'dissolve',
+      'wide->extreme_closeup': 'dissolve',
+
+      // Close to wide = cut (reveal)
+      'closeup->wide': 'cut',
+      'extreme_closeup->wide': 'cut',
+
+      // Same shot type = cut (coverage)
+      'medium->medium': 'cut',
+      'closeup->closeup': 'cut',
+
+      // Over shoulder to reverse = cut (dialogue)
+      'over_shoulder->over_shoulder': 'cut',
+
+      // POV transitions = dissolve
+      'pov->medium': 'dissolve',
+      'medium->pov': 'dissolve',
+
+      // Insert to any = cut
+      'insert->*': 'cut',
+      '*->insert': 'cut'
+    };
+
+    // Check direct match
+    const key = `${fromType}->${toType}`;
+    if (shotCombinations[key]) {
+      return shotCombinations[key];
+    }
+
+    // Check wildcard matches
+    for (const [pattern, transition] of Object.entries(shotCombinations)) {
+      if (pattern.includes('*')) {
+        const [from, to] = pattern.split('->');
+        if ((from === '*' || from === fromType) && (to === '*' || to === toType)) {
+          return transition;
+        }
+      }
+    }
+
+    // Mood-based defaults
+    const moodDefaults = {
+      'action': 'cut',
+      'energetic': 'cut',
+      'fast': 'cut',
+      'dialogue': 'cut',
+      'dramatic': 'fade_black',
+      'emotional': 'dissolve',
+      'dreamy': 'dissolve',
+      'reflective': 'dissolve',
+      'mysterious': 'fade_black',
+      'educational': 'wipe_left',
+      'playful': 'slide_left'
+    };
+
+    return moodDefaults[mood] || 'cut';
+  },
+
+  // Generate FFmpeg filter for transition
+  generateFFmpegFilter(transitionType, offset, customDuration = null) {
+    const transition = this.transitionTypes[transitionType];
+    if (!transition || !transition.ffmpegFilter) {
+      return null; // Cut = no filter
+    }
+
+    const duration = customDuration || transition.duration;
+    return transition.ffmpegFilter
+      .replace('{duration}', duration.toFixed(2))
+      .replace('{offset}', offset.toFixed(2));
+  }
+};
+
+/**
+ * AUDIO_DUCKING_ENGINE
+ *
+ * Automatically reduces background music volume when voiceover is present.
+ * This creates professional-sounding audio mix without manual adjustment.
+ */
+const AUDIO_DUCKING_ENGINE = {
+  // Ducking presets
+  presets: {
+    'subtle': {
+      name: 'Subtle Ducking',
+      duckLevel: 0.7, // Reduce to 70% during voice
+      attackTime: 0.3, // How fast to duck (seconds)
+      releaseTime: 0.5, // How fast to restore
+      threshold: -30, // dB threshold to trigger
+      description: 'Gentle reduction, music still prominent'
+    },
+    'standard': {
+      name: 'Standard Ducking',
+      duckLevel: 0.4, // Reduce to 40%
+      attackTime: 0.2,
+      releaseTime: 0.4,
+      threshold: -25,
+      description: 'Balanced mix, voice clearly dominant'
+    },
+    'aggressive': {
+      name: 'Aggressive Ducking',
+      duckLevel: 0.15, // Reduce to 15%
+      attackTime: 0.1,
+      releaseTime: 0.3,
+      threshold: -20,
+      description: 'Voice-forward, music barely audible during speech'
+    },
+    'podcast': {
+      name: 'Podcast Style',
+      duckLevel: 0.25,
+      attackTime: 0.15,
+      releaseTime: 0.35,
+      threshold: -22,
+      description: 'Optimized for spoken content'
+    }
+  },
+
+  // Generate FFmpeg sidechain compressor filter
+  generateFFmpegFilter(preset = 'standard', voiceTrack = '[voice]', musicTrack = '[music]') {
+    const config = this.presets[preset] || this.presets['standard'];
+
+    // Use FFmpeg sidechaincompress for ducking
+    // This compresses the music signal when the voice signal exceeds threshold
+    return {
+      filter: `${musicTrack}${voiceTrack}sidechaincompress=threshold=${config.threshold}dB:ratio=10:attack=${config.attackTime * 1000}:release=${config.releaseTime * 1000}:level_sc=1[ducked_music]`,
+      mixFilter: `[ducked_music]${voiceTrack}amix=inputs=2:duration=longest:dropout_transition=2:weights=${config.duckLevel} 1[final_audio]`,
+      config
+    };
+  },
+
+  // Simpler approach using volume automation
+  generateVolumeAutomation(voiceSegments, musicDuration, preset = 'standard') {
+    const config = this.presets[preset] || this.presets['standard'];
+    const automationPoints = [];
+
+    // Start at full volume
+    automationPoints.push({ time: 0, volume: 1.0 });
+
+    for (const segment of voiceSegments) {
+      const startDuck = Math.max(0, segment.start - config.attackTime);
+      const endDuck = Math.min(musicDuration, segment.end + config.releaseTime);
+
+      // Ramp down before voice
+      if (startDuck > automationPoints[automationPoints.length - 1].time) {
+        automationPoints.push({ time: startDuck, volume: 1.0 });
+      }
+      automationPoints.push({ time: segment.start, volume: config.duckLevel });
+
+      // Hold during voice
+      automationPoints.push({ time: segment.end, volume: config.duckLevel });
+
+      // Ramp up after voice
+      automationPoints.push({ time: endDuck, volume: 1.0 });
+    }
+
+    // Ensure we end at the music duration
+    if (automationPoints[automationPoints.length - 1].time < musicDuration) {
+      automationPoints.push({ time: musicDuration, volume: 1.0 });
+    }
+
+    return automationPoints;
+  },
+
+  // Generate FFmpeg volume filter from automation points
+  generateVolumeFilter(automationPoints) {
+    // Convert to FFmpeg volume expression
+    // volume='if(lt(t,1),1,if(lt(t,2),0.4,1))'
+    const conditions = [];
+
+    for (let i = 0; i < automationPoints.length - 1; i++) {
+      const current = automationPoints[i];
+      const next = automationPoints[i + 1];
+
+      if (current.volume === next.volume) {
+        // Constant volume segment
+        conditions.push(`between(t,${current.time.toFixed(2)},${next.time.toFixed(2)})*${current.volume.toFixed(2)}`);
+      } else {
+        // Linear interpolation
+        const slope = (next.volume - current.volume) / (next.time - current.time);
+        conditions.push(`between(t,${current.time.toFixed(2)},${next.time.toFixed(2)})*(${current.volume.toFixed(2)}+${slope.toFixed(4)}*(t-${current.time.toFixed(2)}))`);
+      }
+    }
+
+    return `volume='${conditions.join('+')}'`;
+  }
+};
+
+/**
+ * VIDEO_EFFECTS_ENGINE
+ *
+ * Applies visual effects to shots for cinematic quality.
+ * Effects are applied as FFmpeg filter chains.
+ */
+const VIDEO_EFFECTS_ENGINE = {
+  // Effect presets
+  presets: {
+    'cinematic': {
+      name: 'Cinematic',
+      description: 'Film-like color grading with slight desaturation',
+      filters: {
+        saturation: 0.9,
+        contrast: 1.1,
+        brightness: 0.02,
+        gamma: 1.05,
+        vignette: 0.3
+      }
+    },
+    'vibrant': {
+      name: 'Vibrant',
+      description: 'Punchy colors for engaging content',
+      filters: {
+        saturation: 1.3,
+        contrast: 1.15,
+        brightness: 0.05,
+        gamma: 1.0,
+        vignette: 0
+      }
+    },
+    'dramatic': {
+      name: 'Dramatic',
+      description: 'High contrast, moody look',
+      filters: {
+        saturation: 0.8,
+        contrast: 1.3,
+        brightness: -0.05,
+        gamma: 0.95,
+        vignette: 0.5
+      }
+    },
+    'warm': {
+      name: 'Warm Tones',
+      description: 'Golden hour warmth',
+      filters: {
+        saturation: 1.1,
+        contrast: 1.05,
+        brightness: 0.03,
+        gamma: 1.0,
+        vignette: 0.2,
+        colorTemperature: 6500 // Kelvin (warmer)
+      }
+    },
+    'cool': {
+      name: 'Cool Tones',
+      description: 'Blue-tinted modern look',
+      filters: {
+        saturation: 0.95,
+        contrast: 1.1,
+        brightness: 0,
+        gamma: 1.02,
+        vignette: 0.15,
+        colorTemperature: 4500 // Kelvin (cooler)
+      }
+    },
+    'vintage': {
+      name: 'Vintage',
+      description: 'Retro film look with grain',
+      filters: {
+        saturation: 0.7,
+        contrast: 0.95,
+        brightness: 0.05,
+        gamma: 1.1,
+        vignette: 0.4,
+        grain: 0.15
+      }
+    },
+    'documentary': {
+      name: 'Documentary',
+      description: 'Natural, realistic look',
+      filters: {
+        saturation: 1.0,
+        contrast: 1.05,
+        brightness: 0,
+        gamma: 1.0,
+        vignette: 0
+      }
+    },
+    'noir': {
+      name: 'Film Noir',
+      description: 'High contrast black & white',
+      filters: {
+        saturation: 0,
+        contrast: 1.4,
+        brightness: -0.02,
+        gamma: 0.9,
+        vignette: 0.6
+      }
+    }
+  },
+
+  // Individual effect filters
+  effects: {
+    saturation: (value) => value !== 1.0 ? `eq=saturation=${value.toFixed(2)}` : null,
+    contrast: (value) => value !== 1.0 ? `eq=contrast=${value.toFixed(2)}` : null,
+    brightness: (value) => value !== 0 ? `eq=brightness=${value.toFixed(2)}` : null,
+    gamma: (value) => value !== 1.0 ? `eq=gamma=${value.toFixed(2)}` : null,
+    vignette: (value) => value > 0 ? `vignette=PI/${(4/value).toFixed(1)}` : null,
+    grain: (value) => value > 0 ? `noise=alls=${Math.round(value * 30)}:allf=t` : null,
+    blur: (value) => value > 0 ? `boxblur=${value}:${value}` : null,
+    sharpen: (value) => value > 0 ? `unsharp=5:5:${value.toFixed(1)}` : null
+  },
+
+  // Generate FFmpeg filter chain for a preset or custom effects
+  generateFilterChain(presetName = null, customFilters = {}) {
+    let filters = {};
+
+    if (presetName && this.presets[presetName]) {
+      filters = { ...this.presets[presetName].filters };
+    }
+
+    // Merge custom filters
+    filters = { ...filters, ...customFilters };
+
+    // Build filter chain
+    const filterParts = [];
+
+    // Combine eq filters (saturation, contrast, brightness, gamma)
+    const eqParams = [];
+    if (filters.saturation && filters.saturation !== 1.0) {
+      eqParams.push(`saturation=${filters.saturation.toFixed(2)}`);
+    }
+    if (filters.contrast && filters.contrast !== 1.0) {
+      eqParams.push(`contrast=${filters.contrast.toFixed(2)}`);
+    }
+    if (filters.brightness && filters.brightness !== 0) {
+      eqParams.push(`brightness=${filters.brightness.toFixed(2)}`);
+    }
+    if (filters.gamma && filters.gamma !== 1.0) {
+      eqParams.push(`gamma=${filters.gamma.toFixed(2)}`);
+    }
+    if (eqParams.length > 0) {
+      filterParts.push(`eq=${eqParams.join(':')}`);
+    }
+
+    // Add other effects
+    if (filters.vignette && filters.vignette > 0) {
+      filterParts.push(`vignette=PI/${(4/filters.vignette).toFixed(1)}`);
+    }
+    if (filters.grain && filters.grain > 0) {
+      filterParts.push(`noise=alls=${Math.round(filters.grain * 30)}:allf=t`);
+    }
+    if (filters.blur && filters.blur > 0) {
+      filterParts.push(`boxblur=${filters.blur}:${filters.blur}`);
+    }
+    if (filters.sharpen && filters.sharpen > 0) {
+      filterParts.push(`unsharp=5:5:${filters.sharpen.toFixed(1)}`);
+    }
+
+    return filterParts.length > 0 ? filterParts.join(',') : null;
+  }
+};
+
+/**
+ * TITLE_CARD_ENGINE
+ *
+ * Generates title cards and text overlays for scenes.
+ */
+const TITLE_CARD_ENGINE = {
+  // Title card styles
+  styles: {
+    'minimal': {
+      name: 'Minimal',
+      background: 'black',
+      textColor: 'white',
+      fontFamily: 'sans-serif',
+      fontSize: 72,
+      animation: 'fade',
+      duration: 2
+    },
+    'modern': {
+      name: 'Modern',
+      background: 'gradient:linear:#1a1a2e:#16213e',
+      textColor: 'white',
+      fontFamily: 'sans-serif',
+      fontSize: 80,
+      animation: 'slide_up',
+      duration: 2.5,
+      subtitle: true
+    },
+    'dramatic': {
+      name: 'Dramatic',
+      background: 'black',
+      textColor: 'white',
+      fontFamily: 'serif',
+      fontSize: 90,
+      animation: 'fade_slow',
+      duration: 3,
+      letterSpacing: 10
+    },
+    'chapter': {
+      name: 'Chapter Card',
+      background: 'rgba(0,0,0,0.8)',
+      textColor: 'white',
+      fontFamily: 'sans-serif',
+      fontSize: 64,
+      animation: 'fade',
+      duration: 2,
+      chapterNumber: true,
+      overlay: true // Can overlay on video
+    },
+    'lower_third': {
+      name: 'Lower Third',
+      position: 'bottom',
+      background: 'gradient:linear:rgba(0,0,0,0):rgba(0,0,0,0.8)',
+      textColor: 'white',
+      fontFamily: 'sans-serif',
+      fontSize: 48,
+      animation: 'slide_up',
+      duration: 3,
+      overlay: true
+    }
+  },
+
+  // Generate title card FFmpeg filter
+  generateTitleCard(text, style = 'minimal', options = {}) {
+    const styleConfig = this.styles[style] || this.styles['minimal'];
+    const duration = options.duration || styleConfig.duration;
+    const width = options.width || 1920;
+    const height = options.height || 1080;
+
+    // For overlay titles, we generate a drawtext filter
+    if (styleConfig.overlay) {
+      const yPosition = styleConfig.position === 'bottom'
+        ? `h-${styleConfig.fontSize * 2}`
+        : styleConfig.position === 'top'
+          ? styleConfig.fontSize
+          : '(h-text_h)/2';
+
+      return {
+        type: 'overlay',
+        filter: `drawtext=text='${text.replace(/'/g, "\\'")}':fontsize=${styleConfig.fontSize}:fontcolor=${styleConfig.textColor}:x=(w-text_w)/2:y=${yPosition}:enable='between(t,0,${duration})'`,
+        duration
+      };
+    }
+
+    // For full-screen title cards, we generate a video segment
+    // This returns the configuration for creating a title frame
+    return {
+      type: 'fullscreen',
+      config: {
+        text,
+        width,
+        height,
+        duration,
+        style: styleConfig,
+        options
+      },
+      // FFmpeg command to create title card video
+      ffmpegArgs: [
+        '-f', 'lavfi',
+        '-i', `color=c=${styleConfig.background === 'black' ? 'black' : '0x1a1a2e'}:s=${width}x${height}:d=${duration}`,
+        '-vf', `drawtext=text='${text.replace(/'/g, "\\'")}':fontsize=${styleConfig.fontSize}:fontcolor=${styleConfig.textColor}:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0.5,${duration-0.5})'`,
+        '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        '-t', duration.toString()
+      ]
+    };
+  },
+
+  // Generate scene number overlay
+  generateSceneNumber(sceneNumber, totalScenes, duration = 3) {
+    const text = `Scene ${sceneNumber} of ${totalScenes}`;
+    return this.generateTitleCard(text, 'chapter', { duration });
+  }
+};
+
+// Export engines for use in other functions
+exports.SHOT_TRANSITION_ENGINE = SHOT_TRANSITION_ENGINE;
+exports.AUDIO_DUCKING_ENGINE = AUDIO_DUCKING_ENGINE;
+exports.VIDEO_EFFECTS_ENGINE = VIDEO_EFFECTS_ENGINE;
+exports.TITLE_CARD_ENGINE = TITLE_CARD_ENGINE;
+
+/**
+ * creationWizardConfigureShotTransitions
+ *
+ * Configure transitions between shots within a scene
+ */
+exports.creationWizardConfigureShotTransitions = functions
+  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    console.log('[creationWizardConfigureShotTransitions] Starting...');
+
+    const { projectId, sceneId, shots, autoMode = true, mood = 'neutral' } = data;
+
+    if (!projectId || !sceneId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Project ID and Scene ID required');
+    }
+
+    try {
+      const transitionsConfig = [];
+
+      if (autoMode && shots && shots.length > 1) {
+        // Auto-recommend transitions based on shot types
+        for (let i = 0; i < shots.length - 1; i++) {
+          const fromShot = shots[i];
+          const toShot = shots[i + 1];
+
+          const recommendedType = SHOT_TRANSITION_ENGINE.recommendTransition(
+            fromShot,
+            toShot,
+            { mood }
+          );
+
+          const transitionInfo = SHOT_TRANSITION_ENGINE.transitionTypes[recommendedType];
+
+          // Calculate offset (when transition starts)
+          let cumulativeDuration = 0;
+          for (let j = 0; j <= i; j++) {
+            cumulativeDuration += shots[j].duration || 3;
+          }
+          const offset = cumulativeDuration - (transitionInfo.duration || 0);
+
+          transitionsConfig.push({
+            fromShotIndex: i,
+            toShotIndex: i + 1,
+            type: recommendedType,
+            duration: transitionInfo.duration,
+            offset,
+            ffmpegFilter: SHOT_TRANSITION_ENGINE.generateFFmpegFilter(recommendedType, offset),
+            reason: `${fromShot.shotType} → ${toShot.shotType} with ${mood} mood`
+          });
+        }
+      }
+
+      // Store configuration in Firestore
+      const configRef = admin.firestore()
+        .collection('projects').doc(projectId)
+        .collection('sceneTransitions').doc(sceneId);
+
+      await configRef.set({
+        sceneId,
+        transitions: transitionsConfig,
+        autoMode,
+        mood,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`[creationWizardConfigureShotTransitions] Configured ${transitionsConfig.length} transitions for scene ${sceneId}`);
+
+      return {
+        success: true,
+        sceneId,
+        transitions: transitionsConfig,
+        availableTypes: Object.keys(SHOT_TRANSITION_ENGINE.transitionTypes).map(id => ({
+          id,
+          ...SHOT_TRANSITION_ENGINE.transitionTypes[id]
+        }))
+      };
+
+    } catch (error) {
+      console.error('[creationWizardConfigureShotTransitions] Error:', error);
+      throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to configure transitions'));
+    }
+  });
+
+/**
+ * creationWizardConfigureAudioDucking
+ *
+ * Configure audio ducking for background music
+ */
+exports.creationWizardConfigureAudioDucking = functions
+  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    console.log('[creationWizardConfigureAudioDucking] Starting...');
+
+    const { projectId, preset = 'standard', voiceSegments = [], musicDuration } = data;
+
+    if (!projectId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+    }
+
+    try {
+      const presetConfig = AUDIO_DUCKING_ENGINE.presets[preset] || AUDIO_DUCKING_ENGINE.presets['standard'];
+
+      let duckingConfig = {
+        preset,
+        config: presetConfig
+      };
+
+      // If voice segments provided, generate volume automation
+      if (voiceSegments.length > 0 && musicDuration) {
+        const automationPoints = AUDIO_DUCKING_ENGINE.generateVolumeAutomation(
+          voiceSegments,
+          musicDuration,
+          preset
+        );
+
+        const volumeFilter = AUDIO_DUCKING_ENGINE.generateVolumeFilter(automationPoints);
+
+        duckingConfig.automationPoints = automationPoints;
+        duckingConfig.ffmpegFilter = volumeFilter;
+      }
+
+      // Store configuration
+      const configRef = admin.firestore()
+        .collection('projects').doc(projectId)
+        .collection('audioConfig').doc('ducking');
+
+      await configRef.set({
+        ...duckingConfig,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`[creationWizardConfigureAudioDucking] Configured ${preset} ducking with ${voiceSegments.length} segments`);
+
+      return {
+        success: true,
+        ducking: duckingConfig,
+        availablePresets: Object.keys(AUDIO_DUCKING_ENGINE.presets).map(id => ({
+          id,
+          ...AUDIO_DUCKING_ENGINE.presets[id]
+        }))
+      };
+
+    } catch (error) {
+      console.error('[creationWizardConfigureAudioDucking] Error:', error);
+      throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to configure audio ducking'));
+    }
+  });
+
+/**
+ * creationWizardApplyVideoEffects
+ *
+ * Apply video effects preset or custom effects to scenes
+ */
+exports.creationWizardApplyVideoEffects = functions
+  .runWith({ timeoutSeconds: 60, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    console.log('[creationWizardApplyVideoEffects] Starting...');
+
+    const { projectId, preset = null, customFilters = {}, applyToScenes = 'all' } = data;
+
+    if (!projectId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Project ID required');
+    }
+
+    try {
+      // Generate filter chain
+      const filterChain = VIDEO_EFFECTS_ENGINE.generateFilterChain(preset, customFilters);
+
+      const effectsConfig = {
+        preset,
+        customFilters,
+        filterChain,
+        applyToScenes,
+        presetInfo: preset ? VIDEO_EFFECTS_ENGINE.presets[preset] : null
+      };
+
+      // Store configuration
+      const configRef = admin.firestore()
+        .collection('projects').doc(projectId)
+        .collection('videoConfig').doc('effects');
+
+      await configRef.set({
+        ...effectsConfig,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`[creationWizardApplyVideoEffects] Applied ${preset || 'custom'} effects, filter: ${filterChain || 'none'}`);
+
+      return {
+        success: true,
+        effects: effectsConfig,
+        availablePresets: Object.keys(VIDEO_EFFECTS_ENGINE.presets).map(id => ({
+          id,
+          name: VIDEO_EFFECTS_ENGINE.presets[id].name,
+          description: VIDEO_EFFECTS_ENGINE.presets[id].description,
+          filters: VIDEO_EFFECTS_ENGINE.presets[id].filters
+        }))
+      };
+
+    } catch (error) {
+      console.error('[creationWizardApplyVideoEffects] Error:', error);
+      throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to apply video effects'));
+    }
+  });
+
+/**
+ * creationWizardGenerateTitleCards
+ *
+ * Generate title cards for scenes
+ */
+exports.creationWizardGenerateTitleCards = functions
+  .runWith({ timeoutSeconds: 120, memory: '512MB' })
+  .https.onCall(async (data, context) => {
+    console.log('[creationWizardGenerateTitleCards] Starting...');
+
+    const { projectId, scenes, style = 'modern', options = {} } = data;
+
+    if (!projectId || !scenes || scenes.length === 0) {
+      throw new functions.https.HttpsError('invalid-argument', 'Project ID and scenes required');
+    }
+
+    try {
+      const titleCards = [];
+
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+
+        // Generate scene title card
+        if (scene.title || scene.sceneTitle) {
+          const card = TITLE_CARD_ENGINE.generateTitleCard(
+            scene.title || scene.sceneTitle,
+            style,
+            {
+              ...options,
+              subtitle: scene.subtitle,
+              width: options.width || 1920,
+              height: options.height || 1080
+            }
+          );
+
+          titleCards.push({
+            sceneId: scene.sceneId || i + 1,
+            sceneIndex: i,
+            type: 'scene_title',
+            ...card
+          });
+        }
+
+        // Generate chapter card if requested
+        if (options.includeChapterCards) {
+          const chapterCard = TITLE_CARD_ENGINE.generateSceneNumber(
+            i + 1,
+            scenes.length,
+            options.chapterDuration || 2
+          );
+
+          titleCards.push({
+            sceneId: scene.sceneId || i + 1,
+            sceneIndex: i,
+            type: 'chapter_number',
+            ...chapterCard
+          });
+        }
+      }
+
+      // Store configuration
+      const configRef = admin.firestore()
+        .collection('projects').doc(projectId)
+        .collection('videoConfig').doc('titleCards');
+
+      await configRef.set({
+        titleCards,
+        style,
+        options,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`[creationWizardGenerateTitleCards] Generated ${titleCards.length} title cards in ${style} style`);
+
+      return {
+        success: true,
+        titleCards,
+        availableStyles: Object.keys(TITLE_CARD_ENGINE.styles).map(id => ({
+          id,
+          ...TITLE_CARD_ENGINE.styles[id]
+        }))
+      };
+
+    } catch (error) {
+      console.error('[creationWizardGenerateTitleCards] Error:', error);
+      throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate title cards'));
+    }
+  });
+
+/**
+ * creationWizardGetPhase4Config
+ *
+ * Get all Phase 4 configuration options
+ */
+exports.creationWizardGetPhase4Config = functions
+  .runWith({ timeoutSeconds: 30, memory: '256MB' })
+  .https.onCall(async (data, context) => {
+    console.log('[creationWizardGetPhase4Config] Starting...');
+
+    try {
+      return {
+        success: true,
+        config: {
+          transitions: {
+            types: Object.keys(SHOT_TRANSITION_ENGINE.transitionTypes).map(id => ({
+              id,
+              ...SHOT_TRANSITION_ENGINE.transitionTypes[id]
+            }))
+          },
+          audioDucking: {
+            presets: Object.keys(AUDIO_DUCKING_ENGINE.presets).map(id => ({
+              id,
+              ...AUDIO_DUCKING_ENGINE.presets[id]
+            }))
+          },
+          videoEffects: {
+            presets: Object.keys(VIDEO_EFFECTS_ENGINE.presets).map(id => ({
+              id,
+              name: VIDEO_EFFECTS_ENGINE.presets[id].name,
+              description: VIDEO_EFFECTS_ENGINE.presets[id].description,
+              filters: VIDEO_EFFECTS_ENGINE.presets[id].filters
+            }))
+          },
+          titleCards: {
+            styles: Object.keys(TITLE_CARD_ENGINE.styles).map(id => ({
+              id,
+              ...TITLE_CARD_ENGINE.styles[id]
+            }))
+          }
+        }
+      };
+
+    } catch (error) {
+      console.error('[creationWizardGetPhase4Config] Error:', error);
+      throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get config'));
+    }
+  });
