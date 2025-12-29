@@ -7822,15 +7822,14 @@
                                                         </div>
                                                     ` : ''}
 
-                                                    <!-- Image/Video Area -->
-                                                    <div style="height: 90px; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative;">
+                                                    <!-- Image/Video Area (clickable for preview) -->
+                                                    <div onclick="${hasImage ? `openShotPreviewModal(${sceneId}, ${idx})` : ''}" style="height: 90px; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative; ${hasImage ? 'cursor: pointer;' : ''}">
                                                         ${hasImage ? `
                                                             <img src="${shot.imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">
-                                                            ${hasVideo ? `
-                                                                <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
-                                                                    <span style="font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">▶️</span>
-                                                                </div>
-                                                            ` : ''}
+                                                            <!-- Hover overlay for preview hint -->
+                                                            <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
+                                                                <span style="font-size: 1.2rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">${hasVideo ? '▶️' : '🔍'}</span>
+                                                            </div>
                                                             <div style="position: absolute; bottom: 0.25rem; right: 0.25rem; display: flex; gap: 0.15rem;">
                                                                 <div style="width: 14px; height: 14px; background: rgba(16, 185, 129, 0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
                                                                     <span style="color: white; font-size: 7px;">🖼</span>
@@ -8234,10 +8233,12 @@
                 console.error('Shot video error:', error);
                 shot.videoStatus = 'error';
                 shot.videoError = error.message;
-                showToast(`Video failed: ${error.message}`, 'error');
+                const friendlyError = formatVideoGenerationError(error);
+                showToast(friendlyError, 'error');
             }
 
             render();
+            renderShotDecompositionModal(); // Refresh modal if open
             scheduleAutoSave();
         }
 
@@ -8687,6 +8688,219 @@
                 console.error('Frame transfer error:', error);
                 showToast(`Transfer failed: ${error.message}`, 'error');
             }
+        }
+
+        // ==========================================
+        // SHOT PREVIEW MODAL - Full-size Image/Video
+        // ==========================================
+
+        /**
+         * Open large preview modal for a shot's image or video
+         */
+        function openShotPreviewModal(sceneId, shotIndex) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || !decomposed.shots[shotIndex]) {
+                showToast('Shot not found', 'error');
+                return;
+            }
+
+            const shot = decomposed.shots[shotIndex];
+            const hasImage = shot.status === 'ready' && shot.imageUrl;
+            const hasVideo = shot.videoStatus === 'ready' && shot.videoUrl;
+            const isGeneratingVideo = shot.videoStatus === 'generating' || shot.videoStatus === 'processing';
+
+            if (!hasImage && !hasVideo) {
+                showToast('Generate image first to preview', 'info');
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.id = 'shot-preview-modal';
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 10001; padding: 1rem;';
+
+            modal.innerHTML = `
+                <div style="max-width: 1000px; width: 100%; background: linear-gradient(135deg, #1a1a2e, #0f172a); border-radius: 1rem; border: 1px solid rgba(139, 92, 246, 0.3); overflow: hidden; max-height: 90vh; display: flex; flex-direction: column;">
+                    <!-- Header -->
+                    <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                        <div>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="background: rgba(139, 92, 246, 0.3); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.9rem;">${shotIndex + 1}</span>
+                                Shot Preview - ${shot.shotType || 'Shot'}
+                            </div>
+                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">
+                                ${shot.cameraMovement || 'static'} • ${shot.duration || 6}s
+                                ${shot.transferredFrom !== undefined ? ` • 🔗 Frame from Shot ${shot.transferredFrom + 1}` : ''}
+                            </div>
+                        </div>
+                        <button onclick="closeShotPreviewModal()" style="background: none; border: none; color: rgba(255,255,255,0.5); font-size: 1.5rem; cursor: pointer; padding: 0.5rem; transition: color 0.2s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.5)'">&times;</button>
+                    </div>
+
+                    <!-- Content Area -->
+                    <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                        <!-- Tab Buttons (if has video) -->
+                        ${hasVideo ? `
+                            <div style="display: flex; gap: 0.5rem; padding: 1rem 1rem 0.5rem; background: rgba(0,0,0,0.2);">
+                                <button id="preview-tab-image" onclick="switchPreviewTab('image')" style="padding: 0.5rem 1rem; background: rgba(139, 92, 246, 0.3); border: 1px solid rgba(139, 92, 246, 0.5); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+                                    🖼️ Image
+                                </button>
+                                <button id="preview-tab-video" onclick="switchPreviewTab('video')" style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+                                    🎬 Video
+                                </button>
+                            </div>
+                        ` : ''}
+
+                        <!-- Preview Container -->
+                        <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(0,0,0,0.3); min-height: 400px;">
+                            <!-- Image Preview -->
+                            <div id="preview-content-image" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;">
+                                ${hasImage ? `
+                                    <img src="${shot.imageUrl}" style="max-width: 100%; max-height: 60vh; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+                                ` : `
+                                    <div style="text-align: center; color: rgba(255,255,255,0.4);">
+                                        <span style="font-size: 3rem;">🖼️</span>
+                                        <div style="margin-top: 0.5rem;">No image generated yet</div>
+                                    </div>
+                                `}
+                            </div>
+                            <!-- Video Preview (hidden by default) -->
+                            <div id="preview-content-video" style="display: none; align-items: center; justify-content: center; width: 100%; height: 100%;">
+                                ${hasVideo ? `
+                                    <video src="${shot.videoUrl}" controls autoplay loop style="max-width: 100%; max-height: 60vh; border-radius: 0.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.5);"></video>
+                                ` : isGeneratingVideo ? `
+                                    <div style="text-align: center; color: rgba(255,255,255,0.6);">
+                                        <div style="width: 48px; height: 48px; margin: 0 auto 1rem; border: 3px solid rgba(6, 182, 212, 0.2); border-top-color: #06b6d4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                        <div>Video generating...</div>
+                                    </div>
+                                ` : `
+                                    <div style="text-align: center; color: rgba(255,255,255,0.4);">
+                                        <span style="font-size: 3rem;">🎬</span>
+                                        <div style="margin-top: 0.5rem;">No video generated yet</div>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Shot Prompt -->
+                        <div style="padding: 1rem; background: rgba(0,0,0,0.2); border-top: 1px solid rgba(255,255,255,0.1);">
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-bottom: 0.5rem;">SHOT PROMPT</div>
+                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.5; max-height: 80px; overflow-y: auto;">
+                                ${shot.prompt || 'No prompt'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions Footer -->
+                    <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.75rem; flex-wrap: wrap; flex-shrink: 0;">
+                        <button onclick="generateSingleShotImage(${sceneId}, ${shotIndex}); closeShotPreviewModal();"
+                                style="flex: 1; min-width: 120px; padding: 0.6rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+                            ${hasImage ? '🔄 Regenerate Image' : '🎨 Generate Image'}
+                        </button>
+                        ${hasImage ? `
+                            <button onclick="generateSingleShotVideo(${sceneId}, ${shotIndex}); closeShotPreviewModal();"
+                                    style="flex: 1; min-width: 120px; padding: 0.6rem; background: ${hasVideo ? 'rgba(6, 182, 212, 0.15)' : 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'}; border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+                                ${hasVideo ? '🔄 Re-Animate' : '🎬 Animate Shot'}
+                            </button>
+                        ` : ''}
+                        ${hasVideo && shotIndex < decomposed.shots.length - 1 ? `
+                            <button onclick="closeShotPreviewModal(); openFrameCaptureModal(${sceneId}, ${shotIndex});"
+                                    style="flex: 1; min-width: 140px; padding: 0.6rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.3)); border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
+                                🎯 Capture Frame → Shot ${shotIndex + 2}
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Close on escape key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    closeShotPreviewModal();
+                    document.removeEventListener('keydown', handleEscape);
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeShotPreviewModal();
+                }
+            });
+        }
+
+        /**
+         * Close shot preview modal
+         */
+        function closeShotPreviewModal() {
+            const modal = document.getElementById('shot-preview-modal');
+            if (modal) modal.remove();
+        }
+
+        /**
+         * Switch between image and video tabs in preview
+         */
+        function switchPreviewTab(tab) {
+            const imageContent = document.getElementById('preview-content-image');
+            const videoContent = document.getElementById('preview-content-video');
+            const imageTab = document.getElementById('preview-tab-image');
+            const videoTab = document.getElementById('preview-tab-video');
+
+            if (tab === 'video') {
+                if (imageContent) imageContent.style.display = 'none';
+                if (videoContent) videoContent.style.display = 'flex';
+                if (imageTab) {
+                    imageTab.style.background = 'rgba(255,255,255,0.05)';
+                    imageTab.style.borderColor = 'rgba(255,255,255,0.2)';
+                    imageTab.style.color = 'rgba(255,255,255,0.7)';
+                }
+                if (videoTab) {
+                    videoTab.style.background = 'rgba(6, 182, 212, 0.3)';
+                    videoTab.style.borderColor = 'rgba(6, 182, 212, 0.5)';
+                    videoTab.style.color = 'white';
+                }
+            } else {
+                if (imageContent) imageContent.style.display = 'flex';
+                if (videoContent) videoContent.style.display = 'none';
+                if (imageTab) {
+                    imageTab.style.background = 'rgba(139, 92, 246, 0.3)';
+                    imageTab.style.borderColor = 'rgba(139, 92, 246, 0.5)';
+                    imageTab.style.color = 'white';
+                }
+                if (videoTab) {
+                    videoTab.style.background = 'rgba(255,255,255,0.05)';
+                    videoTab.style.borderColor = 'rgba(255,255,255,0.2)';
+                    videoTab.style.color = 'rgba(255,255,255,0.7)';
+                }
+            }
+        }
+
+        /**
+         * Parse and format API error messages for user-friendly display
+         */
+        function formatVideoGenerationError(error) {
+            const msg = error.message || error.toString();
+
+            // Check for common API errors
+            if (msg.includes('insufficient balance') || msg.includes('insufficient_balance')) {
+                return '💳 Minimax account has insufficient balance. Please add credits to your Minimax account.';
+            }
+            if (msg.includes('rate limit') || msg.includes('too many requests')) {
+                return '⏱️ Rate limit reached. Please wait a moment and try again.';
+            }
+            if (msg.includes('invalid') && msg.includes('key')) {
+                return '🔑 API key issue. Please check your Minimax API configuration.';
+            }
+            if (msg.includes('timeout')) {
+                return '⏳ Request timed out. Please try again.';
+            }
+            if (msg.includes('network') || msg.includes('ECONNREFUSED')) {
+                return '🌐 Network error. Please check your connection and try again.';
+            }
+
+            // Return sanitized error
+            return msg.length > 100 ? msg.substring(0, 100) + '...' : msg;
         }
 
         /**
