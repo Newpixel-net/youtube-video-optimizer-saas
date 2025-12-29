@@ -5471,7 +5471,8 @@
                 const portraitPrompt = buildPortraitPrompt(char);
 
                 // Use Gemini (NanoBanana Pro) for best quality portraits
-                const generateFn = functions.httpsCallable('generateCreativeImage');
+                // CRITICAL: 5-minute timeout to match server (Gemini can take 60-120s)
+                const generateFn = functions.httpsCallable('generateCreativeImage', { timeout: 300000 });
                 // Note: Gemini doesn't support negativePrompt as a parameter
                 // The backend embeds negative prompts in the prompt text for Gemini
                 const result = await generateFn({
@@ -6941,7 +6942,8 @@
                 } else {
                     // Use NanoBanana (Gemini) - synchronous result
                     // This model SUPPORTS character reference images!
-                    const generateFn = functions.httpsCallable('generateCreativeImage');
+                    // CRITICAL: 5-minute timeout to match server (Gemini can take 60-120s)
+                    const generateFn = functions.httpsCallable('generateCreativeImage', { timeout: 300000 });
 
                     // Map aspect ratio
                     const aspectRatioMap = {

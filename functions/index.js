@@ -11372,7 +11372,12 @@ exports.testImagenApi = functions.https.onCall(async (data, context) => {
 
 // Generate creative image using Google Gemini/Imagen API (NanoBanana)
 // Documentation: https://ai.google.dev/gemini-api/docs/imagen
-exports.generateCreativeImage = functions.https.onCall(async (data, context) => {
+exports.generateCreativeImage = functions
+  .runWith({
+    timeoutSeconds: 300, // 5 minutes - Gemini image generation can take 60-120s
+    memory: '1GB' // Increased memory for image processing with sharp
+  })
+  .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'generateImage', 10);
 
@@ -11700,91 +11705,121 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
         // Reference: https://ai.google.dev/gemini-api/docs/image-generation
 
         // Generate images (Gemini generates one at a time)
+        // Retry mechanism for transient failures (up to 2 retries per image)
+        const MAX_RETRIES = 2;
+        const lastErrors = [];
+
         for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
-          try {
-            // Aspect ratio handling for Gemini
-            // Note: The @google/genai SDK's imageConfig may not work with all model versions
-            // So we embed aspect ratio in the prompt AND try imageConfig as fallback
-            const geminiAspectRatio = validAspectRatio || '16:9';
+          let success = false;
 
-            // Enhance the prompt with aspect ratio instruction
-            const aspectRatioInstruction = `[Generate image in ${geminiAspectRatio} aspect ratio format]\n\n`;
-            const enhancedParts = contentParts.map((part, idx) => {
-              if (idx === 0 && part.text) {
-                return { text: aspectRatioInstruction + part.text };
+          for (let retry = 0; retry <= MAX_RETRIES && !success; retry++) {
+            try {
+              if (retry > 0) {
+                console.log(`[generateCreativeImage] Retry ${retry}/${MAX_RETRIES} for image ${imgIdx + 1}`);
+                // Exponential backoff: 2s, 4s
+                await new Promise(resolve => setTimeout(resolve, retry * 2000));
               }
-              return part;
-            });
 
-            const result = await ai.models.generateContent({
-              model: geminiImageModelId,
-              contents: [{ role: 'user', parts: enhancedParts }],
-              config: {
-                responseModalities: ['image', 'text']
-              }
-            });
+              // Aspect ratio handling for Gemini
+              // Note: The @google/genai SDK's imageConfig may not work with all model versions
+              // So we embed aspect ratio in the prompt AND try imageConfig as fallback
+              const geminiAspectRatio = validAspectRatio || '16:9';
 
-            // Extract image from response - handle both SDK response structures
-            const candidates = result.candidates || (result.response && result.response.candidates);
-            if (candidates && candidates.length > 0) {
-              const candidate = candidates[0];
-              const parts = candidate.content?.parts || candidate.parts || [];
-              for (const part of parts) {
-                const inlineData = part.inlineData || part.inline_data;
-                if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
-                  // Found an image
-                  const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
-                  const rawBuffer = Buffer.from(imageBytes, 'base64');
-
-                  // Enforce exact dimensions based on aspect ratio
-                  // This ensures consistent 1920x1080 for 16:9, etc.
-                  const { buffer: processedBuffer, width: targetWidth, height: targetHeight, mimeType: processedMimeType } =
-                    await enforceImageDimensions(rawBuffer, geminiAspectRatio, 'hd');
-
-                  const fileName = `creative-studio/${uid}/${timestamp}-gemini-${imgIdx + 1}.png`;
-                  const file = storage.file(fileName);
-
-                  await file.save(processedBuffer, {
-                    metadata: {
-                      contentType: processedMimeType,
-                      metadata: {
-                        prompt: finalPrompt.substring(0, 500),
-                        model: geminiImageModelId,
-                        aspectRatio: geminiAspectRatio,
-                        width: String(targetWidth),
-                        height: String(targetHeight),
-                        generatedAt: new Date().toISOString()
-                      }
-                    }
-                  });
-
-                  // Make file publicly accessible [RESTORED-FIX-2025-12-01]
-                  await file.makePublic();
-                  const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
-
-                  generatedImages.push({
-                    url: publicUrl,
-                    fileName: fileName,
-                    seed: Math.floor(Math.random() * 1000000),
-                    aspectRatio: geminiAspectRatio,
-                    width: targetWidth,
-                    height: targetHeight
-                  });
-
-                  console.log(`Gemini image ${imgIdx + 1} saved: ${fileName} (${targetWidth}x${targetHeight}, ${geminiAspectRatio})`);
-                  break; // Only take first image from this response
+              // Enhance the prompt with aspect ratio instruction and quality hints
+              const aspectRatioInstruction = `[Generate image in ${geminiAspectRatio} aspect ratio format. High quality, detailed, sharp focus.]\n\n`;
+              const enhancedParts = contentParts.map((part, idx) => {
+                if (idx === 0 && part.text) {
+                  return { text: aspectRatioInstruction + part.text };
                 }
+                return part;
+              });
+
+              console.log(`[generateCreativeImage] Calling Gemini model: ${geminiImageModelId}, image ${imgIdx + 1}/${imageCount}`);
+              const startTime = Date.now();
+
+              const result = await ai.models.generateContent({
+                model: geminiImageModelId,
+                contents: [{ role: 'user', parts: enhancedParts }],
+                config: {
+                  responseModalities: ['image', 'text']
+                }
+              });
+
+              console.log(`[generateCreativeImage] Gemini response received in ${Date.now() - startTime}ms`);
+
+              // Extract image from response - handle both SDK response structures
+              const candidates = result.candidates || (result.response && result.response.candidates);
+              if (candidates && candidates.length > 0) {
+                const candidate = candidates[0];
+                const parts = candidate.content?.parts || candidate.parts || [];
+                for (const part of parts) {
+                  const inlineData = part.inlineData || part.inline_data;
+                  if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
+                    // Found an image
+                    const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
+                    const rawBuffer = Buffer.from(imageBytes, 'base64');
+
+                    // Log original image size for debugging quality issues
+                    console.log(`[generateCreativeImage] Raw image buffer size: ${rawBuffer.length} bytes`);
+
+                    // Enforce exact dimensions based on aspect ratio
+                    // This ensures consistent 1920x1080 for 16:9, etc.
+                    const { buffer: processedBuffer, width: targetWidth, height: targetHeight, mimeType: processedMimeType } =
+                      await enforceImageDimensions(rawBuffer, geminiAspectRatio, 'hd');
+
+                    console.log(`[generateCreativeImage] Processed image size: ${processedBuffer.length} bytes, dimensions: ${targetWidth}x${targetHeight}`);
+
+                    const fileName = `creative-studio/${uid}/${timestamp}-gemini-${imgIdx + 1}.png`;
+                    const file = storage.file(fileName);
+
+                    await file.save(processedBuffer, {
+                      metadata: {
+                        contentType: processedMimeType,
+                        metadata: {
+                          prompt: finalPrompt.substring(0, 500),
+                          model: geminiImageModelId,
+                          aspectRatio: geminiAspectRatio,
+                          width: String(targetWidth),
+                          height: String(targetHeight),
+                          generatedAt: new Date().toISOString()
+                        }
+                      }
+                    });
+
+                    // Make file publicly accessible [RESTORED-FIX-2025-12-01]
+                    await file.makePublic();
+                    const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+                    generatedImages.push({
+                      url: publicUrl,
+                      fileName: fileName,
+                      seed: Math.floor(Math.random() * 1000000),
+                      aspectRatio: geminiAspectRatio,
+                      width: targetWidth,
+                      height: targetHeight
+                    });
+
+                    console.log(`[generateCreativeImage] Image ${imgIdx + 1} saved: ${fileName} (${targetWidth}x${targetHeight}, ${geminiAspectRatio})`);
+                    success = true; // Mark success to exit retry loop
+                    break; // Only take first image from this response
+                  }
+                }
+              } else {
+                console.warn(`[generateCreativeImage] No candidates in Gemini response for image ${imgIdx + 1}`);
               }
+            } catch (genError) {
+              const errorMsg = genError.message || 'Unknown error';
+              console.error(`[generateCreativeImage] Gemini error for image ${imgIdx + 1}, retry ${retry}:`, errorMsg);
+              lastErrors.push(errorMsg);
+              // Continue to next retry
             }
-          } catch (genError) {
-            console.error(`Gemini generation error for image ${imgIdx + 1}:`, genError);
-            // Continue with remaining images
-          }
-        }
+          } // End retry loop
+        } // End image count loop
 
         if (generatedImages.length === 0) {
+          const errorDetails = lastErrors.length > 0 ? ` Last error: ${lastErrors[lastErrors.length - 1]}` : '';
           throw new functions.https.HttpsError('internal',
-            'Gemini did not generate any images. The content may have been filtered.');
+            `Gemini did not generate any images. The content may have been filtered or the model encountered an error.${errorDetails}`);
         }
 
         usedModel = geminiImageModelId;
