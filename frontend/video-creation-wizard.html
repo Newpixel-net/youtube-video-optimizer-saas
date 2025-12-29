@@ -9986,7 +9986,13 @@
             const hasSelectedConcept = selectedConcept && (selectedConcept.title || selectedConcept.logline);
             const hasImprovedConcept = improvedData && (improvedData.improvedConcept || improvedData.hookLine);
             const hasRawConcept = concept?.rawInput && concept.rawInput.length > 20;
-            const usingNewFlow = hasSelectedConcept || hasImprovedConcept;
+
+            // usingNewFlow = ONLY when we have a FULL selected concept (with title)
+            // This ensures the new flow block can safely access selectedConcept properties
+            const usingNewFlow = hasSelectedConcept;
+
+            // hasAnyConcept = we have SOME concept data to show (even if not full)
+            const hasAnyConcept = hasSelectedConcept || hasImprovedConcept || hasRawConcept;
 
             // AUTO-POPULATE TOPIC: Always derive from available data
             // This ensures the Script step is always connected to previous steps
@@ -10127,8 +10133,8 @@
                     </div>
                     `}
 
-                    <!-- Hidden input to store topic for new flow (populated from selected concept) -->
-                    ${usingNewFlow ? `<input type="hidden" id="script-topic" value="${selectedConcept.title}: ${selectedConcept.logline || selectedConcept.description || ''}">` : ''}
+                    <!-- Hidden input to store topic for new flow (already populated from available concept data) -->
+                    ${usingNewFlow ? `<input type="hidden" id="script-topic" value="${state.content.topic || ''}">` : ''}
 
                     <!-- Tone selector -->
                     <div style="margin-bottom: 1.5rem;">
