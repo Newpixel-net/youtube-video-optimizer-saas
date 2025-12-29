@@ -26393,55 +26393,20 @@ ${narrationMode === 'voiceover' ? '- Use third-person narration describing chara
 ${narrationMode === 'narrator' ? '- Use an omniscient narrator who knows all characters\' thoughts and feelings' : ''}`;
       }
 
-      // Build selected concept section - FULL DATA from creationWizardGenerateConcepts
+      // Build selected concept section - OPTIMIZED to avoid duplicating data in other sections
+      // Characters, relationships, and world are handled in their own dedicated sections
       let selectedConceptSection = '';
       if (selectedConcept) {
         selectedConceptSection = `
 
-📋 SELECTED CONCEPT - THE CORE STORY
+📋 CORE STORY CONCEPT
 Title: "${selectedConcept.title}"
 Logline: ${selectedConcept.logline}
-${selectedConcept.description ? `Description: ${selectedConcept.description}` : ''}
-${selectedConcept.theme ? `\n🎯 DEEPER MEANING/THEME: ${selectedConcept.theme}` : ''}
-
-${selectedConcept.narrativeStructure || selectedConcept.storyEngine ? `
-📖 NARRATIVE ARCHITECTURE (CRITICAL - defines story structure):
-${selectedConcept.narrativeStructure ? `- Structure: ${selectedConcept.narrativeStructure.replace(/_/g, ' ').toUpperCase()}` : ''}
-${selectedConcept.storyEngine ? `- Story Engine: ${selectedConcept.storyEngine.replace(/_/g, ' ')}` : ''}
-${selectedConcept.protagonistCount ? `- Protagonist Count: ${selectedConcept.protagonistCount}` : ''}
-YOUR SCENES MUST FOLLOW THIS STRUCTURE - it defines how the story unfolds!` : ''}
-
-${selectedConcept.characters && selectedConcept.characters.length > 0 ? `
-👥 CONCEPT CHARACTERS (from story development):
-${selectedConcept.characters.map((char, idx) => `
-CHARACTER ${idx + 1}: ${char.name || 'Unnamed'}
-- Archetype: ${char.archetype || 'undefined'}
-- Role: ${char.role || 'undefined'}
-- Fatal Flaw: ${char.flaw || 'none specified'}
-- Character Arc: ${char.arc || 'none specified'}`).join('\n')}
-
-These characters MUST appear with VISUAL CONSISTENCY across all their scenes!` : ''}
-
-${selectedConcept.keyRelationships && selectedConcept.keyRelationships.length > 0 ? `
-💫 KEY RELATIONSHIPS (drive scene dynamics):
-${selectedConcept.keyRelationships.map((rel, idx) => `${idx + 1}. ${rel.between}: ${rel.type} - Tension: ${rel.tension}`).join('\n')}
-Show these relationships EVOLVING across scenes!` : ''}
-
-${selectedConcept.worldSetting ? `
-🌍 WORLD SETTING (from concept):
-- Location: ${selectedConcept.worldSetting.location || 'unspecified'}
-- Unique Rule: ${selectedConcept.worldSetting.uniqueRule || 'none'}
-- Atmosphere: ${selectedConcept.worldSetting.atmosphere || 'cinematic'}` : ''}
-
-${selectedConcept.uniqueElements && selectedConcept.uniqueElements.length > 0 ? `
-✨ Unique Elements that MUST appear:
-${selectedConcept.uniqueElements.map((elem, idx) => `${idx + 1}. ${elem}`).join('\n')}` : ''}
-
-${selectedConcept.mood ? `Mood: ${selectedConcept.mood}` : ''}
-${selectedConcept.tone ? `Tone: ${selectedConcept.tone}` : ''}
-${selectedConcept.visualApproach ? `Visual Approach: ${selectedConcept.visualApproach}` : ''}
-
-This concept is THE FOUNDATION of your script. Every scene must serve this story.`;
+${selectedConcept.theme ? `Theme: ${selectedConcept.theme}` : ''}
+${selectedConcept.narrativeStructure ? `Structure: ${selectedConcept.narrativeStructure.replace(/_/g, ' ').toUpperCase()}` : ''}
+${selectedConcept.storyEngine ? `Engine: ${selectedConcept.storyEngine.replace(/_/g, ' ')}` : ''}
+${selectedConcept.uniqueElements && selectedConcept.uniqueElements.length > 0 ? `Unique Elements: ${selectedConcept.uniqueElements.join(', ')}` : ''}
+${selectedConcept.mood ? `Mood: ${selectedConcept.mood}` : ''} ${selectedConcept.tone ? `Tone: ${selectedConcept.tone}` : ''}`;
       }
 
       // Build world-building section
@@ -26642,30 +26607,9 @@ ${styleReferencesSection}
 ${avoidSection}
 ${hookLineSection}
 
-============================================================
-DEEP STORY QUALITY REQUIREMENTS
-============================================================
-1. STORY COMPLEXITY: Create a narrative with multiple layers - surface plot AND deeper themes
-2. CHARACTER DEPTH: Characters must have motivations, conflicts, and growth arcs
-3. VISUAL CONSISTENCY: Every scene must feel part of ONE cohesive visual world
-4. EMOTIONAL JOURNEY: The viewer should feel a complete emotional arc from start to finish
-5. MEMORABLE MOMENTS: Include at least 2-3 "iconic" visual moments that could be movie posters
-6. THEMATIC UNITY: A central theme should thread through every scene
-7. CINEMATIC INTELLIGENCE: This should feel like a trailer for a $100M production
-${requestedCharacterCount > 0 ? `
-⚠️ CRITICAL CHARACTER COUNT REQUIREMENT:
-You MUST include EXACTLY ${requestedCharacterCount} distinct characters in this story.
-Each character MUST have a unique name, visual appearance, and role.
-Failure to include ${requestedCharacterCount} characters is NOT acceptable.
-` : ''}
-DO NOT CREATE:
-- Generic, surface-level content
-- Disconnected scenes that don't build on each other
-- Characters that appear once and disappear
-- Visuals that could be from any random video
-- Cookie-cutter stories without unique identity
-${requestedCharacterCount > 0 ? `- Stories with fewer than ${requestedCharacterCount} characters` : ''}
-============================================================
+QUALITY: Multi-layered narrative, character depth with growth arcs, visual consistency, complete emotional journey.
+${requestedCharacterCount > 0 ? `⚠️ MUST include EXACTLY ${requestedCharacterCount} distinct characters.` : ''}
+AVOID: Generic content, disconnected scenes, one-time characters, cookie-cutter stories.
 `;
     }
 
@@ -27098,6 +27042,14 @@ LOCATION CONSISTENCY RULES:
     // - Character dialogue arrays
     // - audioDesign metadata
     // - Detailed transition purposes
+
+    // Log prompt sizes for debugging timeout issues
+    const systemPromptLength = systemPrompt.length;
+    const userPromptLength = userPrompt.length;
+    console.log(`[creationWizardGenerateScript] Prompt sizes - System: ${systemPromptLength} chars, User: ${userPromptLength} chars, Total: ${systemPromptLength + userPromptLength} chars`);
+    console.log(`[creationWizardGenerateScript] Starting GPT-4o call at ${new Date().toISOString()}`);
+
+    const startTime = Date.now();
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
@@ -27108,6 +27060,9 @@ LOCATION CONSISTENCY RULES:
       temperature: conceptEnrichment ? 0.85 : 0.8, // Slightly higher creativity for enriched concepts
       max_tokens: 6500 // Cinematic production requires more tokens for rich scene structure
     });
+
+    const elapsedTime = Date.now() - startTime;
+    console.log(`[creationWizardGenerateScript] GPT-4o completed in ${elapsedTime}ms (${(elapsedTime / 1000).toFixed(1)}s)`);
 
     // Parse the response
     const responseText = completion.choices[0].message.content.trim();

@@ -6314,7 +6314,9 @@
             render();
 
             try {
-                const generateScriptFn = functions.httpsCallable('creationWizardGenerateScript');
+                // CRITICAL: Set 5-minute timeout to match server-side timeout
+                // Default Firebase callable timeout is 70s which is too short for complex scripts
+                const generateScriptFn = functions.httpsCallable('creationWizardGenerateScript', { timeout: 300000 });
 
                 // Build enriched concept data from AI improvement AND selected concept
                 // Merge data from: improvedData (AI enhancement) + refinedConcept (selected idea) + characterIntelligence
