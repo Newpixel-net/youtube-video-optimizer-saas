@@ -9981,15 +9981,34 @@
             const characterIntel = state.characterIntelligence;
 
             // Determine if using new production flow
-            // ROBUST CHECK: If we have a selected concept, use new flow regardless of production.type
-            // This handles edge cases like autosave state restoration
-            const usingNewFlow = selectedConcept && selectedConcept.title;
+            // COMPREHENSIVE CHECK: Detect ANY concept data from previous steps
+            // This includes: selected concept, improved concept, or raw input
+            const hasSelectedConcept = selectedConcept && (selectedConcept.title || selectedConcept.logline);
+            const hasImprovedConcept = improvedData && (improvedData.improvedConcept || improvedData.hookLine);
+            const hasRawConcept = concept?.rawInput && concept.rawInput.length > 20;
+            const usingNewFlow = hasSelectedConcept || hasImprovedConcept;
 
-            // FALLBACK: Ensure state.content.topic is populated from selected concept
-            // This ensures the hidden input always has the correct value
-            if (selectedConcept && (!state.content.topic || state.content.topic.trim() === '')) {
-                state.content.topic = selectedConcept.title + ': ' + (selectedConcept.logline || selectedConcept.description || '');
+            // AUTO-POPULATE TOPIC: Always derive from available data
+            // This ensures the Script step is always connected to previous steps
+            if (!state.content.topic || state.content.topic.trim() === '') {
+                if (selectedConcept?.title) {
+                    // Best: Use selected concept title + logline
+                    state.content.topic = selectedConcept.title + ': ' + (selectedConcept.logline || selectedConcept.description || '');
+                } else if (improvedData?.improvedConcept) {
+                    // Fallback: Use AI-improved concept text (first 150 chars)
+                    state.content.topic = improvedData.improvedConcept.substring(0, 150);
+                } else if (concept?.rawInput) {
+                    // Last resort: Use raw user input
+                    state.content.topic = concept.rawInput.substring(0, 150);
+                }
             }
+
+            // BUILD DISPLAY DATA: Compile all concept info for display
+            // Even in legacy flow, show what we know
+            const displayTitle = selectedConcept?.title || (improvedData?.hookLine ? 'Your Concept' : null);
+            const displayLogline = selectedConcept?.logline || selectedConcept?.description || improvedData?.improvedConcept?.substring(0, 200) || concept?.rawInput?.substring(0, 200) || '';
+            const displayMood = selectedConcept?.mood || improvedData?.suggestedMood || null;
+            const displayTone = selectedConcept?.tone || improvedData?.suggestedTone || null;
 
             return `
                 <div class="content-card">
@@ -10064,7 +10083,24 @@
                     </div>
                     ` : ''}
                     ` : `
-                    <!-- LEGACY FLOW: Basic config summary -->
+                    <!-- FLOW: Show concept data if available, otherwise basic config -->
+                    ${displayTitle || displayLogline ? `
+                    <!-- We have SOME concept data - show it! -->
+                    <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(6, 182, 212, 0.08)); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+                        <div style="font-size: 0.7rem; color: rgba(139, 92, 246, 0.8); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Your Concept</div>
+                        ${displayTitle ? `<div style="font-size: 1.05rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">${displayTitle}</div>` : ''}
+                        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.5; margin-bottom: 0.75rem;">
+                            ${displayLogline}
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.6);">
+                            ${displayMood ? `<span>Mood: <span style="color: #a78bfa;">${displayMood}</span></span>` : ''}
+                            ${displayTone ? `<span>Tone: <span style="color: #f472b6;">${displayTone}</span></span>` : ''}
+                            ${state.platform.selected ? `<span>Platform: <span style="color: #67e8f9;">${state.platform.selected}</span></span>` : ''}
+                            ${formatDuration(state.platform.targetDuration) ? `<span>Duration: <span style="color: #67e8f9;">${formatDuration(state.platform.targetDuration)}</span></span>` : ''}
+                        </div>
+                    </div>
+                    ` : `
+                    <!-- No concept data - show basic config -->
                     <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem; margin-bottom: 1.5rem;">
                         <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Your video configuration:</div>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
@@ -10075,18 +10111,19 @@
                             <span class="config-tag">${style?.icon || ''} ${style?.name || 'Style'}</span>
                         </div>
                     </div>
+                    `}
 
-                    <!-- Topic (editable) - Only show for legacy flow -->
+                    <!-- Topic input - shows as readonly if we have concept data, editable otherwise -->
                     <div style="margin-bottom: 1.5rem;">
                         <label style="display: block; font-size: 0.9rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">
-                            Video Topic
+                            Video Topic ${state.content.topic ? '<span style="font-size: 0.7rem; color: rgba(139, 92, 246, 0.7); font-weight: 400;">(from your concept)</span>' : ''}
                         </label>
                         <input type="text"
                                id="script-topic"
                                class="topic-input"
                                value="${state.content.topic || ''}"
                                placeholder="e.g., 5 Morning Habits That Changed My Life"
-                               style="width: 100%;">
+                               style="width: 100%; ${state.content.topic ? 'background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3);' : ''}">
                     </div>
                     `}
 
