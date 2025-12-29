@@ -12212,6 +12212,11 @@
                             <button onclick="upscaleSceneImage(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.2); color: white; cursor: pointer; font-size: 0.65rem;" title="Upscale to HD/4K">
                                 ⬆️
                             </button>
+                            ${!state.storyboard.multiShotMode?.decomposedScenes?.[scene.id]?.shots?.length ? `
+                            <button onclick="decomposeSceneToShots(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(139, 92, 246, 0.5); background: rgba(139, 92, 246, 0.2); color: white; cursor: pointer; font-size: 0.65rem;" title="Decompose into shots">
+                                ✂️
+                            </button>
+                            ` : ''}
                         </div>
                     </div>
                 `;
