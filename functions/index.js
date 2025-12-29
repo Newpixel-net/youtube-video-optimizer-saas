@@ -41487,3 +41487,581 @@ exports.creationWizardGetSceneVideoSequence = functions.https.onCall(async (data
     throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get scene sequence'));
   }
 });
+
+// =============================================================================
+// PHASE 12C: BATCH OPERATIONS & CROSS-SCENE CONSISTENCY
+// Decompose all scenes at once with unified visual style
+// =============================================================================
+
+/**
+ * creationWizardBatchDecomposeScenes - Decompose all scenes into shots at once
+ *
+ * Creates a unified visual consistency profile that applies across ALL scenes,
+ * ensuring the entire video maintains a cohesive look.
+ */
+exports.creationWizardBatchDecomposeScenes = functions
+  .runWith({
+    timeoutSeconds: 540, // 9 minutes for processing all scenes
+    memory: '1GB'
+  })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    scenes,             // Array of scene objects { id, visualPrompt, narration, duration }
+    targetShotCount,    // Default shots per scene
+    genre,
+    productionMode,
+    styleBible,         // Global style bible for consistency
+    characterBible,     // Character definitions
+    globalConsistency   // { enabled: true, anchorSceneId: null } - use first scene as anchor
+  } = data;
+
+  if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scenes array is required');
+  }
+
+  console.log(`[creationWizardBatchDecomposeScenes] Starting batch decomposition of ${scenes.length} scenes`);
+
+  try {
+    // Step 1: Generate a GLOBAL visual consistency profile
+    // This ensures ALL scenes share the same visual DNA
+    let globalVisualProfile = null;
+
+    if (globalConsistency?.enabled !== false) {
+      console.log('[creationWizardBatchDecomposeScenes] Generating global visual profile...');
+
+      const profilePrompt = `Analyze these scene descriptions and create a UNIFIED visual style profile that will maintain consistency across ALL scenes.
+
+SCENES:
+${scenes.map((s, i) => `Scene ${i + 1}: ${s.visualPrompt || s.visual || ''}`).join('\n')}
+
+GENRE: ${genre || 'cinematic'}
+PRODUCTION MODE: ${productionMode || 'premium'}
+
+${styleBible ? `STYLE BIBLE: ${JSON.stringify(styleBible)}` : ''}
+${characterBible && characterBible.length > 0 ? `CHARACTERS: ${JSON.stringify(characterBible)}` : ''}
+
+Create a unified visual profile that ALL shots across ALL scenes must follow:
+
+Return JSON:
+{
+  "visualDNA": {
+    "cinematicStyle": "The overall cinematic approach (e.g., 'neo-noir thriller', 'warm documentary')",
+    "colorPalette": {
+      "primary": "Main color (e.g., 'deep teal')",
+      "secondary": "Accent color (e.g., 'warm amber')",
+      "shadows": "Shadow tone (e.g., 'cool blue-black')",
+      "highlights": "Highlight tone (e.g., 'golden')"
+    },
+    "lighting": {
+      "style": "Overall lighting approach (e.g., 'high contrast chiaroscuro')",
+      "keyLight": "Main light character (e.g., 'hard side light')",
+      "fillRatio": "Fill to key ratio (e.g., '1:4 dramatic')",
+      "practicals": "Practical lights in scene (e.g., 'neon signs, screens')"
+    },
+    "atmosphere": {
+      "mood": "Emotional quality (e.g., 'tense, anticipatory')",
+      "texture": "Visual texture (e.g., 'film grain, subtle haze')",
+      "depth": "Depth of field approach (e.g., 'shallow DOF isolating subjects')"
+    },
+    "cameraLanguage": {
+      "movement": "Overall camera philosophy (e.g., 'deliberate, controlled movements')",
+      "angles": "Preferred angles (e.g., 'low angles for power, eye-level for intimacy')",
+      "lensChoice": "Lens character (e.g., 'anamorphic wide, slight distortion')"
+    }
+  },
+  "sceneTransitions": {
+    "style": "How scenes should flow (e.g., 'match cuts on movement, dissolves for time')",
+    "pacing": "Overall rhythm (e.g., 'building tension, accelerating cuts')"
+  },
+  "consistencyRules": [
+    "Rule 1 for maintaining consistency",
+    "Rule 2...",
+    "Rule 3..."
+  ]
+}`;
+
+      const profileCompletion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: 'You are a cinematographer creating a unified visual style guide for a video project. Output valid JSON only.' },
+          { role: 'user', content: profilePrompt }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.7,
+        max_tokens: 1500
+      });
+
+      try {
+        globalVisualProfile = JSON.parse(profileCompletion.choices[0].message.content.trim());
+        console.log('[creationWizardBatchDecomposeScenes] Global visual profile created');
+      } catch (e) {
+        console.warn('[creationWizardBatchDecomposeScenes] Failed to parse visual profile, continuing without');
+      }
+    }
+
+    // Step 2: Decompose each scene with the global profile
+    const results = [];
+    const defaultShots = targetShotCount || 3;
+
+    for (let i = 0; i < scenes.length; i++) {
+      const scene = scenes[i];
+      const sceneDescription = scene.visualPrompt || scene.visual || '';
+      const sceneDuration = scene.duration || 6;
+
+      try {
+        // Analyze scene type
+        const sceneType = SHOT_DECOMPOSITION_ENGINE.analyzeSceneType(sceneDescription);
+        const shotCount = SHOT_DECOMPOSITION_ENGINE.calculateShotCount(sceneDuration, sceneType);
+        const actualShotCount = Math.min(Math.max(defaultShots, 2), shotCount);
+        const baseSequence = SHOT_DECOMPOSITION_ENGINE.generateShotSequence(sceneType, actualShotCount, sceneDuration);
+
+        // Build prompt with global consistency requirements
+        const systemPrompt = `You are a Hollywood cinematographer decomposing Scene ${i + 1} of ${scenes.length} into shots.
+
+CRITICAL: This scene is part of a LARGER VIDEO. ALL shots must match the global visual style.
+
+${globalVisualProfile ? `
+GLOBAL VISUAL DNA (MUST FOLLOW):
+${JSON.stringify(globalVisualProfile.visualDNA, null, 2)}
+
+CONSISTENCY RULES:
+${globalVisualProfile.consistencyRules?.map((r, idx) => `${idx + 1}. ${r}`).join('\n') || 'Maintain visual consistency across all shots'}
+` : ''}
+
+Output JSON with shots array containing detailed prompts that EXPLICITLY include:
+1. The global color palette
+2. The lighting style
+3. The atmosphere/mood
+4. Camera language
+
+Each shot prompt must be 150+ words and include these visual DNA elements.`;
+
+        const userPrompt = `Decompose Scene ${i + 1} into ${actualShotCount} shots:
+
+SCENE DESCRIPTION:
+${sceneDescription}
+
+DURATION: ${sceneDuration}s
+SCENE TYPE: ${sceneType}
+
+SHOT SEQUENCE TEMPLATE:
+${JSON.stringify(baseSequence, null, 2)}
+
+${scene.narration ? `NARRATION: "${scene.narration}"` : ''}
+
+Return JSON:
+{
+  "shots": [
+    {
+      "shotIndex": 1,
+      "shotType": "wide|medium|closeup|etc",
+      "duration": 2.5,
+      "cameraMovement": "movement type",
+      "prompt": "DETAILED prompt (150+ words) including global visual DNA...",
+      "purpose": "narrative purpose"
+    }
+  ],
+  "sceneConsistencyNotes": "How this scene connects to others visually"
+}`;
+
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.7,
+          max_tokens: 3000
+        });
+
+        const shotData = JSON.parse(completion.choices[0].message.content.trim());
+
+        // Normalize shots
+        const normalizedShots = (shotData.shots || []).map((shot, idx) => ({
+          id: `${scene.id}_shot_${idx + 1}`,
+          sceneId: scene.id,
+          shotIndex: shot.shotIndex || idx + 1,
+          shotType: shot.shotType || baseSequence[idx]?.shotType || 'medium',
+          duration: shot.duration || baseSequence[idx]?.duration || 2,
+          cameraMovement: shot.cameraMovement || baseSequence[idx]?.cameraMovement || 'static',
+          prompt: shot.prompt,
+          purpose: shot.purpose || 'scene coverage',
+          status: 'pending',
+          imageUrl: null,
+          videoUrl: null
+        }));
+
+        results.push({
+          sceneId: scene.id,
+          sceneIndex: i,
+          status: 'ready',
+          sceneType,
+          totalDuration: sceneDuration,
+          shotCount: normalizedShots.length,
+          shots: normalizedShots,
+          consistencyNotes: shotData.sceneConsistencyNotes || null
+        });
+
+        console.log(`[creationWizardBatchDecomposeScenes] Scene ${i + 1}/${scenes.length} decomposed: ${normalizedShots.length} shots`);
+
+        // Small delay between scenes
+        if (i < scenes.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+      } catch (sceneError) {
+        console.error(`[creationWizardBatchDecomposeScenes] Scene ${i + 1} failed:`, sceneError);
+        results.push({
+          sceneId: scene.id,
+          sceneIndex: i,
+          status: 'error',
+          error: sceneError.message || 'Decomposition failed',
+          shots: []
+        });
+      }
+    }
+
+    // Log usage
+    const successCount = results.filter(r => r.status === 'ready').length;
+    const totalShots = results.reduce((sum, r) => sum + (r.shots?.length || 0), 0);
+
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'batch_shot_decomposition',
+      scenesProcessed: scenes.length,
+      scenesSuccessful: successCount,
+      totalShotsCreated: totalShots,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: successCount > 0,
+      totalScenes: scenes.length,
+      successCount,
+      failedCount: scenes.length - successCount,
+      totalShots,
+      globalVisualProfile,
+      scenes: results
+    };
+
+  } catch (error) {
+    console.error('[creationWizardBatchDecomposeScenes] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to batch decompose scenes'));
+  }
+});
+
+/**
+ * creationWizardBatchGenerateShotImages - Generate images for all shots across all scenes
+ *
+ * Uses the first generated image as a style anchor for subsequent images.
+ */
+exports.creationWizardBatchGenerateShotImages = functions
+  .runWith({
+    timeoutSeconds: 540,
+    memory: '2GB'
+  })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    decomposedScenes,   // Array of { sceneId, shots: [...] }
+    model,              // Image model
+    aspectRatio,
+    characterReference, // Optional character reference
+    globalVisualProfile // From batch decomposition
+  } = data;
+
+  if (!decomposedScenes || !Array.isArray(decomposedScenes) || decomposedScenes.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Decomposed scenes array is required');
+  }
+
+  const geminiApiKey = functions.config().gemini?.key;
+  if (!geminiApiKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'Gemini API key not configured');
+  }
+
+  const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+  const storage = admin.storage().bucket();
+  const timestamp = Date.now();
+
+  // Flatten all shots
+  const allShots = [];
+  decomposedScenes.forEach(scene => {
+    (scene.shots || []).forEach(shot => {
+      allShots.push({
+        ...shot,
+        sceneId: scene.sceneId
+      });
+    });
+  });
+
+  console.log(`[creationWizardBatchGenerateShotImages] Starting batch generation of ${allShots.length} shots across ${decomposedScenes.length} scenes`);
+
+  const results = [];
+  let anchorImageBuffer = null; // First image becomes the style anchor
+
+  for (let i = 0; i < allShots.length; i++) {
+    const shot = allShots[i];
+
+    try {
+      // Build enhanced prompt with global visual profile
+      let enhancedPrompt = shot.prompt || '';
+
+      if (globalVisualProfile?.visualDNA) {
+        const dna = globalVisualProfile.visualDNA;
+        enhancedPrompt += `\n\nVISUAL REQUIREMENTS:
+- Style: ${dna.cinematicStyle || 'cinematic'}
+- Colors: ${dna.colorPalette?.primary || 'cinematic'} with ${dna.colorPalette?.secondary || 'balanced'} accents
+- Lighting: ${dna.lighting?.style || 'professional'}
+- Mood: ${dna.atmosphere?.mood || 'engaging'}
+- Camera: ${dna.cameraLanguage?.lensChoice || 'cinematic lens'}`;
+      }
+
+      // Add aspect ratio and quality hints
+      const aspectInstruction = `[Generate in ${aspectRatio || '16:9'} aspect ratio, high quality, detailed, sharp focus, cinematic]\n\n`;
+
+      // Build content parts
+      const contentParts = [];
+
+      // Add character reference if available
+      if (characterReference?.base64) {
+        contentParts.push({
+          inlineData: {
+            mimeType: characterReference.mimeType || 'image/png',
+            data: characterReference.base64
+          }
+        });
+      }
+
+      contentParts.push({ text: aspectInstruction + enhancedPrompt });
+
+      // Generate image
+      const geminiModelId = model === 'nanobanana' ? 'gemini-2.0-flash-exp' : 'gemini-2.0-flash-exp';
+
+      console.log(`[creationWizardBatchGenerateShotImages] Generating shot ${i + 1}/${allShots.length} (Scene ${shot.sceneId}, Shot ${shot.shotIndex})`);
+
+      const result = await ai.models.generateContent({
+        model: geminiModelId,
+        contents: [{ role: 'user', parts: contentParts }],
+        config: {
+          responseModalities: ['image', 'text']
+        }
+      });
+
+      // Extract image
+      const candidates = result.candidates || (result.response && result.response.candidates);
+      if (candidates && candidates.length > 0) {
+        const parts = candidates[0].content?.parts || candidates[0].parts || [];
+        for (const part of parts) {
+          const inlineData = part.inlineData || part.inline_data;
+          if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
+            const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
+            const rawBuffer = Buffer.from(imageBytes, 'base64');
+
+            // Process image
+            const { buffer: processedBuffer, width, height } = await enforceImageDimensions(rawBuffer, aspectRatio || '16:9', 'hd');
+
+            // Save first image as anchor
+            if (i === 0) {
+              anchorImageBuffer = processedBuffer;
+            }
+
+            // Save to storage
+            const fileName = `creative-studio/${uid}/${timestamp}-scene${shot.sceneId}-shot${shot.shotIndex}.png`;
+            const file = storage.file(fileName);
+
+            await file.save(processedBuffer, {
+              metadata: { contentType: 'image/png' }
+            });
+
+            await file.makePublic();
+            const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+            results.push({
+              sceneId: shot.sceneId,
+              shotId: shot.id,
+              shotIndex: shot.shotIndex,
+              status: 'ready',
+              imageUrl: publicUrl,
+              width,
+              height
+            });
+
+            console.log(`[creationWizardBatchGenerateShotImages] Shot ${i + 1}/${allShots.length} saved: ${fileName}`);
+            break;
+          }
+        }
+      }
+
+      if (!results.find(r => r.shotId === shot.id)) {
+        results.push({
+          sceneId: shot.sceneId,
+          shotId: shot.id,
+          shotIndex: shot.shotIndex,
+          status: 'error',
+          error: 'No image generated'
+        });
+      }
+
+      // Rate limiting delay
+      if (i < allShots.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+    } catch (shotError) {
+      console.error(`[creationWizardBatchGenerateShotImages] Shot ${i + 1} failed:`, shotError);
+      results.push({
+        sceneId: shot.sceneId,
+        shotId: shot.id,
+        shotIndex: shot.shotIndex,
+        status: 'error',
+        error: shotError.message || 'Generation failed'
+      });
+    }
+  }
+
+  const successCount = results.filter(r => r.status === 'ready').length;
+
+  // Log usage
+  await db.collection('apiUsage').add({
+    userId: uid,
+    type: 'batch_shot_image_generation',
+    totalShots: allShots.length,
+    successCount,
+    model: model || 'nanobanana-pro',
+    timestamp: admin.firestore.FieldValue.serverTimestamp()
+  });
+
+  return {
+    success: successCount > 0,
+    totalShots: allShots.length,
+    successCount,
+    failedCount: allShots.length - successCount,
+    shots: results
+  };
+});
+
+/**
+ * creationWizardExportMultiShotProject - Prepare multi-shot project for export
+ *
+ * Creates an export manifest that includes all shot videos organized by scene,
+ * ready for final video assembly.
+ */
+exports.creationWizardExportMultiShotProject = functions
+  .runWith({
+    timeoutSeconds: 120,
+    memory: '512MB'
+  })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    projectId,
+    scenes,             // Array of { sceneId, shots: [...with videoUrl] }
+    audioTrack,         // Optional background audio
+    voiceover,          // Optional voiceover track
+    outputFormat = 'mp4',
+    quality = 'high'
+  } = data;
+
+  if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scenes with shot videos required');
+  }
+
+  try {
+    // Build export manifest
+    const exportManifest = {
+      projectId: projectId || `project_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      createdBy: uid,
+      format: outputFormat,
+      quality,
+      scenes: [],
+      totalDuration: 0,
+      totalShots: 0
+    };
+
+    let currentTime = 0;
+
+    for (const scene of scenes) {
+      const sceneShots = (scene.shots || []).filter(s => s.videoUrl);
+
+      if (sceneShots.length === 0) continue;
+
+      const sceneDuration = sceneShots.reduce((sum, shot) => sum + (shot.duration || 6), 0);
+
+      exportManifest.scenes.push({
+        sceneId: scene.sceneId,
+        sceneIndex: exportManifest.scenes.length,
+        startTime: currentTime,
+        duration: sceneDuration,
+        shots: sceneShots.map((shot, idx) => ({
+          shotId: shot.id || shot.shotId,
+          shotIndex: idx,
+          shotType: shot.shotType,
+          videoUrl: shot.videoUrl,
+          duration: shot.duration || 6,
+          startTime: currentTime + sceneShots.slice(0, idx).reduce((sum, s) => sum + (s.duration || 6), 0),
+          transition: shot.transition || 'cut'
+        }))
+      });
+
+      currentTime += sceneDuration;
+      exportManifest.totalShots += sceneShots.length;
+    }
+
+    exportManifest.totalDuration = currentTime;
+
+    // Add audio tracks if provided
+    if (audioTrack) {
+      exportManifest.audioTrack = {
+        url: audioTrack.url,
+        volume: audioTrack.volume || 0.3,
+        fadeIn: audioTrack.fadeIn || 2,
+        fadeOut: audioTrack.fadeOut || 2
+      };
+    }
+
+    if (voiceover) {
+      exportManifest.voiceover = {
+        url: voiceover.url,
+        volume: voiceover.volume || 1.0
+      };
+    }
+
+    // Store export manifest
+    const manifestRef = await db.collection('exportManifests').add({
+      ...exportManifest,
+      userId: uid,
+      status: 'ready',
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`[creationWizardExportMultiShotProject] Created export manifest ${manifestRef.id}: ${exportManifest.scenes.length} scenes, ${exportManifest.totalShots} shots, ${exportManifest.totalDuration}s`);
+
+    return {
+      success: true,
+      manifestId: manifestRef.id,
+      manifest: exportManifest,
+      // Generate FFmpeg-compatible concat file content
+      ffmpegConcatFile: exportManifest.scenes.flatMap(scene =>
+        scene.shots.map(shot => `file '${shot.videoUrl}'\nduration ${shot.duration}`)
+      ).join('\n'),
+      // Preview playlist
+      playlist: exportManifest.scenes.flatMap(scene =>
+        scene.shots.map(shot => ({
+          sceneId: scene.sceneId,
+          shotType: shot.shotType,
+          url: shot.videoUrl,
+          duration: shot.duration
+        }))
+      )
+    };
+
+  } catch (error) {
+    console.error('[creationWizardExportMultiShotProject] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to create export manifest'));
+  }
+});
