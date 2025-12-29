@@ -7759,26 +7759,52 @@
                             ` : ''}
 
                             ${hasShots ? `
-                                <!-- Shot Timeline -->
+                                <!-- Frame Chain Pipeline Header -->
                                 <div style="margin-top: 1rem;">
-                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-                                        <div style="font-size: 0.9rem; color: white; font-weight: 600;">Shot Timeline</div>
-                                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">
-                                            ${decomposed.shots.filter(s => s.status === 'ready' && s.imageUrl).length}/${decomposed.shots.length} images ready
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                                        <div>
+                                            <div style="font-size: 0.9rem; color: white; font-weight: 600;">Shot Timeline</div>
+                                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">
+                                                🔗 Frame Chain: Capture last frame → Transfer to next shot for continuity
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                            <span style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">
+                                                🖼️ ${decomposed.shots.filter(s => s.status === 'ready' && s.imageUrl).length}/${decomposed.shots.length}
+                                            </span>
+                                            <span style="font-size: 0.7rem; color: rgba(6, 182, 212, 0.8);">
+                                                🎬 ${decomposed.shots.filter(s => s.videoStatus === 'ready' && s.videoUrl).length}/${decomposed.shots.length}
+                                            </span>
                                         </div>
                                     </div>
 
-                                    <!-- Visual Timeline with connectors -->
-                                    <div style="position: relative; display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.5rem 0; overflow-x: auto;">
-                                        ${decomposed.shots.map((shot, idx) => `
-                                            <div style="flex: 1; min-width: 140px; max-width: 180px; position: relative;">
-                                                <!-- Connector line -->
-                                                ${idx < decomposed.shots.length - 1 ? `
-                                                    <div style="position: absolute; top: 50px; right: -0.5rem; width: 1rem; height: 2px; background: linear-gradient(90deg, rgba(139, 92, 246, 0.5), rgba(6, 182, 212, 0.5)); z-index: 0;"></div>
+                                    <!-- Visual Timeline with Frame Chain connectors -->
+                                    <div style="position: relative; display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.5rem 0; overflow-x: auto;">
+                                        ${decomposed.shots.map((shot, idx) => {
+                                            const hasImage = shot.status === 'ready' && shot.imageUrl;
+                                            const hasVideo = shot.videoStatus === 'ready' && shot.videoUrl;
+                                            const isGeneratingVideo = shot.videoStatus === 'generating' || shot.videoStatus === 'processing';
+                                            const wasTransferred = shot.transferredFrom !== undefined;
+                                            const nextShot = decomposed.shots[idx + 1];
+                                            const isLastShot = idx === decomposed.shots.length - 1;
+
+                                            return `
+                                            <div style="flex: 1; min-width: 160px; max-width: 200px; position: relative;">
+                                                <!-- Frame Chain Connector -->
+                                                ${!isLastShot ? `
+                                                    <div style="position: absolute; top: 55px; right: -0.75rem; width: 1.5rem; height: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 3;">
+                                                        ${hasVideo ? `
+                                                            <div style="font-size: 1rem; color: ${nextShot?.transferredFrom === idx ? '#10b981' : 'rgba(139, 92, 246, 0.6)'};">
+                                                                ${nextShot?.transferredFrom === idx ? '🔗' : '→'}
+                                                            </div>
+                                                        ` : `
+                                                            <div style="width: 100%; height: 2px; background: rgba(255,255,255,0.15);"></div>
+                                                        `}
+                                                    </div>
                                                 ` : ''}
 
                                                 <!-- Shot Card -->
-                                                <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem; overflow: hidden; position: relative; z-index: 1;">
+                                                <div style="background: rgba(255,255,255,0.05); border: 1px solid ${wasTransferred ? 'rgba(16, 185, 129, 0.4)' : hasVideo ? 'rgba(6, 182, 212, 0.4)' : 'rgba(255,255,255,0.15)'}; border-radius: 0.5rem; overflow: hidden; position: relative; z-index: 1;">
                                                     <!-- Shot Number Badge -->
                                                     <div style="position: absolute; top: 0.25rem; left: 0.25rem; background: rgba(0,0,0,0.7); color: white; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem; font-weight: 600; z-index: 2;">
                                                         ${idx + 1}
@@ -7789,17 +7815,41 @@
                                                         ${shot.shotType || 'shot'}
                                                     </div>
 
-                                                    <!-- Image Area -->
-                                                    <div style="height: 80px; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative;">
-                                                        ${shot.status === 'ready' && shot.imageUrl ? `
+                                                    <!-- Transferred Badge -->
+                                                    ${wasTransferred ? `
+                                                        <div style="position: absolute; top: 0.25rem; left: 50%; transform: translateX(-50%); background: rgba(16, 185, 129, 0.9); color: white; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.5rem; z-index: 2;">
+                                                            🔗 from ${shot.transferredFrom + 1}
+                                                        </div>
+                                                    ` : ''}
+
+                                                    <!-- Image/Video Area -->
+                                                    <div style="height: 90px; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; position: relative;">
+                                                        ${hasImage ? `
                                                             <img src="${shot.imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">
-                                                            <div style="position: absolute; bottom: 0.25rem; right: 0.25rem; width: 16px; height: 16px; background: rgba(16, 185, 129, 0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                                                                <span style="color: white; font-size: 8px;">✓</span>
+                                                            ${hasVideo ? `
+                                                                <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s;" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
+                                                                    <span style="font-size: 1.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">▶️</span>
+                                                                </div>
+                                                            ` : ''}
+                                                            <div style="position: absolute; bottom: 0.25rem; right: 0.25rem; display: flex; gap: 0.15rem;">
+                                                                <div style="width: 14px; height: 14px; background: rgba(16, 185, 129, 0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                                                    <span style="color: white; font-size: 7px;">🖼</span>
+                                                                </div>
+                                                                ${hasVideo ? `
+                                                                    <div style="width: 14px; height: 14px; background: rgba(6, 182, 212, 0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                                                        <span style="color: white; font-size: 7px;">🎬</span>
+                                                                    </div>
+                                                                ` : ''}
                                                             </div>
                                                         ` : shot.status === 'generating' ? `
                                                             <div style="display: flex; flex-direction: column; align-items: center;">
                                                                 <div style="width: 24px; height: 24px; border: 2px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                                                                <span style="font-size: 0.6rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">Generating...</span>
+                                                                <span style="font-size: 0.6rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">Image...</span>
+                                                            </div>
+                                                        ` : isGeneratingVideo ? `
+                                                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                                                <div style="width: 24px; height: 24px; border: 2px solid rgba(6, 182, 212, 0.2); border-top-color: #06b6d4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                                                <span style="font-size: 0.6rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">Video...</span>
                                                             </div>
                                                         ` : shot.status === 'error' ? `
                                                             <div style="text-align: center;">
@@ -7814,21 +7864,45 @@
                                                     </div>
 
                                                     <!-- Shot Info & Actions -->
-                                                    <div style="padding: 0.5rem;">
-                                                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.6); margin-bottom: 0.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                    <div style="padding: 0.4rem;">
+                                                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                                             ${shot.cameraMovement || 'static'} • ${shot.duration || 2}s
                                                         </div>
 
-                                                        ${shot.status !== 'generating' ? `
-                                                            <button onclick="generateSingleShotImage(${sceneId}, ${idx})"
-                                                                    style="width: 100%; padding: 0.35rem; background: ${shot.status === 'ready' && shot.imageUrl ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(6, 182, 212, 0.4))'}; border: 1px solid ${shot.status === 'ready' && shot.imageUrl ? 'rgba(255,255,255,0.2)' : 'rgba(139, 92, 246, 0.5)'}; border-radius: 0.35rem; color: white; cursor: pointer; font-size: 0.65rem; font-weight: 500;">
-                                                                ${shot.status === 'ready' && shot.imageUrl ? '🔄 Regen' : '🎨 Generate'}
-                                                            </button>
-                                                        ` : ''}
+                                                        <!-- Action Buttons Grid -->
+                                                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                                            ${shot.status !== 'generating' && !isGeneratingVideo ? `
+                                                                <!-- Row 1: Image Generation -->
+                                                                <button onclick="generateSingleShotImage(${sceneId}, ${idx})"
+                                                                        style="width: 100%; padding: 0.3rem; background: ${hasImage ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(6, 182, 212, 0.4))'}; border: 1px solid ${hasImage ? 'rgba(255,255,255,0.15)' : 'rgba(139, 92, 246, 0.5)'}; border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
+                                                                    ${hasImage ? '🔄 Regen' : '🎨 Generate'}
+                                                                </button>
+
+                                                                ${hasImage ? `
+                                                                    <!-- Row 2: Video Generation -->
+                                                                    <button onclick="generateSingleShotVideo(${sceneId}, ${idx})"
+                                                                            style="width: 100%; padding: 0.3rem; background: ${hasVideo ? 'rgba(6, 182, 212, 0.15)' : 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'}; border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
+                                                                        ${hasVideo ? '🔄 Re-Animate' : '🎬 Animate'}
+                                                                    </button>
+                                                                ` : ''}
+
+                                                                ${hasVideo && !isLastShot ? `
+                                                                    <!-- Row 3: Frame Capture & Transfer -->
+                                                                    <button onclick="openFrameCaptureModal(${sceneId}, ${idx})"
+                                                                            style="width: 100%; padding: 0.3rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.3)); border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
+                                                                        🎯 Capture → Shot ${idx + 2}
+                                                                    </button>
+                                                                ` : ''}
+                                                            ` : `
+                                                                <div style="text-align: center; padding: 0.25rem; font-size: 0.6rem; color: rgba(255,255,255,0.5);">
+                                                                    Processing...
+                                                                </div>
+                                                            `}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        `).join('')}
+                                        `}).join('')}
                                     </div>
 
                                     <!-- Prompt Details (expandable) -->
@@ -8381,6 +8455,238 @@
                 video.onended = playNext;
                 playNext();
             };
+        }
+
+        // ==========================================
+        // FRAME CHAIN PIPELINE - Capture & Transfer
+        // ==========================================
+
+        /**
+         * Open frame capture modal for a shot's video
+         */
+        function openFrameCaptureModal(sceneId, shotIndex) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || !decomposed.shots[shotIndex]) {
+                showToast('Shot not found', 'error');
+                return;
+            }
+
+            const shot = decomposed.shots[shotIndex];
+            if (!shot.videoUrl) {
+                showToast('Generate video first to capture frames', 'error');
+                return;
+            }
+
+            // Store capture context
+            state.frameCaptureContext = {
+                sceneId,
+                shotIndex,
+                videoUrl: shot.videoUrl,
+                capturedFrame: null
+            };
+
+            const modal = document.createElement('div');
+            modal.id = 'frame-capture-modal';
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 10001; padding: 1rem;';
+
+            const nextShotIndex = shotIndex + 1;
+            const hasNextShot = decomposed.shots[nextShotIndex] !== undefined;
+
+            modal.innerHTML = `
+                <div style="max-width: 800px; width: 100%; background: linear-gradient(135deg, #1a1a2e, #0f172a); border-radius: 1rem; border: 1px solid rgba(139, 92, 246, 0.3); overflow: hidden;">
+                    <!-- Header -->
+                    <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 1.3rem;">🎯</span> Frame Capture - Shot ${shotIndex + 1}
+                            </div>
+                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Scrub video to select frame for next shot</div>
+                        </div>
+                        <button onclick="closeFrameCaptureModal()" style="background: none; border: none; color: rgba(255,255,255,0.5); font-size: 1.5rem; cursor: pointer; padding: 0.5rem;">&times;</button>
+                    </div>
+
+                    <!-- Video Player -->
+                    <div style="padding: 1rem; background: rgba(0,0,0,0.3);">
+                        <video id="frame-capture-video" src="${shot.videoUrl}" style="width: 100%; border-radius: 0.5rem; max-height: 400px;" controls></video>
+
+                        <!-- Frame Preview -->
+                        <div style="margin-top: 1rem; display: flex; gap: 1rem; align-items: flex-start;">
+                            <div style="flex: 1;">
+                                <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 0.5rem;">CAPTURED FRAME</div>
+                                <div id="captured-frame-preview" style="background: rgba(0,0,0,0.5); border: 2px dashed rgba(255,255,255,0.2); border-radius: 0.5rem; height: 150px; display: flex; align-items: center; justify-content: center;">
+                                    <span style="color: rgba(255,255,255,0.3); font-size: 0.85rem;">Click "Capture Current Frame"</span>
+                                </div>
+                            </div>
+                            ${hasNextShot ? `
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 1rem;">
+                                <div style="font-size: 2rem; color: rgba(139, 92, 246, 0.5);">→</div>
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">TRANSFER</div>
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 0.5rem;">SHOT ${nextShotIndex + 1} START FRAME</div>
+                                <div id="next-shot-preview" style="background: rgba(0,0,0,0.5); border: 2px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; height: 150px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                                    ${decomposed.shots[nextShotIndex].imageUrl
+                                        ? `<img src="${decomposed.shots[nextShotIndex].imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">`
+                                        : `<span style="color: rgba(255,255,255,0.3); font-size: 0.85rem;">No image yet</span>`
+                                    }
+                                </div>
+                            </div>
+                            ` : `
+                            <div style="flex: 1; text-align: center; padding: 2rem;">
+                                <div style="color: rgba(255,255,255,0.4); font-size: 0.85rem;">This is the last shot</div>
+                            </div>
+                            `}
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                        <button onclick="captureCurrentFrame()" style="flex: 1; min-width: 150px; padding: 0.75rem; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border: none; border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            📸 Capture Current Frame
+                        </button>
+                        <button onclick="captureLastFrame()" style="flex: 1; min-width: 150px; padding: 0.75rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.5); border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            ⏭️ Capture Last Frame
+                        </button>
+                        ${hasNextShot ? `
+                        <button id="transfer-frame-btn" onclick="transferFrameToNextShot()" disabled style="flex: 1; min-width: 200px; padding: 0.75rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; color: rgba(255,255,255,0.5); font-weight: 600; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            ➡️ Send to Shot ${nextShotIndex + 1}
+                        </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Load video and seek to end for "last frame" convenience
+            const video = document.getElementById('frame-capture-video');
+            video.addEventListener('loadedmetadata', () => {
+                // Ready to capture
+            });
+        }
+
+        /**
+         * Close frame capture modal
+         */
+        function closeFrameCaptureModal() {
+            const modal = document.getElementById('frame-capture-modal');
+            if (modal) modal.remove();
+            state.frameCaptureContext = null;
+        }
+
+        /**
+         * Capture the current frame from the video
+         */
+        function captureCurrentFrame() {
+            const video = document.getElementById('frame-capture-video');
+            if (!video) return;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const frameDataUrl = canvas.toDataURL('image/png');
+            state.frameCaptureContext.capturedFrame = frameDataUrl;
+
+            // Update preview
+            const preview = document.getElementById('captured-frame-preview');
+            if (preview) {
+                preview.innerHTML = `<img src="${frameDataUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0.375rem;">`;
+            }
+
+            // Enable transfer button
+            const transferBtn = document.getElementById('transfer-frame-btn');
+            if (transferBtn) {
+                transferBtn.disabled = false;
+                transferBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                transferBtn.style.border = 'none';
+                transferBtn.style.color = 'white';
+                transferBtn.style.cursor = 'pointer';
+            }
+
+            showToast('Frame captured! You can now transfer it to the next shot.', 'success');
+        }
+
+        /**
+         * Capture the last frame of the video
+         */
+        function captureLastFrame() {
+            const video = document.getElementById('frame-capture-video');
+            if (!video) return;
+
+            // Seek to just before the end
+            video.currentTime = Math.max(0, video.duration - 0.1);
+
+            // Wait for seek to complete
+            video.onseeked = () => {
+                captureCurrentFrame();
+                video.onseeked = null;
+            };
+        }
+
+        /**
+         * Transfer captured frame to the next shot as its starting image
+         */
+        async function transferFrameToNextShot() {
+            const ctx = state.frameCaptureContext;
+            if (!ctx || !ctx.capturedFrame) {
+                showToast('Capture a frame first', 'error');
+                return;
+            }
+
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[ctx.sceneId];
+            if (!decomposed) return;
+
+            const nextShotIndex = ctx.shotIndex + 1;
+            const nextShot = decomposed.shots[nextShotIndex];
+            if (!nextShot) {
+                showToast('No next shot to transfer to', 'error');
+                return;
+            }
+
+            showToast('Transferring frame to next shot...', 'info');
+
+            try {
+                // Upload the captured frame as an image
+                const uploadFn = functions.httpsCallable('uploadBase64Image', { timeout: 60000 });
+                const result = await uploadFn({
+                    imageBase64: ctx.capturedFrame.split(',')[1], // Remove data:image/png;base64, prefix
+                    mimeType: 'image/png',
+                    filename: `shot_${nextShotIndex + 1}_transferred_frame.png`
+                });
+
+                if (result.data.success && result.data.url) {
+                    // Update next shot with the transferred frame
+                    nextShot.imageUrl = result.data.url;
+                    nextShot.status = 'ready';
+                    nextShot.transferredFrom = ctx.shotIndex; // Mark that this was transferred
+
+                    // Update preview in modal
+                    const nextPreview = document.getElementById('next-shot-preview');
+                    if (nextPreview) {
+                        nextPreview.innerHTML = `
+                            <img src="${result.data.url}" style="width: 100%; height: 100%; object-fit: cover;">
+                            <div style="position: absolute; bottom: 0.25rem; right: 0.25rem; background: rgba(16, 185, 129, 0.9); color: white; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem;">
+                                ✓ Transferred
+                            </div>
+                        `;
+                    }
+
+                    showToast(`Frame transferred to Shot ${nextShotIndex + 1}! Visual continuity established.`, 'success');
+
+                    // Re-render the main modal
+                    renderShotDecompositionModal();
+                    scheduleAutoSave();
+                } else {
+                    throw new Error('Upload failed');
+                }
+
+            } catch (error) {
+                console.error('Frame transfer error:', error);
+                showToast(`Transfer failed: ${error.message}`, 'error');
+            }
         }
 
         /**
