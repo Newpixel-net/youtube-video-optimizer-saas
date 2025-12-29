@@ -41000,3 +41000,490 @@ async function generateCreativeImageInternal(uid, requestData) {
 
 // Export the shot decomposition engine
 exports.SHOT_DECOMPOSITION_ENGINE = SHOT_DECOMPOSITION_ENGINE;
+
+// =============================================================================
+// PHASE 12B: SHOT VIDEO GENERATION & ASSEMBLY
+// Generate videos for each shot and assemble into scene sequences
+// =============================================================================
+
+/**
+ * creationWizardGenerateShotVideo - Generate video for a single shot using Minimax
+ *
+ * Uses the shot's image as first frame (Image-to-Video) for consistency
+ */
+exports.creationWizardGenerateShotVideo = functions
+  .runWith({
+    timeoutSeconds: 120,
+    memory: '512MB'
+  })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    sceneId,
+    shotId,
+    shotIndex,
+    imageUrl,           // First frame image (from shot generation)
+    prompt,             // Video motion prompt
+    duration = '6s',    // Shot duration
+    cameraMovement,     // Camera movement for this shot
+    model = 'hailuo-2.3'
+  } = data;
+
+  if (!imageUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Shot image URL is required for video generation');
+  }
+
+  if (!prompt || prompt.trim().length < 5) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video prompt is required');
+  }
+
+  const minimaxKey = process.env.MINIMAX_API_KEY || functions.config().minimax?.key;
+  if (!minimaxKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured');
+  }
+
+  try {
+    // Build video prompt with camera movement
+    let videoPrompt = prompt.trim();
+
+    // Map shot camera movement to Minimax format
+    const cameraMovementMap = {
+      'static': 'Static shot',
+      'slow_push': 'Slow push in',
+      'slow_pull': 'Slow pull out',
+      'tracking': 'Tracking shot',
+      'pan': 'Pan',
+      'tilt': 'Tilt',
+      'crane_up': 'Crane up',
+      'crane_down': 'Crane down',
+      'handheld': 'Handheld movement',
+      'orbit': 'Orbit around subject'
+    };
+
+    const movement = cameraMovementMap[cameraMovement] || 'Subtle movement';
+    videoPrompt = `[${movement}] ${videoPrompt}`;
+
+    console.log(`[creationWizardGenerateShotVideo] Scene ${sceneId}, Shot ${shotIndex}: Starting video generation`);
+
+    // Call Minimax API for Image-to-Video
+    const payload = {
+      model: 'video-01', // Minimax model ID for I2V
+      prompt: videoPrompt,
+      first_frame_image: imageUrl,
+      prompt_optimizer: true
+    };
+
+    const minimaxResponse = await axios.post(
+      'https://api.minimax.io/v1/video_generation',
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${minimaxKey}`
+        },
+        timeout: 60000
+      }
+    );
+
+    const taskId = minimaxResponse.data.task_id;
+    const baseResp = minimaxResponse.data.base_resp;
+
+    if (baseResp && baseResp.status_code !== 0) {
+      throw new Error(`Minimax API error: ${baseResp.status_msg || 'Unknown error'}`);
+    }
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'shot_video_generation',
+      model: model,
+      sceneId,
+      shotId,
+      shotIndex,
+      duration,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      taskId,
+      sceneId,
+      shotId,
+      shotIndex,
+      status: 'processing',
+      provider: 'minimax'
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateShotVideo] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to start shot video generation'));
+  }
+});
+
+/**
+ * creationWizardGenerateAllShotVideos - Generate videos for all shots in a scene
+ *
+ * Sequentially generates videos for each shot, then returns the complete sequence
+ */
+exports.creationWizardGenerateAllShotVideos = functions
+  .runWith({
+    timeoutSeconds: 540, // 9 minutes for multiple video generations
+    memory: '1GB'
+  })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    sceneId,
+    shots,              // Array of shot objects with imageUrl, prompt, etc.
+    model = 'hailuo-2.3',
+    duration = '6s'
+  } = data;
+
+  if (!shots || !Array.isArray(shots) || shots.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Shots array is required');
+  }
+
+  const minimaxKey = process.env.MINIMAX_API_KEY || functions.config().minimax?.key;
+  if (!minimaxKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured');
+  }
+
+  const results = [];
+
+  try {
+    console.log(`[creationWizardGenerateAllShotVideos] Starting video generation for ${shots.length} shots in scene ${sceneId}`);
+
+    for (let i = 0; i < shots.length; i++) {
+      const shot = shots[i];
+
+      if (!shot.imageUrl) {
+        results.push({
+          shotId: shot.id,
+          shotIndex: i,
+          status: 'error',
+          error: 'No image URL - generate image first'
+        });
+        continue;
+      }
+
+      try {
+        // Build video prompt with camera movement
+        let videoPrompt = shot.prompt || 'Cinematic movement, subtle animation';
+
+        const cameraMovementMap = {
+          'static': 'Static shot',
+          'slow_push': 'Slow push in',
+          'slow_pull': 'Slow pull out',
+          'tracking': 'Tracking shot',
+          'pan': 'Pan',
+          'tilt': 'Tilt',
+          'crane_up': 'Crane up',
+          'crane_down': 'Crane down',
+          'handheld': 'Handheld movement',
+          'orbit': 'Orbit around subject'
+        };
+
+        const movement = cameraMovementMap[shot.cameraMovement] || 'Subtle movement';
+        videoPrompt = `[${movement}] ${videoPrompt}`;
+
+        // Call Minimax API
+        const payload = {
+          model: 'video-01',
+          prompt: videoPrompt,
+          first_frame_image: shot.imageUrl,
+          prompt_optimizer: true
+        };
+
+        const minimaxResponse = await axios.post(
+          'https://api.minimax.io/v1/video_generation',
+          payload,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${minimaxKey}`
+            },
+            timeout: 60000
+          }
+        );
+
+        const taskId = minimaxResponse.data.task_id;
+        const baseResp = minimaxResponse.data.base_resp;
+
+        if (baseResp && baseResp.status_code !== 0) {
+          throw new Error(baseResp.status_msg || 'Minimax error');
+        }
+
+        results.push({
+          shotId: shot.id,
+          shotIndex: i,
+          taskId,
+          status: 'processing',
+          duration: shot.duration || 2
+        });
+
+        console.log(`[creationWizardGenerateAllShotVideos] Shot ${i + 1}/${shots.length} started: taskId=${taskId}`);
+
+        // Small delay between API calls to avoid rate limiting
+        if (i < shots.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+      } catch (shotError) {
+        console.error(`[creationWizardGenerateAllShotVideos] Shot ${i + 1} failed:`, shotError);
+        results.push({
+          shotId: shot.id,
+          shotIndex: i,
+          status: 'error',
+          error: shotError.message || 'Generation failed'
+        });
+      }
+    }
+
+    // Log usage
+    const successCount = results.filter(r => r.status === 'processing').length;
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'batch_shot_video_generation',
+      sceneId,
+      totalShots: shots.length,
+      successfulStarts: successCount,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: successCount > 0,
+      sceneId,
+      totalShots: shots.length,
+      startedCount: successCount,
+      failedCount: shots.length - successCount,
+      shots: results
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateAllShotVideos] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate shot videos'));
+  }
+});
+
+/**
+ * creationWizardCheckShotVideoStatus - Check status of a shot video generation
+ */
+exports.creationWizardCheckShotVideoStatus = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { taskId, shotId, shotIndex } = data;
+
+  if (!taskId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Task ID is required');
+  }
+
+  const minimaxKey = process.env.MINIMAX_API_KEY || functions.config().minimax?.key;
+  if (!minimaxKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured');
+  }
+
+  try {
+    const statusResponse = await axios.get(
+      `https://api.minimax.io/v1/query/video_generation?task_id=${taskId}`,
+      {
+        headers: { 'Authorization': `Bearer ${minimaxKey}` },
+        timeout: 30000
+      }
+    );
+
+    const statusData = statusResponse.data;
+    const status = statusData.status;
+
+    // Map Minimax status to our status
+    let mappedStatus = 'processing';
+    let videoUrl = null;
+
+    if (status === 'Success') {
+      mappedStatus = 'ready';
+
+      // Get video URL from file_id
+      if (statusData.file_id) {
+        try {
+          const fileResponse = await axios.get(
+            `https://api.minimax.io/v1/files/retrieve?file_id=${statusData.file_id}`,
+            {
+              headers: { 'Authorization': `Bearer ${minimaxKey}` },
+              timeout: 30000
+            }
+          );
+          videoUrl = fileResponse.data.file?.download_url;
+        } catch (fileError) {
+          console.error('[creationWizardCheckShotVideoStatus] Error fetching file:', fileError);
+        }
+      }
+    } else if (status === 'Fail') {
+      mappedStatus = 'error';
+    }
+
+    return {
+      success: true,
+      taskId,
+      shotId,
+      shotIndex,
+      status: mappedStatus,
+      videoUrl,
+      rawStatus: status
+    };
+
+  } catch (error) {
+    console.error('[creationWizardCheckShotVideoStatus] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check shot video status'));
+  }
+});
+
+/**
+ * creationWizardAssembleSceneVideo - Creates a scene video sequence from shot videos
+ *
+ * Note: This creates a video sequence manifest that can be:
+ * 1. Played back sequentially by a video player
+ * 2. Concatenated during export using ffmpeg
+ * 3. Processed by a cloud video editing service
+ *
+ * For actual video concatenation, we would need ffmpeg or a video editing API.
+ * This function prepares the sequence data for those operations.
+ */
+exports.creationWizardAssembleSceneVideo = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: '256MB'
+  })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    sceneId,
+    projectId,
+    shots,              // Array of { shotId, videoUrl, duration, transition }
+    transitions = 'cut' // Default transition between shots
+  } = data;
+
+  if (!shots || !Array.isArray(shots) || shots.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Shots array with video URLs is required');
+  }
+
+  // Validate all shots have video URLs
+  const shotsWithVideos = shots.filter(s => s.videoUrl);
+  if (shotsWithVideos.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'At least one shot must have a video URL');
+  }
+
+  try {
+    // Calculate total duration
+    const totalDuration = shotsWithVideos.reduce((sum, shot) => sum + (shot.duration || 2), 0);
+
+    // Build scene video sequence manifest
+    const sceneSequence = {
+      sceneId,
+      projectId: projectId || null,
+      createdAt: new Date().toISOString(),
+      createdBy: uid,
+      totalDuration,
+      shotCount: shotsWithVideos.length,
+      defaultTransition: transitions,
+      shots: shotsWithVideos.map((shot, idx) => ({
+        index: idx,
+        shotId: shot.shotId,
+        shotType: shot.shotType || 'medium',
+        videoUrl: shot.videoUrl,
+        duration: shot.duration || 2,
+        startTime: shotsWithVideos.slice(0, idx).reduce((sum, s) => sum + (s.duration || 2), 0),
+        transition: shot.transition || transitions,
+        transitionDuration: 0.5 // Half second transition
+      })),
+      // Playback configuration
+      playback: {
+        mode: 'sequential', // sequential | loop | shuffle
+        autoPlay: true,
+        preload: true
+      },
+      // Export configuration (for when user exports the video)
+      exportConfig: {
+        format: 'mp4',
+        codec: 'h264',
+        quality: 'high',
+        fps: 30
+      }
+    };
+
+    // Store the scene sequence in Firestore for later retrieval
+    const sequenceRef = await db.collection('sceneVideoSequences').add({
+      ...sceneSequence,
+      userId: uid,
+      status: 'ready',
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log(`[creationWizardAssembleSceneVideo] Created sequence ${sequenceRef.id} for scene ${sceneId} with ${shotsWithVideos.length} shots`);
+
+    return {
+      success: true,
+      sequenceId: sequenceRef.id,
+      sceneId,
+      totalDuration,
+      shotCount: shotsWithVideos.length,
+      sequence: sceneSequence,
+      // Provide a preview playlist for immediate playback
+      playlist: shotsWithVideos.map(shot => ({
+        url: shot.videoUrl,
+        duration: shot.duration || 2
+      }))
+    };
+
+  } catch (error) {
+    console.error('[creationWizardAssembleSceneVideo] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to assemble scene video'));
+  }
+});
+
+/**
+ * creationWizardGetSceneVideoSequence - Retrieve a saved scene video sequence
+ */
+exports.creationWizardGetSceneVideoSequence = functions.https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { sequenceId, sceneId } = data;
+
+  try {
+    let sequence = null;
+
+    if (sequenceId) {
+      // Get by sequence ID
+      const doc = await db.collection('sceneVideoSequences').doc(sequenceId).get();
+      if (doc.exists && doc.data().userId === uid) {
+        sequence = { id: doc.id, ...doc.data() };
+      }
+    } else if (sceneId) {
+      // Get latest sequence for a scene
+      const snapshot = await db.collection('sceneVideoSequences')
+        .where('userId', '==', uid)
+        .where('sceneId', '==', sceneId)
+        .orderBy('timestamp', 'desc')
+        .limit(1)
+        .get();
+
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        sequence = { id: doc.id, ...doc.data() };
+      }
+    }
+
+    if (!sequence) {
+      return { success: false, message: 'Sequence not found' };
+    }
+
+    return {
+      success: true,
+      sequence
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGetSceneVideoSequence] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to get scene sequence'));
+  }
+});
