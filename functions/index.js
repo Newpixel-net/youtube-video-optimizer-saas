@@ -11467,33 +11467,25 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
         // Generate images (Gemini generates one at a time)
         for (let imgIdx = 0; imgIdx < imageCount; imgIdx++) {
           try {
-            // Build generation config with aspect ratio support
-            // Reference: https://ai.google.dev/gemini-api/docs/image-generation
-            // Gemini supports: 1:1, 3:2, 2:3, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9
-            const geminiAspectRatioMap = {
-              '1:1': '1:1',
-              '16:9': '16:9',
-              '9:16': '9:16',
-              '4:3': '4:3',
-              '3:4': '3:4',
-              '4:5': '4:5',
-              '5:4': '5:4',
-              '3:2': '3:2',
-              '2:3': '2:3',
-              '21:9': '21:9'
-            };
-            const geminiAspectRatio = geminiAspectRatioMap[validAspectRatio] || '16:9';
+            // Aspect ratio handling for Gemini
+            // Note: The @google/genai SDK's imageConfig may not work with all model versions
+            // So we embed aspect ratio in the prompt AND try imageConfig as fallback
+            const geminiAspectRatio = validAspectRatio || '16:9';
+
+            // Enhance the prompt with aspect ratio instruction
+            const aspectRatioInstruction = `[Generate image in ${geminiAspectRatio} aspect ratio format]\n\n`;
+            const enhancedParts = contentParts.map((part, idx) => {
+              if (idx === 0 && part.text) {
+                return { text: aspectRatioInstruction + part.text };
+              }
+              return part;
+            });
 
             const result = await ai.models.generateContent({
               model: geminiImageModelId,
-              contents: [{ role: 'user', parts: contentParts }],
+              contents: [{ role: 'user', parts: enhancedParts }],
               config: {
-                responseModalities: ['image', 'text'],
-                // CRITICAL FIX: Pass aspect ratio to Gemini image generation
-                // This ensures 16:9, 9:16, etc. selections are respected
-                imageConfig: {
-                  aspectRatio: geminiAspectRatio
-                }
+                responseModalities: ['image', 'text']
               }
             });
 
@@ -23442,7 +23434,42 @@ exports.creationWizardImproveIdea = functions.https.onCall(async (data, context)
     uid
   });
 
+  // === NARRATIVE ARCHITECTURE REFERENCE ===
+  // These are the building blocks for sophisticated storytelling
+  const NARRATIVE_STRUCTURES_REF = `
+AVAILABLE NARRATIVE STRUCTURES (choose the BEST fit for the concept):
+- heros_journey: Single protagonist transforms through trials (Lord of the Rings, Star Wars)
+- ensemble: Group of 3-6 characters with equal weight (Ocean's Eleven, Guardians of Galaxy, Avengers)
+- dual_protagonist: Two leads with different/conflicting goals (Heat, The Prestige, Marriage Story)
+- mystery_procedural: Uncovering truth clue by clue (Knives Out, Sherlock, Only Murders)
+- tragedy: Protagonist undone by fatal flaw (Breaking Bad, Scarface, The Godfather)
+- rebirth: Dark character transforms to redemption (A Christmas Carol, Iron Man, Groundhog Day)
+- comedy_of_errors: Misunderstandings lead to chaos then resolution (The Hangover, Bridesmaids)
+- anthology_connected: Multiple stories connected by theme (Love Actually, Crash, Black Mirror)
+- siege_survival: Group trapped against threat (Die Hard, Alien, A Quiet Place)
+- quest_journey: Travel toward goal with obstacles (Finding Nemo, Mad Max, Wizard of Oz)
+- nonlinear_puzzle: Story out of order, audience pieces truth (Pulp Fiction, Memento)`;
+
+  const STORY_ENGINES_REF = `
+STORY ENGINES (what drives scenes forward):
+- case_of_week: Each segment presents new problem to solve
+- relationship_dynamics: Character interactions drive plot
+- escalating_threat: Outside force grows stronger continuously
+- mystery_layers: Each scene peels back layer of mystery
+- transformation_arc: Character change is the engine
+- quest_progress: Movement toward clear objective
+- survival_pressure: Constant threat keeps tension
+- social_dynamics: Shifting alliances and power`;
+
+  const CHARACTER_ARCHETYPES_REF = `
+CHARACTER ARCHETYPES (use MULTIPLE for depth):
+PROTAGONISTS: reluctant_hero, chosen_one, anti_hero, tragic_hero, everyman, wounded_healer
+SUPPORTING: mentor, trickster, loyal_friend, love_interest, rival, innocent
+ANTAGONISTS: mastermind, force_of_nature, fallen_hero, mirror_villain, system, inner_demon
+ENSEMBLE: leader, specialist, heart, wildcard, skeptic, newbie`;
+
   const prompt = `You are a GENIUS Hollywood creative director with 30+ years of experience developing blockbuster concepts.
+You understand that great stories come in MANY forms - not just the hero's journey.
 
 USER'S ROUGH IDEA:
 "${rawInput}"
@@ -23450,74 +23477,106 @@ USER'S ROUGH IDEA:
 PRODUCTION TYPE: ${productionType || 'Video Content'} ${productionSubType ? `(${productionSubType})` : ''}
 ${currentStyleReference ? `CURRENT STYLE REFERENCE: ${currentStyleReference}` : ''}
 
-YOUR TASK:
-Transform this rough idea into a BRILLIANT, detailed concept that would impress any studio executive.
+${NARRATIVE_STRUCTURES_REF}
 
-ANALYZE the input for:
-1. Any style references (movies, shows, directors, visual styles mentioned)
-2. Genre combinations and unique angles
-3. Character archetypes implied
-4. World-building elements
-5. Mood and atmosphere
-6. What makes this potentially special
+${STORY_ENGINES_REF}
+
+${CHARACTER_ARCHETYPES_REF}
+
+YOUR TASK:
+Transform this rough idea into a BRILLIANT, detailed concept with a COMPLETE PRODUCTION BIBLE foundation.
+
+CRITICAL ANALYSIS:
+1. What NARRATIVE STRUCTURE fits this idea best? (NOT always hero's journey!)
+2. What STORY ENGINE should drive scenes?
+3. How many protagonists? (1? 2? Ensemble of 4-6?)
+4. What character ARCHETYPES create the richest dynamics?
+5. What's the THEME beneath the surface?
+6. What visual/audio style defines this world?
 
 RULES FOR IMPROVEMENT:
 - EXPAND terse descriptions into vivid, evocative prose
-- IDENTIFY the core creative genius in their idea and amplify it
-- ADD sensory details, emotional hooks, and visual language
-- ENSURE the concept is 100% ORIGINAL (no direct copies)
-- MAINTAIN the user's original vision while elevating it
-- Include specific visual language that guides cinematography
+- CHOOSE the narrative structure that BEST serves this story (ensembles, dual protagonists, mysteries, etc.)
+- CREATE multiple characters with clear archetypes, flaws, and arcs
+- DEFINE character RELATIONSHIPS and tensions
+- ESTABLISH world rules that affect the story
+- Include specific visual and audio style guidelines
+- Make it feel like a PRODUCTION BIBLE that a whole team could work from
 
 Return EXACTLY this JSON structure:
 {
-  "improvedConcept": "A rich, detailed 3-5 sentence description that captures the ESSENCE of their vision with vivid, cinematic language. Include the hook, the journey, and the emotional core. This should read like a pitch that gets greenlit immediately.",
+  "improvedConcept": "A rich, detailed 3-5 sentence description capturing the ESSENCE with vivid, cinematic language. Include the hook, central conflict, and emotional stakes.",
 
-  "extractedStyles": [
-    "Specific visual style 1 (e.g., 'Matrix-style bullet-time cinematography')",
-    "Specific visual style 2 (e.g., 'Avengers epic scale and vibrant color grading')",
-    "Specific visual style 3 (e.g., 'Avatar bioluminescent world design')"
-  ],
-
-  "thingsToAvoid": [
-    "Specific thing to avoid 1 (e.g., 'Direct Neo/Matrix character copies')",
-    "Specific thing to avoid 2 (e.g., 'MCU trademarked elements')",
-    "Generic clichés to avoid"
-  ],
-
-  "suggestedMood": "Primary atmospheric mood (e.g., 'Epic with underlying tension')",
-
-  "suggestedTone": "Narrative tone (e.g., 'Serious with moments of wonder')",
-
-  "keyElements": [
-    "Core element 1 that makes this unique",
-    "Core element 2 that drives the story",
-    "Core element 3 that creates emotional resonance"
-  ],
-
-  "genreFusion": "Description of genre combination (e.g., 'Martial arts action meets cosmic fantasy with grounded emotional stakes')",
-
-  "visualSignature": "The defining visual style in one sentence (e.g., 'Hyper-stylized action sequences in a bioluminescent alien megacity with practical grit')",
-
-  "hookLine": "A single powerful sentence that would hook any audience",
+  "narrativeArchitecture": {
+    "structure": "KEY from narrative structures (e.g., 'ensemble', 'dual_protagonist', 'mystery_procedural')",
+    "structureReason": "Why this structure serves the story best",
+    "storyEngine": "KEY from story engines (e.g., 'relationship_dynamics', 'escalating_threat')",
+    "protagonistCount": "Number (1, 2, '3-4', etc.)",
+    "keyBeats": ["Beat 1", "Beat 2", "Beat 3", "...specific to chosen structure"]
+  },
 
   "characters": [
     {
-      "archetype": "The Reluctant Hero",
-      "uniqueTwist": "What makes this character fresh and original",
-      "visualDescription": "Brief visual concept for this character"
+      "name": "Original character name",
+      "archetype": "KEY from archetypes (e.g., 'anti_hero', 'leader')",
+      "role": "protagonist/supporting/antagonist/ensemble",
+      "flaw": "Specific character flaw",
+      "arc": "How they change through the story",
+      "uniqueTwist": "What makes them fresh and original",
+      "visualDescription": "Detailed visual concept",
+      "voiceDescription": "How they speak, verbal mannerisms"
+    }
+  ],
+
+  "characterRelationships": [
+    {
+      "char1": "Character name",
+      "char2": "Character name",
+      "relationshipType": "rivals/allies/lovers/mentor-student/enemies/family",
+      "tension": "Source of conflict or connection",
+      "evolution": "How relationship changes"
     }
   ],
 
   "worldBuilding": {
-    "setting": "Where this takes place",
-    "rules": "What makes this world unique",
-    "atmosphere": "The pervading feeling of this world"
-  }
+    "setting": "Where and when - be specific",
+    "uniqueMechanic": "What makes this world special (rules, tech, magic, society)",
+    "limitations": ["What CAN'T happen", "Constraint 2"],
+    "visualLanguage": "How this world should LOOK - colors, textures, style",
+    "atmosphere": "The pervading feeling"
+  },
+
+  "visualStyle": {
+    "colorPalette": "Specific colors and their meaning",
+    "lightingApproach": "High key/low key/natural/stylized and why",
+    "cameraPhilosophy": "Handheld/steady, close/wide, movement style",
+    "referenceFilms": ["Film 1 for visual reference", "Film 2"]
+  },
+
+  "audioStyle": {
+    "musicGenre": "Score style (orchestral, electronic, hybrid, etc.)",
+    "dialogueApproach": "Naturalistic/stylized/sparse",
+    "signatureSounds": ["Recurring sound 1", "Sound motif 2"]
+  },
+
+  "extractedStyles": ["Visual style reference 1", "Visual style reference 2", "Visual style reference 3"],
+  "thingsToAvoid": ["Thing to avoid 1", "Thing to avoid 2", "Cliché to avoid"],
+  "suggestedMood": "Primary atmospheric mood",
+  "suggestedTone": "Narrative tone",
+  "keyElements": ["Core element 1", "Core element 2", "Core element 3"],
+  "genreFusion": "Description of genre combination",
+  "visualSignature": "The defining visual style in one sentence",
+  "hookLine": "A single powerful sentence that hooks the audience",
+  "theme": "What this story is REALLY about beneath the surface (e.g., 'the cost of ambition', 'found family vs blood', 'redemption through sacrifice')",
+  "premise": "The 'what if' question that drives everything"
 }
 
-IMPORTANT: Be SPECIFIC, not generic. Every field should contain actionable creative direction.
-The improved concept should make anyone reading it immediately visualize the video.`;
+CRITICAL:
+- Do NOT default to hero's journey - choose the structure that BEST fits
+- Create AT LEAST 3-4 characters with distinct archetypes
+- Define relationships BETWEEN characters
+- Be SPECIFIC in every field - this is a production bible, not a vague pitch`;
+
 
   try {
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -23531,11 +23590,11 @@ The improved concept should make anyone reading it immediately visualize the vid
         messages: [
           {
             role: 'system',
-            content: 'You are a legendary creative director known for transforming rough ideas into blockbuster concepts. Your improvements always maintain the creator\'s original vision while elevating it to Hollywood-quality. Always return valid JSON.'
+            content: 'You are a legendary creative director and showrunner known for creating hit TV series and films. You understand that great stories use diverse narrative structures - ensembles, dual protagonists, mysteries, tragedies - not just the hero\'s journey. You create rich production bibles with multiple characters, defined relationships, and clear world rules. Always return valid JSON with complete, specific details.'
           },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 2500,
+        max_tokens: 4000,
         temperature: 0.85
       })
     });
@@ -23676,43 +23735,127 @@ Each concept should be a different creative direction but ALL should incorporate
 `;
   }
 
-  const prompt = `You are a Hollywood-grade concept developer. Generate 3 UNIQUE and ORIGINAL video concepts.
+  // === NARRATIVE DIVERSITY REQUIREMENT ===
+  // Each concept MUST use a DIFFERENT narrative structure
+  const narrativeDiversityGuide = `
+=== MANDATORY NARRATIVE DIVERSITY ===
+You MUST generate 3 concepts using DIFFERENT narrative structures.
 
-USER'S IDEA:
+NARRATIVE STRUCTURES TO CHOOSE FROM:
+1. heros_journey - Single protagonist transforms through trials (1 protagonist)
+2. ensemble - Group of 3-6 characters with equal weight, interconnected (3-6 protagonists)
+3. dual_protagonist - Two leads with conflicting goals (2 protagonists)
+4. mystery_procedural - Uncovering truth clue by clue (1-2 protagonists)
+5. tragedy - Character undone by fatal flaw (1 protagonist)
+6. rebirth - Dark character transforms to redemption (1 protagonist)
+7. comedy_of_errors - Misunderstandings lead to chaos (2-4 protagonists)
+8. anthology_connected - Multiple stories connected by theme (4-8 characters)
+9. siege_survival - Group trapped against threat (3-8 protagonists)
+10. quest_journey - Travel toward goal with obstacles (1-4 protagonists)
+11. nonlinear_puzzle - Story out of order (1-3 protagonists)
+
+STORY ENGINES (pair with structure):
+- relationship_dynamics: Character interactions drive plot
+- escalating_threat: Outside force grows stronger
+- mystery_layers: Each scene reveals new layer
+- transformation_arc: Character change drives story
+- quest_progress: Movement toward clear goal
+- survival_pressure: Constant threat tension
+- social_dynamics: Shifting alliances and power
+
+CHARACTER ARCHETYPES (use multiple per concept):
+PROTAGONISTS: reluctant_hero, chosen_one, anti_hero, tragic_hero, everyman, wounded_healer
+SUPPORTING: mentor, trickster, loyal_friend, love_interest, rival, innocent
+ANTAGONISTS: mastermind, force_of_nature, fallen_hero, mirror_villain
+ENSEMBLE: leader, specialist, heart, wildcard, skeptic, newbie
+
+CRITICAL: The 3 concepts must use 3 DIFFERENT structures!
+Example valid distribution:
+- Concept 1: ensemble structure (team of 4)
+- Concept 2: mystery_procedural (detective + partner)
+- Concept 3: tragedy (single anti-hero)
+
+INVALID (too similar):
+- Concept 1: heros_journey (one hero)
+- Concept 2: heros_journey (one hero)
+- Concept 3: rebirth (one hero)
+`;
+
+  const prompt = `You are a Hollywood showrunner who creates diverse, sophisticated stories.
+You understand that the best pitches offer RADICALLY DIFFERENT approaches to the same core idea.
+
+USER'S CORE IDEA:
 ${rawInput || 'Create something engaging and original'}
 
 ${productionContext}
 ${enrichmentContext}
+${narrativeDiversityGuide}
 ${styleWarning}
 ${avoidList}
 
+YOUR TASK:
+Generate 3 concepts that are GENUINELY DIFFERENT in structure and approach.
+Each concept should explore the user's idea through a DIFFERENT LENS.
+
 REQUIREMENTS:
-1. Each concept must be 100% ORIGINAL - no copying from existing media
-2. Create unique characters with original names and backstories
-3. Develop fresh settings that aren't direct copies of existing properties
-4. If style references are mentioned, capture the VISUAL FEEL only
-5. Each concept should have a clear hook that grabs attention
-${enrichment ? `6. INCORPORATE the AI-enhanced data above - don't ignore it!
-7. Each concept should feel connected to the enriched vision while offering unique takes` : ''}
+1. Each concept uses a DIFFERENT narrative structure (mandatory!)
+2. Each concept has a DIFFERENT number/type of protagonists
+3. Create rich characters with archetypes, flaws, and arcs
+4. Define character relationships and dynamics
+5. Establish clear world rules
+6. Include visual and tonal direction
+${enrichment ? `7. Build on the enriched production bible data (narrative architecture, characters, relationships)
+8. Use the detected story engine and adapt it for each structure` : ''}
 
 Return EXACTLY this JSON structure:
 {
   "ideas": [
     {
       "title": "Short, catchy title",
-      "logline": "One compelling sentence describing the concept",
-      "description": "2-3 sentences expanding on the concept",
+      "logline": "One compelling sentence (include the hook!)",
+      "description": "2-3 sentences expanding on the concept with emotional stakes",
+
+      "narrativeStructure": "KEY from structures above (e.g., 'ensemble', 'dual_protagonist')",
+      "storyEngine": "KEY from engines above (e.g., 'relationship_dynamics')",
+      "protagonistCount": "Number or range (1, 2, '3-4', etc.)",
+
+      "characters": [
+        {
+          "name": "Original character name",
+          "archetype": "KEY from archetypes",
+          "role": "protagonist/supporting/antagonist/ensemble",
+          "flaw": "Specific flaw",
+          "arc": "Transformation"
+        }
+      ],
+
+      "keyRelationships": [
+        {
+          "between": "Character 1 & Character 2",
+          "type": "rivals/allies/lovers/mentor-student/family",
+          "tension": "Source of conflict"
+        }
+      ],
+
+      "worldSetting": {
+        "location": "Where this takes place",
+        "uniqueRule": "What makes this world special",
+        "atmosphere": "The feeling of this world"
+      },
+
       "uniqueElements": ["Element 1", "Element 2", "Element 3"],
-      "mood": "Primary mood (e.g., Tense, Uplifting, Mysterious)",
-      "tone": "Tone (e.g., Serious, Playful, Dark)",
-      "visualApproach": "How this should look visually",
-      "suggestedCharacters": ["Brief character concepts that fit this story"],
-      "worldSetting": "The world/setting for this concept"
+      "mood": "Primary mood",
+      "tone": "Narrative tone",
+      "visualApproach": "Cinematic visual style",
+      "theme": "What it's REALLY about beneath the surface"
     }
   ]
 }
 
-Generate 3 diverse concepts that offer different creative directions${enrichment ? ' while staying true to the enriched vision' : ''}.`;
+CRITICAL DIVERSITY CHECK before responding:
+- Are all 3 structures DIFFERENT? (Required!)
+- Are protagonist counts VARIED? (Required!)
+- Do the stories feel like different shows/films? (Required!)`;
 
   try {
     // Use GPT-4o for concept generation
@@ -23727,12 +23870,12 @@ Generate 3 diverse concepts that offer different creative directions${enrichment
         messages: [
           {
             role: 'system',
-            content: 'You are a creative director at a major studio. Generate original, compelling video concepts. Always return valid JSON.'
+            content: 'You are a showrunner known for creating diverse, acclaimed series. You NEVER pitch the same story structure twice - each concept explores fundamentally different narrative territory (ensemble vs single protagonist, mystery vs character study, etc.). You create rich multi-character stories with clear archetypes, relationships, and world rules. Always return valid JSON with genuinely diverse concepts.'
           },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 2000,
-        temperature: 0.9
+        max_tokens: 4000,
+        temperature: 0.95
       })
     });
 
@@ -24511,6 +24654,270 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     // "actual film/TV production" with proper scene types and audio
     // ============================================================
 
+    // ============================================================
+    // NARRATIVE ARCHITECTURE SYSTEM
+    // The foundation for diverse, Hollywood-quality storytelling
+    // All downstream generation (concepts, scripts, visuals) references this
+    // ============================================================
+
+    /**
+     * NARRATIVE STRUCTURES - Different story patterns beyond Hero's Journey
+     * Each concept should be assigned ONE of these to ensure diversity
+     */
+    const NARRATIVE_STRUCTURES = {
+      'heros_journey': {
+        name: "Hero's Journey",
+        description: 'Single protagonist transforms through trials',
+        protagonistCount: 1,
+        keyBeats: ['ordinary_world', 'call_to_adventure', 'refusal', 'mentor', 'crossing_threshold', 'tests', 'ordeal', 'reward', 'return'],
+        examples: ['Lord of the Rings', 'Star Wars', 'The Lion King'],
+        bestFor: ['epic', 'adventure', 'fantasy', 'coming_of_age'],
+        sceneDistribution: { dialogue: 30, action: 25, emotional: 20, montage: 10, revelation: 15 }
+      },
+      'ensemble': {
+        name: 'Ensemble',
+        description: 'Group of 3-6 characters with equal narrative weight, interconnected storylines',
+        protagonistCount: '3-6',
+        keyBeats: ['introduce_each', 'establish_connections', 'individual_conflicts', 'convergence_point', 'group_challenge', 'resolution_per_character'],
+        examples: ["Ocean's Eleven", 'Guardians of the Galaxy', 'The Breakfast Club', 'Avengers'],
+        bestFor: ['heist', 'team_mission', 'workplace', 'found_family'],
+        sceneDistribution: { dialogue: 45, action: 20, emotional: 20, montage: 5, revelation: 10 }
+      },
+      'dual_protagonist': {
+        name: 'Dual Protagonist',
+        description: 'Two leads with different/conflicting goals, parallel journeys',
+        protagonistCount: 2,
+        keyBeats: ['introduce_both', 'establish_conflict', 'parallel_struggles', 'intersection', 'confrontation_or_union', 'dual_resolution'],
+        examples: ['Heat', 'The Prestige', 'Marriage Story', 'Challengers'],
+        bestFor: ['rivalry', 'romance', 'cat_and_mouse', 'opposing_ideologies'],
+        sceneDistribution: { dialogue: 40, action: 15, emotional: 30, montage: 5, revelation: 10 }
+      },
+      'mystery_procedural': {
+        name: 'Mystery/Procedural',
+        description: 'Uncovering truth about an event, clue by clue',
+        protagonistCount: '1-2',
+        keyBeats: ['inciting_crime', 'investigation_begins', 'false_leads', 'key_discovery', 'suspect_confrontation', 'truth_revealed'],
+        examples: ['Knives Out', 'Se7en', 'Only Murders in the Building', 'Sherlock'],
+        bestFor: ['detective', 'thriller', 'crime', 'whodunit'],
+        sceneDistribution: { dialogue: 40, action: 10, emotional: 15, montage: 10, revelation: 25 }
+      },
+      'tragedy': {
+        name: 'Tragedy',
+        description: 'Protagonist undone by fatal flaw, descent from grace',
+        protagonistCount: 1,
+        keyBeats: ['greatness_established', 'flaw_introduced', 'temptation', 'wrong_choice', 'consequences_build', 'downfall', 'recognition_too_late'],
+        examples: ['Breaking Bad', 'Scarface', 'Macbeth', 'The Godfather'],
+        bestFor: ['crime_drama', 'power_corruption', 'cautionary_tale'],
+        sceneDistribution: { dialogue: 35, action: 20, emotional: 25, montage: 5, revelation: 15 }
+      },
+      'rebirth': {
+        name: 'Rebirth',
+        description: 'Dark/flawed character transforms to redemption',
+        protagonistCount: 1,
+        keyBeats: ['darkness_shown', 'catalyst_for_change', 'resistance', 'gradual_awakening', 'sacrifice_or_action', 'new_person_emerges'],
+        examples: ['A Christmas Carol', 'Groundhog Day', 'Schindlers List', 'Iron Man'],
+        bestFor: ['redemption', 'holiday', 'second_chance', 'transformation'],
+        sceneDistribution: { dialogue: 35, action: 15, emotional: 35, montage: 5, revelation: 10 }
+      },
+      'comedy_of_errors': {
+        name: 'Comedy of Errors',
+        description: 'Misunderstandings and mishaps lead to chaotic but happy resolution',
+        protagonistCount: '2-4',
+        keyBeats: ['setup_situation', 'initial_misunderstanding', 'complications_multiply', 'peak_chaos', 'truth_emerges', 'happy_resolution'],
+        examples: ['Bridesmaids', 'The Hangover', 'Superbad', 'Some Like It Hot'],
+        bestFor: ['romantic_comedy', 'buddy_comedy', 'farce', 'situational'],
+        sceneDistribution: { dialogue: 50, action: 15, emotional: 15, montage: 10, revelation: 10 }
+      },
+      'anthology_connected': {
+        name: 'Anthology/Hyperlink',
+        description: 'Multiple separate stories connected by theme, location, or event',
+        protagonistCount: '4-8',
+        keyBeats: ['introduce_story_a', 'introduce_story_b', 'introduce_story_c', 'develop_parallels', 'connection_revealed', 'thematic_resolution'],
+        examples: ['Love Actually', 'Crash', 'Magnolia', 'Cloud Atlas'],
+        bestFor: ['thematic_exploration', 'city_portrait', 'time_spanning', 'interconnected'],
+        sceneDistribution: { dialogue: 40, action: 10, emotional: 30, montage: 10, revelation: 10 }
+      },
+      'siege_survival': {
+        name: 'Siege/Survival',
+        description: 'Group trapped, must survive against external threat',
+        protagonistCount: '3-8',
+        keyBeats: ['normalcy', 'threat_arrives', 'trapped', 'initial_defense', 'losses', 'internal_conflict', 'final_stand', 'aftermath'],
+        examples: ['Die Hard', 'Alien', 'The Thing', '10 Cloverfield Lane'],
+        bestFor: ['horror', 'action', 'thriller', 'disaster'],
+        sceneDistribution: { dialogue: 25, action: 35, emotional: 20, montage: 5, revelation: 15 }
+      },
+      'quest_journey': {
+        name: 'Quest/Journey',
+        description: 'Travel toward goal, episodic obstacles, companions gathered',
+        protagonistCount: '1-4',
+        keyBeats: ['quest_given', 'journey_begins', 'first_obstacle', 'ally_gained', 'setback', 'dark_moment', 'final_approach', 'goal_achieved'],
+        examples: ['Finding Nemo', 'Mad Max Fury Road', 'The Wizard of Oz', 'Road Trip'],
+        bestFor: ['adventure', 'road_movie', 'coming_of_age', 'fantasy'],
+        sceneDistribution: { dialogue: 30, action: 30, emotional: 20, montage: 10, revelation: 10 }
+      },
+      'nonlinear_puzzle': {
+        name: 'Non-Linear/Puzzle',
+        description: 'Story told out of order, audience pieces together truth',
+        protagonistCount: '1-3',
+        keyBeats: ['fragment_present', 'fragment_past', 'connection_hints', 'revelation_piece', 'timeline_converges', 'full_picture'],
+        examples: ['Pulp Fiction', 'Memento', 'Arrival', '21 Grams'],
+        bestFor: ['psychological', 'mystery', 'art_house', 'thriller'],
+        sceneDistribution: { dialogue: 35, action: 15, emotional: 25, montage: 5, revelation: 20 }
+      }
+    };
+
+    /**
+     * STORY ENGINES - What mechanism drives ongoing story/scenes forward
+     * Determines HOW scenes generate conflict and progression
+     */
+    const STORY_ENGINES = {
+      'case_of_week': {
+        name: 'Case/Problem of the Week',
+        description: 'Each segment presents new case/problem to solve',
+        examples: ['House', 'CSI', 'Black Mirror'],
+        sceneGenerator: 'Present problem → Investigate → Complication → Solve',
+        bestPairedWith: ['mystery_procedural', 'anthology_connected']
+      },
+      'relationship_dynamics': {
+        name: 'Relationship Dynamics',
+        description: 'Character interactions and evolving relationships drive plot',
+        examples: ['Friends', 'The Office', 'Marriage Story'],
+        sceneGenerator: 'Character A wants X → Character B conflicts → Negotiation/Growth',
+        bestPairedWith: ['ensemble', 'dual_protagonist', 'comedy_of_errors']
+      },
+      'escalating_threat': {
+        name: 'Escalating External Threat',
+        description: 'Outside force grows stronger, raising stakes continuously',
+        examples: ['Breaking Bad', 'Game of Thrones', 'The Walking Dead'],
+        sceneGenerator: 'Threat appears → Characters respond → Threat escalates → Bigger response needed',
+        bestPairedWith: ['siege_survival', 'heros_journey', 'tragedy']
+      },
+      'mystery_layers': {
+        name: 'Mystery Unraveling',
+        description: 'Each scene peels back layer of central mystery',
+        examples: ['Lost', 'Westworld', 'Dark'],
+        sceneGenerator: 'Question posed → Partial answer → Bigger question revealed',
+        bestPairedWith: ['mystery_procedural', 'nonlinear_puzzle']
+      },
+      'transformation_arc': {
+        name: 'Character Transformation',
+        description: 'Character change is the engine - each scene shows evolution',
+        examples: ['Breaking Bad', 'Mad Men', 'Fleabag'],
+        sceneGenerator: 'Character at state A → Challenge → Character moves toward state B',
+        bestPairedWith: ['tragedy', 'rebirth', 'heros_journey']
+      },
+      'quest_progress': {
+        name: 'Quest/Goal Progress',
+        description: 'Movement toward clear objective drives each scene',
+        examples: ['Lord of the Rings', 'Inception', 'Ocean\\'s Eleven'],
+        sceneGenerator: 'Objective clear → Obstacle appears → Overcome/Adapt → Closer to goal',
+        bestPairedWith: ['quest_journey', 'ensemble', 'heros_journey']
+      },
+      'survival_pressure': {
+        name: 'Survival Pressure',
+        description: 'Constant threat keeps characters (and audience) on edge',
+        examples: ['The Martian', 'Gravity', 'A Quiet Place'],
+        sceneGenerator: 'Safety threatened → Immediate response → Brief respite → New threat',
+        bestPairedWith: ['siege_survival', 'quest_journey']
+      },
+      'social_dynamics': {
+        name: 'Social/Power Dynamics',
+        description: 'Shifting alliances, status, and power relationships',
+        examples: ['Succession', 'Game of Thrones', 'Mean Girls'],
+        sceneGenerator: 'Power balance → Challenge to hierarchy → Shift → New balance',
+        bestPairedWith: ['ensemble', 'tragedy', 'dual_protagonist']
+      }
+    };
+
+    /**
+     * CHARACTER_ARCHETYPES - Rich variety beyond "reluctant hero"
+     * Each story should use MULTIPLE archetypes for depth
+     */
+    const CHARACTER_ARCHETYPES = {
+      // PRIMARY PROTAGONISTS
+      'reluctant_hero': { role: 'protagonist', description: 'Ordinary person thrust into extraordinary circumstances', flaw: 'self-doubt', arc: 'discovers inner strength' },
+      'chosen_one': { role: 'protagonist', description: 'Destined for greatness, must accept responsibility', flaw: 'denial of destiny', arc: 'embraces purpose' },
+      'anti_hero': { role: 'protagonist', description: 'Morally gray, does wrong things for understandable reasons', flaw: 'moral compromise', arc: 'finds line they wont cross or crosses it' },
+      'tragic_hero': { role: 'protagonist', description: 'Great person with fatal flaw leading to downfall', flaw: 'hubris/obsession', arc: 'falls from grace' },
+      'everyman': { role: 'protagonist', description: 'Relatable ordinary person, audience surrogate', flaw: 'passivity', arc: 'takes agency' },
+      'wounded_healer': { role: 'protagonist', description: 'Damaged person who helps others heal', flaw: 'cant help self', arc: 'heals self through helping others' },
+
+      // SUPPORTING CHARACTERS
+      'mentor': { role: 'supporting', description: 'Wise guide who prepares hero', flaw: 'hidden past', arc: 'often sacrifices for hero' },
+      'trickster': { role: 'supporting', description: 'Comic relief who speaks uncomfortable truths', flaw: 'unreliable', arc: 'proves loyal when it matters' },
+      'loyal_friend': { role: 'supporting', description: 'Steadfast companion through all trials', flaw: 'blind loyalty', arc: 'must choose between loyalties' },
+      'love_interest': { role: 'supporting', description: 'Romantic connection that humanizes protagonist', flaw: 'own agenda', arc: 'becomes partner not prize' },
+      'rival': { role: 'supporting', description: 'Competitor who pushes protagonist to excel', flaw: 'jealousy', arc: 'becomes ally or doubles down' },
+      'innocent': { role: 'supporting', description: 'Pure character who represents what\\'s worth fighting for', flaw: 'naivety', arc: 'loss of innocence or protected' },
+
+      // ANTAGONISTS
+      'mastermind': { role: 'antagonist', description: 'Intelligent planner, always steps ahead', flaw: 'arrogance', arc: 'undone by underestimating others' },
+      'force_of_nature': { role: 'antagonist', description: 'Unstoppable, almost elemental threat', flaw: 'single-minded', arc: 'finally met with equal force' },
+      'fallen_hero': { role: 'antagonist', description: 'Once good, now corrupted by tragedy or power', flaw: 'twisted virtue', arc: 'redeemed or destroyed by former self' },
+      'mirror_villain': { role: 'antagonist', description: 'What protagonist could become if they fail', flaw: 'same as hero', arc: 'shows hero the path not to take' },
+      'system': { role: 'antagonist', description: 'Institution, society, or system as antagonist', flaw: 'inflexibility', arc: 'reformed or destroyed' },
+      'inner_demon': { role: 'antagonist', description: 'Protagonists own nature/past/addiction as enemy', flaw: 'self-destructive', arc: 'conquered or succumbed to' },
+
+      // ENSEMBLE-SPECIFIC
+      'leader': { role: 'ensemble', description: 'Takes charge, makes hard decisions', flaw: 'burden of command', arc: 'learns to trust others' },
+      'specialist': { role: 'ensemble', description: 'Expert in crucial skill', flaw: 'limited perspective', arc: 'grows beyond specialty' },
+      'heart': { role: 'ensemble', description: 'Emotional center, keeps group human', flaw: 'too empathetic', arc: 'learns necessary hardness' },
+      'wildcard': { role: 'ensemble', description: 'Unpredictable element, chaos agent', flaw: 'unreliable', arc: 'commits when it counts' },
+      'skeptic': { role: 'ensemble', description: 'Questions everything, voice of caution', flaw: 'cynicism', arc: 'becomes believer' },
+      'newbie': { role: 'ensemble', description: 'New to the group, audience surrogate', flaw: 'inexperience', arc: 'earns place' }
+    };
+
+    /**
+     * PRODUCTION_BIBLE_TEMPLATE - Unified structure all generation references
+     * Created during concept phase, used by script, visuals, audio
+     */
+    const PRODUCTION_BIBLE_TEMPLATE = {
+      // Core Identity
+      logline: '', // One sentence that sells the story
+      premise: '', // What if question that drives everything
+      theme: '', // What its REALLY about beneath the surface
+      tone: '', // How it FEELS (dark comedy, hopeful drama, etc)
+
+      // Narrative Architecture
+      narrativeStructure: '', // Key from NARRATIVE_STRUCTURES
+      storyEngine: '', // Key from STORY_ENGINES
+      actStructure: { // How the story breaks into acts
+        act1: { purpose: 'setup', percentOfRuntime: 25 },
+        act2a: { purpose: 'rising_action', percentOfRuntime: 25 },
+        act2b: { purpose: 'complications', percentOfRuntime: 25 },
+        act3: { purpose: 'resolution', percentOfRuntime: 25 }
+      },
+
+      // Character Bible
+      characters: [
+        // Each character: { name, archetype, role, flaw, arc, relationships, visualDescription, voiceDescription }
+      ],
+      characterRelationships: [], // Array of { char1, char2, relationshipType, tension }
+
+      // World Bible
+      worldRules: {
+        setting: '', // Where and when
+        uniqueMechanic: '', // What makes this world special
+        limitations: [], // What CAN'T happen in this world
+        visualLanguage: '' // How this world should LOOK
+      },
+
+      // Visual Bible
+      visualStyle: {
+        colorPalette: '', // Dominant colors and why
+        lightingApproach: '', // High key, low key, natural, etc
+        cameraPhilosophy: '', // Handheld vs steady, close vs wide, etc
+        referenceFilms: [] // Visual touchstones
+      },
+
+      // Audio Bible
+      audioStyle: {
+        musicGenre: '', // Score style
+        dialogueApproach: '', // Naturalistic, stylized, minimal
+        signatureSounds: [] // Recurring audio motifs
+      }
+    };
+
     /**
      * SCENE TYPES - How each scene functions in a film
      * Different from production MODE - these are the building blocks
@@ -24924,6 +25331,89 @@ Use these as VISUAL STYLE inspiration only - create original content, characters
 Your opening scene/hook should capture this energy and promise.`;
       }
 
+      // Build NARRATIVE ARCHITECTURE section (NEW - uses production bible data)
+      let narrativeArchitectureSection = '';
+      if (conceptEnrichment.narrativeArchitecture) {
+        const narArch = conceptEnrichment.narrativeArchitecture;
+
+        // Get structure details from our constants
+        const structureKey = narArch.structure || 'heros_journey';
+        const structureInfo = NARRATIVE_STRUCTURES[structureKey] || NARRATIVE_STRUCTURES['heros_journey'];
+        const storyEngineKey = narArch.storyEngine || 'transformation_arc';
+        const storyEngineInfo = STORY_ENGINES[storyEngineKey] || STORY_ENGINES['transformation_arc'];
+
+        narrativeArchitectureSection = `
+
+🏗️ NARRATIVE ARCHITECTURE - STORY STRUCTURE
+This story uses: ${structureInfo.name.toUpperCase()} structure
+${structureInfo.description}
+Examples: ${structureInfo.examples.join(', ')}
+
+PROTAGONIST COUNT: ${narArch.protagonistCount || structureInfo.protagonistCount}
+${narArch.structureReason ? `WHY THIS STRUCTURE: ${narArch.structureReason}` : ''}
+
+KEY BEATS TO HIT (in order):
+${(narArch.keyBeats || structureInfo.keyBeats).map((beat, idx) => `${idx + 1}. ${beat.replace(/_/g, ' ').toUpperCase()}`).join('\n')}
+
+SCENE TYPE DISTRIBUTION (use as guide):
+- Dialogue scenes: ~${structureInfo.sceneDistribution.dialogue}%
+- Action scenes: ~${structureInfo.sceneDistribution.action}%
+- Emotional scenes: ~${structureInfo.sceneDistribution.emotional}%
+- Revelation scenes: ~${structureInfo.sceneDistribution.revelation}%
+- Montage: ~${structureInfo.sceneDistribution.montage}%
+
+⚡ STORY ENGINE: ${storyEngineInfo.name}
+${storyEngineInfo.description}
+Scene generation pattern: ${storyEngineInfo.sceneGenerator}
+`;
+      }
+
+      // Build character relationships section (NEW - explicit relationships)
+      let characterRelationshipsSection = '';
+      if (conceptEnrichment.characterRelationships && conceptEnrichment.characterRelationships.length > 0) {
+        characterRelationshipsSection = `
+
+🔗 CHARACTER RELATIONSHIPS - MANDATORY DYNAMICS
+These relationships MUST drive scenes and create tension:
+
+${conceptEnrichment.characterRelationships.map((rel, idx) => `RELATIONSHIP ${idx + 1}: ${rel.char1} ↔ ${rel.char2}
+- Type: ${rel.relationshipType}
+- Tension Source: ${rel.tension}
+- Evolution: ${rel.evolution || 'Show this relationship changing across scenes'}`).join('\n\n')}
+
+Include at least ONE scene that explicitly explores each relationship.`;
+      }
+
+      // Build theme section (NEW - thematic depth)
+      let themeSection = '';
+      if (conceptEnrichment.theme || conceptEnrichment.premise) {
+        themeSection = `
+
+🎭 THEMATIC SPINE - WHAT IT'S REALLY ABOUT
+${conceptEnrichment.theme ? `THEME: "${conceptEnrichment.theme}"` : ''}
+${conceptEnrichment.premise ? `PREMISE (The "What If"): "${conceptEnrichment.premise}"` : ''}
+
+Every scene should subtly reinforce this theme. The climax should be the ultimate expression of this thematic question.`;
+      }
+
+      // Build visual/audio style section (NEW - production bible)
+      let productionStyleSection = '';
+      if (conceptEnrichment.visualStyle || conceptEnrichment.audioStyle) {
+        const vs = conceptEnrichment.visualStyle || {};
+        const as = conceptEnrichment.audioStyle || {};
+        productionStyleSection = `
+
+🎨 PRODUCTION STYLE BIBLE
+${vs.colorPalette ? `COLOR PALETTE: ${vs.colorPalette}` : ''}
+${vs.lightingApproach ? `LIGHTING: ${vs.lightingApproach}` : ''}
+${vs.cameraPhilosophy ? `CAMERA PHILOSOPHY: ${vs.cameraPhilosophy}` : ''}
+${vs.referenceFilms && vs.referenceFilms.length > 0 ? `VISUAL REFERENCES: ${vs.referenceFilms.join(', ')}` : ''}
+
+${as.musicGenre ? `MUSIC STYLE: ${as.musicGenre}` : ''}
+${as.dialogueApproach ? `DIALOGUE APPROACH: ${as.dialogueApproach}` : ''}
+${as.signatureSounds && as.signatureSounds.length > 0 ? `SIGNATURE SOUNDS: ${as.signatureSounds.join(', ')}` : ''}`;
+      }
+
       // Combine all sections
       deepStoryArchitecture = `
 
@@ -24938,9 +25428,13 @@ ENHANCED CONCEPT VISION:
 ${conceptEnrichment.improvedConcept || topic}
 ${conceptEnrichment.suggestedMood ? `\nOVERALL MOOD: ${conceptEnrichment.suggestedMood}` : ''}
 ${conceptEnrichment.suggestedTone ? `NARRATIVE TONE: ${conceptEnrichment.suggestedTone}` : ''}
+${narrativeArchitectureSection}
 ${characterBible}
+${characterRelationshipsSection}
 ${worldBuildingSection}
 ${visualSignatureSection}
+${productionStyleSection}
+${themeSection}
 ${keyElementsSection}
 ${genreFusionSection}
 ${styleReferencesSection}
