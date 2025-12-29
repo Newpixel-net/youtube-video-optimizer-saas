@@ -40609,36 +40609,27 @@ const SHOT_DECOMPOSITION_ENGINE = {
 
   /**
    * Generate shot sequence for a scene
+   * IMPORTANT: Minimax only supports 6s or 10s video clips
    */
-  generateShotSequence(sceneType, shotCount, sceneDuration) {
+  generateShotSequence(sceneType, shotCount, sceneDuration, clipDuration = 6) {
     const pattern = this.scenePatterns[sceneType];
     const recommendedShots = pattern.recommendedShots;
     const sequence = [];
 
-    // Calculate base duration per shot
-    const totalDuration = sceneDuration;
-    let remainingDuration = totalDuration;
+    // MINIMAX CONSTRAINT: Each shot must be exactly 6s or 10s
+    // The clipDuration parameter should be 6 or 10
+    const validClipDuration = clipDuration === 10 ? 10 : 6;
 
     for (let i = 0; i < shotCount; i++) {
       // Cycle through recommended shots
       const shotTypeKey = recommendedShots[i % recommendedShots.length];
       const shotType = this.shotTypes[shotTypeKey];
 
-      // Calculate duration for this shot
-      const isLastShot = (i === shotCount - 1);
-      let shotDuration;
-
-      if (isLastShot) {
-        shotDuration = remainingDuration;
-      } else {
-        const baseDuration = (shotType.typicalDuration.min + shotType.typicalDuration.max) / 2;
-        shotDuration = Math.round(baseDuration * pattern.shotDurationMultiplier * 10) / 10;
-        shotDuration = Math.max(1, Math.min(shotDuration, remainingDuration - (shotCount - i - 1)));
-      }
-
-      remainingDuration -= shotDuration;
+      // FIXED: Shot duration is ALWAYS the Minimax clip duration (6s or 10s)
+      const shotDuration = validClipDuration;
 
       // Determine camera movement based on shot type and position
+      const isLastShot = (i === shotCount - 1);
       let cameraMovement = 'static';
       if (i === 0) cameraMovement = 'slow_push'; // Opening shot
       else if (isLastShot) cameraMovement = 'slow_pull'; // Closing shot
@@ -40649,13 +40640,16 @@ const SHOT_DECOMPOSITION_ENGINE = {
         shotIndex: i + 1,
         shotType: shotTypeKey,
         shotTypeName: shotType.name,
-        duration: shotDuration,
+        duration: shotDuration, // ALWAYS 6 or 10 seconds
         cameraMovement: cameraMovement,
         promptPrefix: shotType.promptPrefix,
         purpose: shotType.useCases[0],
         transition: isLastShot ? 'cut' : 'cut'
       });
     }
+
+    // Log the Hollywood math
+    console.log(`[HollywoodDecomposition] Scene: ${sceneDuration}s → ${shotCount} shots × ${validClipDuration}s = ${shotCount * validClipDuration}s total`);
 
     return sequence;
   },
@@ -40946,9 +40940,9 @@ exports.creationWizardDecomposeSceneToShots = functions
       Scene Type Adjustment: ${sceneTypeAdjustment}
       Final Shot Count: ${shotCount}`);
 
-    // STEP 3: Generate shot sequence with precise duration math
-    // Each shot duration = sceneDuration / shotCount (to fit exactly in scene)
-    const baseSequence = SHOT_DECOMPOSITION_ENGINE.generateShotSequence(sceneType, shotCount, sceneDuration);
+    // STEP 3: Generate shot sequence with EXACT Minimax clip duration
+    // Each shot duration = clipDuration (exactly 6s or 10s from Minimax)
+    const baseSequence = SHOT_DECOMPOSITION_ENGINE.generateShotSequence(sceneType, shotCount, sceneDuration, clipDuration);
 
     console.log(`[creationWizardDecomposeSceneToShots] Scene ${scene.id}: ${sceneType} type, ${shotCount} shots, ${sceneDuration}s duration`);
 
@@ -41325,14 +41319,19 @@ exports.creationWizardGenerateShotVideo = functions
     videoPrompt = `[${movement}] ${videoPrompt}`;
 
     console.log(`[creationWizardGenerateShotVideo] Scene ${sceneId}, Shot ${shotIndex}: Starting video generation`);
+    console.log(`[creationWizardGenerateShotVideo] Image URL: ${imageUrl}`);
+    console.log(`[creationWizardGenerateShotVideo] Prompt: ${videoPrompt.substring(0, 100)}...`);
 
     // Call Minimax API for Image-to-Video
+    // Using video-01 model for image-to-video generation
     const payload = {
-      model: 'video-01', // Minimax model ID for I2V
+      model: 'video-01',
       prompt: videoPrompt,
       first_frame_image: imageUrl,
       prompt_optimizer: true
     };
+
+    console.log(`[creationWizardGenerateShotVideo] Sending to Minimax API...`);
 
     const minimaxResponse = await axios.post(
       'https://api.minimax.io/v1/video_generation',
@@ -41346,12 +41345,22 @@ exports.creationWizardGenerateShotVideo = functions
       }
     );
 
+    console.log(`[creationWizardGenerateShotVideo] Minimax response:`, JSON.stringify(minimaxResponse.data, null, 2));
+
     const taskId = minimaxResponse.data.task_id;
     const baseResp = minimaxResponse.data.base_resp;
 
-    if (baseResp && baseResp.status_code !== 0) {
-      throw new Error(`Minimax API error: ${baseResp.status_msg || 'Unknown error'}`);
+    if (!taskId) {
+      console.error(`[creationWizardGenerateShotVideo] No task_id returned! Full response:`, minimaxResponse.data);
+      throw new Error(`Minimax API error: No task_id returned. Response: ${JSON.stringify(minimaxResponse.data)}`);
     }
+
+    if (baseResp && baseResp.status_code !== 0) {
+      console.error(`[creationWizardGenerateShotVideo] API error:`, baseResp);
+      throw new Error(`Minimax API error: ${baseResp.status_msg || 'Unknown error'} (code: ${baseResp.status_code})`);
+    }
+
+    console.log(`[creationWizardGenerateShotVideo] Task started successfully: ${taskId}`);
 
     // Log usage
     await db.collection('apiUsage').add({
