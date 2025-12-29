@@ -7894,18 +7894,38 @@
 
                                                         <!-- Action Buttons Grid -->
                                                         <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                                            ${shot.status !== 'generating' && !isGeneratingVideo ? `
+                                                            ${shot.videoStatus === 'error' ? `
+                                                                <!-- Video Error State -->
+                                                                <div style="text-align: center; padding: 0.35rem; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.3rem;">
+                                                                    <div style="font-size: 0.55rem; color: #f87171; font-weight: 500;">
+                                                                        ❌ Video failed
+                                                                    </div>
+                                                                    <div style="font-size: 0.5rem; color: rgba(255,255,255,0.4); margin-top: 0.1rem; max-height: 24px; overflow: hidden;">
+                                                                        ${(shot.videoError || 'Generation failed').substring(0, 50)}
+                                                                    </div>
+                                                                </div>
+                                                                <button onclick="generateSingleShotVideo(${sceneId}, ${idx})"
+                                                                        style="width: 100%; padding: 0.3rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
+                                                                    🔄 Retry Animation
+                                                                </button>
+                                                            ` : shot.status !== 'generating' && !isGeneratingVideo ? `
                                                                 <!-- Row 1: Image Generation -->
                                                                 <button onclick="generateSingleShotImage(${sceneId}, ${idx})"
                                                                         style="width: 100%; padding: 0.3rem; background: ${hasImage ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(6, 182, 212, 0.4))'}; border: 1px solid ${hasImage ? 'rgba(255,255,255,0.15)' : 'rgba(139, 92, 246, 0.5)'}; border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
                                                                     ${hasImage ? '🔄 Regen' : '🎨 Generate'}
                                                                 </button>
 
-                                                                ${hasImage ? `
+                                                                ${hasImage && hasVideo ? `
+                                                                    <!-- Row 2: Play Video -->
+                                                                    <button onclick="openShotPreviewModal(${sceneId}, ${idx}); setTimeout(() => switchPreviewTab('video'), 100);"
+                                                                            style="width: 100%; padding: 0.3rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(6, 182, 212, 0.3)); border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
+                                                                        ▶️ Play Video
+                                                                    </button>
+                                                                ` : hasImage ? `
                                                                     <!-- Row 2: Video Generation -->
                                                                     <button onclick="generateSingleShotVideo(${sceneId}, ${idx})"
-                                                                            style="width: 100%; padding: 0.3rem; background: ${hasVideo ? 'rgba(6, 182, 212, 0.15)' : 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'}; border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
-                                                                        ${hasVideo ? '🔄 Re-Animate' : '🎬 Animate'}
+                                                                            style="width: 100%; padding: 0.3rem; background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3)); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
+                                                                        🎬 Animate
                                                                     </button>
                                                                 ` : ''}
 
@@ -7914,6 +7934,14 @@
                                                                     <button onclick="openFrameCaptureModal(${sceneId}, ${idx})"
                                                                             style="width: 100%; padding: 0.3rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.3)); border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
                                                                         🎯 Capture → Shot ${idx + 2}
+                                                                    </button>
+                                                                ` : ''}
+
+                                                                ${hasVideo ? `
+                                                                    <!-- Row 4: Re-animate option -->
+                                                                    <button onclick="generateSingleShotVideo(${sceneId}, ${idx})"
+                                                                            style="width: 100%; padding: 0.25rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.3rem; color: rgba(255,255,255,0.6); cursor: pointer; font-size: 0.55rem;">
+                                                                        🔄 Re-Animate
                                                                     </button>
                                                                 ` : ''}
                                                             ` : (() => {
