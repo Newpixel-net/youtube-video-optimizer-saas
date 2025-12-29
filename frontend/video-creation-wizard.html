@@ -7856,16 +7856,20 @@
                                                                 <div style="width: 24px; height: 24px; border: 2px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                                                                 <span style="font-size: 0.6rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">Generating image...</span>
                                                             </div>
-                                                        ` : isGeneratingVideo && hasImage ? `
+                                                        ` : isGeneratingVideo && hasImage ? (() => {
+                                                            const elapsedSecs = shot.videoPollStartTime ? Math.floor((Date.now() - shot.videoPollStartTime) / 1000) : 0;
+                                                            const elapsedStr = elapsedSecs > 0 ? `${Math.floor(elapsedSecs / 60)}:${(elapsedSecs % 60).toString().padStart(2, '0')}` : '';
+                                                            return `
                                                             <!-- Video generating with image visible -->
-                                                            <img src="${shot.imageUrl}" style="width: 100%; height: 100%; object-fit: cover; filter: brightness(0.6);">
-                                                            <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.4);">
-                                                                <div style="width: 32px; height: 32px; border: 3px solid rgba(6, 182, 212, 0.3); border-top-color: #06b6d4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                                                                <span style="font-size: 0.6rem; color: #67e8f9; margin-top: 0.5rem; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">
-                                                                    ${shot.videoStatus === 'generating' ? '🎬 Starting...' : '⏳ Rendering...'}
+                                                            <img src="${shot.imageUrl}" style="width: 100%; height: 100%; object-fit: cover; filter: brightness(0.5);">
+                                                            <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);">
+                                                                <div style="width: 36px; height: 36px; border: 3px solid rgba(6, 182, 212, 0.3); border-top-color: #06b6d4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                                                <span style="font-size: 0.65rem; color: #67e8f9; margin-top: 0.5rem; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">
+                                                                    ${shot.videoStatus === 'generating' ? '🎬 Starting...' : `⏳ ${elapsedStr || 'Rendering...'}`}
                                                                 </span>
+                                                                ${shot.videoPollCount > 0 ? `<span style="font-size: 0.5rem; color: rgba(255,255,255,0.6); margin-top: 0.2rem;">Check #${shot.videoPollCount}</span>` : ''}
                                                             </div>
-                                                        ` : isGeneratingVideo ? `
+                                                        `})() : isGeneratingVideo ? `
                                                             <div style="display: flex; flex-direction: column; align-items: center;">
                                                                 <div style="width: 28px; height: 28px; border: 3px solid rgba(6, 182, 212, 0.2); border-top-color: #06b6d4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                                                                 <span style="font-size: 0.6rem; color: #67e8f9; margin-top: 0.25rem;">Animating...</span>
@@ -7912,7 +7916,13 @@
                                                                         🎯 Capture → Shot ${idx + 2}
                                                                     </button>
                                                                 ` : ''}
-                                                            ` : `
+                                                            ` : (() => {
+                                                                // Calculate elapsed time for video generation
+                                                                const elapsedSecs = shot.videoPollStartTime ? Math.floor((Date.now() - shot.videoPollStartTime) / 1000) : 0;
+                                                                const elapsedStr = elapsedSecs > 0 ? `${Math.floor(elapsedSecs / 60)}:${(elapsedSecs % 60).toString().padStart(2, '0')}` : '';
+                                                                const pollCount = shot.videoPollCount || 0;
+
+                                                                return `
                                                                 <!-- Enhanced Loading Status -->
                                                                 <div style="text-align: center; padding: 0.35rem; background: ${shot.status === 'generating' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(6, 182, 212, 0.15)'}; border: 1px solid ${shot.status === 'generating' ? 'rgba(139, 92, 246, 0.3)' : 'rgba(6, 182, 212, 0.3)'}; border-radius: 0.3rem;">
                                                                     <div style="font-size: 0.6rem; color: ${shot.status === 'generating' ? '#a78bfa' : '#67e8f9'}; font-weight: 500;">
@@ -7920,13 +7930,18 @@
                                                                             ? '🎨 Creating image...'
                                                                             : shot.videoStatus === 'generating'
                                                                                 ? '🎬 Sending to AI...'
-                                                                                : '⏳ Rendering video...'}
+                                                                                : `⏳ Rendering... ${elapsedStr}`}
                                                                     </div>
+                                                                    ${shot.videoStatus === 'processing' && pollCount > 0 ? `
+                                                                        <div style="font-size: 0.5rem; color: rgba(255,255,255,0.4); margin-top: 0.15rem;">
+                                                                            Check #${pollCount} • Usually ~60-90s
+                                                                        </div>
+                                                                    ` : ''}
                                                                     <div style="margin-top: 0.25rem; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-                                                                        <div style="height: 100%; width: 60%; background: linear-gradient(90deg, ${shot.status === 'generating' ? '#8b5cf6' : '#06b6d4'}, transparent); animation: pulse 1.5s ease-in-out infinite;"></div>
+                                                                        <div style="height: 100%; width: ${shot.videoStatus === 'processing' ? Math.min(pollCount * 2, 95) : 60}%; background: linear-gradient(90deg, ${shot.status === 'generating' ? '#8b5cf6' : '#06b6d4'}, ${shot.status === 'generating' ? '#a78bfa' : '#22d3ee'}); transition: width 0.5s;"></div>
                                                                     </div>
                                                                 </div>
-                                                            `}
+                                                            `})()}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -8350,18 +8365,24 @@
             if (!decomposed || !decomposed.shots[shotIndex]) return;
 
             const shot = decomposed.shots[shotIndex];
-            let pollCount = 0;
-            const maxPolls = 120;
+            shot.videoPollCount = 0;
+            shot.videoPollStartTime = Date.now();
+            const maxPolls = 90; // 3 minutes at 2s intervals
 
             const pollInterval = setInterval(async () => {
-                pollCount++;
+                shot.videoPollCount = (shot.videoPollCount || 0) + 1;
 
-                if (pollCount > maxPolls || shot.videoStatus !== 'processing') {
+                // Update UI every poll to show progress
+                renderShotDecompositionModal();
+
+                if (shot.videoPollCount > maxPolls || shot.videoStatus !== 'processing') {
                     clearInterval(pollInterval);
                     if (shot.videoStatus === 'processing') {
                         shot.videoStatus = 'error';
-                        shot.videoError = 'Timed out';
+                        shot.videoError = 'Video generation timed out after 3 minutes';
+                        showToast(`⏱️ Shot ${shotIndex + 1} video timed out. Try again.`, 'error');
                         render();
+                        renderShotDecompositionModal();
                     }
                     return;
                 }
@@ -8370,22 +8391,39 @@
                     const checkStatusFn = functions.httpsCallable('creationWizardCheckShotVideoStatus');
                     const result = await checkStatusFn({ taskId, shotId: shot.id });
 
+                    console.log(`[Video Poll] Shot ${shotIndex + 1}, Poll #${shot.videoPollCount}: ${result.data.status}`);
+
                     if (result.data.status === 'ready' && result.data.videoUrl) {
                         clearInterval(pollInterval);
                         shot.videoUrl = result.data.videoUrl;
                         shot.videoStatus = 'ready';
+                        delete shot.videoPollCount;
+                        delete shot.videoPollStartTime;
                         showToast(`🎬 Shot ${shotIndex + 1} video ready!`, 'success');
                         render();
+                        renderShotDecompositionModal();
                         scheduleAutoSave();
                     } else if (result.data.status === 'error') {
                         clearInterval(pollInterval);
                         shot.videoStatus = 'error';
-                        shot.videoError = 'Generation failed';
+                        shot.videoError = result.data.error || 'Video generation failed';
+                        delete shot.videoPollCount;
+                        showToast(`❌ Shot ${shotIndex + 1} video failed`, 'error');
                         render();
+                        renderShotDecompositionModal();
                     }
 
                 } catch (error) {
                     console.error('Poll error:', error);
+                    // Don't stop polling on transient errors, but log them
+                    if (shot.videoPollCount > 5 && error.message?.includes('insufficient')) {
+                        // If we've polled several times and get balance error, stop
+                        clearInterval(pollInterval);
+                        shot.videoStatus = 'error';
+                        shot.videoError = formatVideoGenerationError(error);
+                        render();
+                        renderShotDecompositionModal();
+                    }
                 }
 
             }, 2000);
