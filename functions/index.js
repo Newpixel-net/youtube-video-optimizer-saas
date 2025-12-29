@@ -24215,12 +24215,13 @@ CRITICAL DIVERSITY CHECK before responding:
  * - Timing for each scene
  */
 exports.creationWizardGenerateScript = functions.https.onCall(async (data, context) => {
-  const uid = await verifyAuth(context);
-  const { projectId, config } = data;
+  try {
+    const uid = await verifyAuth(context);
+    const { projectId, config } = data;
 
-  if (!config) {
-    throw new functions.https.HttpsError('invalid-argument', 'Script configuration required');
-  }
+    if (!config) {
+      throw new functions.https.HttpsError('invalid-argument', 'Script configuration required');
+    }
 
   const {
     platform,
@@ -24249,7 +24250,6 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     throw new functions.https.HttpsError('invalid-argument', 'Topic must be at least 3 characters');
   }
 
-  try {
     // === CONTENT DEPTH CONFIGURATION ===
     // Controls how rich and detailed the narration content is
     const contentDepthConfig = {
