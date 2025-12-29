@@ -25172,6 +25172,553 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
       }
     };
 
+    // =========================================================================
+    // LOCATION BIBLE SYSTEM - Cinematic Location Consistency
+    // Ensures locations look consistent across scenes with proper state tracking
+    // =========================================================================
+
+    /**
+     * LOCATION_ARCHETYPES - Common cinematic location types with base visual DNA
+     * These provide starting points for rich location descriptions
+     */
+    const LOCATION_ARCHETYPES = {
+      // INTERIOR LOCATIONS
+      'dojo_traditional': {
+        category: 'interior',
+        baseElements: [
+          'Weathered wooden beam construction',
+          'Paper shoji screens filtering light',
+          'Worn tatami mats with training patterns',
+          'Ancestral weapons mounted on walls',
+          'Central open training area',
+          'Faded calligraphy scrolls on pillars'
+        ],
+        colorPalette: 'Warm wood tones, cream paper, aged brass, deep shadows',
+        atmosphere: 'Sacred discipline, echoes of generations, timeless tradition',
+        lightingSuggestions: {
+          day: 'Soft diffused light through paper screens, dust motes visible',
+          night: 'Warm lantern glow, deep shadows in corners, meditation ambiance',
+          dramatic: 'Single overhead source, dramatic chiaroscuro, tension'
+        }
+      },
+      'corporate_modern': {
+        category: 'interior',
+        baseElements: [
+          'Floor-to-ceiling glass windows',
+          'Sleek minimalist furniture',
+          'Polished concrete or marble floors',
+          'Ambient LED lighting strips',
+          'Large digital displays',
+          'Open floor plan with private offices'
+        ],
+        colorPalette: 'Cool grays, chrome accents, blue-white lighting, occasional warm wood',
+        atmosphere: 'Power, control, cold efficiency, wealth',
+        lightingSuggestions: {
+          day: 'Bright natural light, city views, clean and clinical',
+          night: 'Dramatic city lights through windows, desk lamps, moody blue',
+          dramatic: 'Silhouettes against windows, harsh overhead, noir feeling'
+        }
+      },
+      'abandoned_industrial': {
+        category: 'interior',
+        baseElements: [
+          'Rusted metal beams and catwalks',
+          'Broken skylights with vegetation growth',
+          'Abandoned machinery and equipment',
+          'Graffiti on crumbling walls',
+          'Pools of standing water',
+          'Debris and scattered objects'
+        ],
+        colorPalette: 'Rust oranges, concrete gray, toxic greens, faded industrial colors',
+        atmosphere: 'Decay, danger, forgotten purpose, urban exploration',
+        lightingSuggestions: {
+          day: 'Shafts of light through broken skylights, dust particles, god rays',
+          night: 'Moonlight through gaps, flashlight beams, emergency lighting',
+          dramatic: 'Single light source, deep shadows, horror tension'
+        }
+      },
+      'cozy_home': {
+        category: 'interior',
+        baseElements: [
+          'Comfortable lived-in furniture',
+          'Personal photos and memorabilia',
+          'Warm textiles and rugs',
+          'Kitchen visible with cooking elements',
+          'Books and personal items scattered naturally',
+          'Plants and natural elements'
+        ],
+        colorPalette: 'Warm earth tones, soft fabrics, golden lighting, personal colors',
+        atmosphere: 'Safety, memory, family, emotional anchor',
+        lightingSuggestions: {
+          day: 'Warm sunlight through curtains, domestic comfort',
+          night: 'Lamp light pools, TV glow, intimate warmth',
+          dramatic: 'Single lamp, shadows of memory, emotional weight'
+        }
+      },
+      'high_tech_lab': {
+        category: 'interior',
+        baseElements: [
+          'Banks of monitors and screens',
+          'Holographic or projected displays',
+          'Clean white surfaces',
+          'Complex equipment and machinery',
+          'Server racks with blinking lights',
+          'Sterile controlled environment'
+        ],
+        colorPalette: 'Clinical white, blue accent lighting, green data streams, chrome',
+        atmosphere: 'Innovation, danger of technology, sterile progress',
+        lightingSuggestions: {
+          day: 'Bright clinical lighting, no shadows, clean',
+          night: 'Screen glow, blue ambient, focused work lights',
+          dramatic: 'Emergency red lighting, system alerts, tension'
+        }
+      },
+
+      // EXTERIOR LOCATIONS
+      'urban_street': {
+        category: 'exterior',
+        baseElements: [
+          'Mixed architecture buildings',
+          'Street lights and signage',
+          'Vehicles parked or moving',
+          'Sidewalks with pedestrians',
+          'Urban infrastructure (fire hydrants, mailboxes)',
+          'Visible sky between buildings'
+        ],
+        colorPalette: 'Concrete gray, neon accents at night, varied building colors',
+        atmosphere: 'Urban energy, anonymity, life in motion',
+        lightingSuggestions: {
+          day: 'Direct sunlight with building shadows, harsh urban light',
+          night: 'Neon signs, street lamps, car headlights, wet reflections',
+          dramatic: 'Rain-slicked streets, isolated pools of light, noir'
+        }
+      },
+      'forest_ancient': {
+        category: 'exterior',
+        baseElements: [
+          'Towering ancient trees with thick canopy',
+          'Filtered dappled light through leaves',
+          'Moss-covered fallen logs',
+          'Natural paths through undergrowth',
+          'Visible wildlife or signs of it',
+          'Mist or fog in low areas'
+        ],
+        colorPalette: 'Deep greens, brown earth, golden light shafts, silver mist',
+        atmosphere: 'Mystery, ancient wisdom, nature untamed, spiritual',
+        lightingSuggestions: {
+          day: 'God rays through canopy, dappled light patterns, ethereal',
+          night: 'Moonlight filtering, bioluminescence possible, mysterious',
+          dramatic: 'Storm light, ominous shadows, nature threatening'
+        }
+      },
+      'rooftop_urban': {
+        category: 'exterior',
+        baseElements: [
+          'HVAC units and utility structures',
+          'Low walls or railings at edge',
+          'City skyline visible',
+          'Water towers or antenna structures',
+          'Gravel or membrane roofing surface',
+          'Access door/stairwell structure'
+        ],
+        colorPalette: 'Gray industrial, city lights colors at night, sky gradient',
+        atmosphere: 'Isolation above the world, confrontation space, transition',
+        lightingSuggestions: {
+          day: 'Bright open sky, harsh shadows from structures',
+          night: 'City glow from below, dramatic sky, isolated',
+          dramatic: 'Backlit by city, silhouettes, wind-swept'
+        }
+      },
+      'beach_coastal': {
+        category: 'exterior',
+        baseElements: [
+          'Sandy shore meeting water',
+          'Wave patterns and foam',
+          'Driftwood and natural debris',
+          'Horizon line where sea meets sky',
+          'Possible cliffs or vegetation at edge',
+          'Shells and stones scattered'
+        ],
+        colorPalette: 'Sand beige, ocean blue-green, white foam, sky gradients',
+        atmosphere: 'Freedom, contemplation, edge of world, emotional release',
+        lightingSuggestions: {
+          day: 'Bright reflections, harsh sun, squinting light',
+          night: 'Moonlight on water, silvery tones, romantic',
+          dramatic: 'Storm approaching, dark water, ominous sky, golden hour'
+        }
+      }
+    };
+
+    /**
+     * LOCATION_STATE_MODIFIERS - How locations change between scenes
+     */
+    const LOCATION_STATE_MODIFIERS = {
+      timeOfDay: {
+        'dawn': {
+          lighting: 'Soft pink and orange light emerging, long shadows, quiet awakening',
+          mood: 'Hope, new beginning, quiet before the world wakes',
+          colorShift: 'Warm pink-orange cast, soft contrast'
+        },
+        'morning': {
+          lighting: 'Bright clear light, shorter shadows, fresh illumination',
+          mood: 'Energy, possibility, clarity, productive',
+          colorShift: 'Clean neutral tones, slight warmth'
+        },
+        'midday': {
+          lighting: 'Harsh overhead sun, minimal shadows, bright exposure',
+          mood: 'Intensity, nowhere to hide, confrontation',
+          colorShift: 'High contrast, washed highlights'
+        },
+        'afternoon': {
+          lighting: 'Warm angled light, lengthening shadows, golden tones',
+          mood: 'Warmth, comfort, passing time, reflection',
+          colorShift: 'Golden warm cast, rich colors'
+        },
+        'golden_hour': {
+          lighting: 'Deep orange-gold light, long dramatic shadows, magical quality',
+          mood: 'Romance, beauty, fleeting perfection, emotional peak',
+          colorShift: 'Strong orange-gold, deep shadows, cinematic'
+        },
+        'dusk': {
+          lighting: 'Fading light, blue hour beginning, mixed warm and cool',
+          mood: 'Transition, melancholy, ending, uncertain',
+          colorShift: 'Purple and blue tones emerging, warm pockets'
+        },
+        'night': {
+          lighting: 'Artificial sources dominate, pools of light in darkness',
+          mood: 'Mystery, danger, intimacy, secrets',
+          colorShift: 'Cool blue overall, warm practical lights'
+        },
+        'deep_night': {
+          lighting: 'Minimal light, moonlight or starlight only, near darkness',
+          mood: 'Isolation, fear, contemplation, stillness',
+          colorShift: 'Desaturated, silver-blue, high contrast'
+        }
+      },
+      weather: {
+        'clear': {
+          atmosphere: 'Crisp visibility, clean air, normal conditions',
+          particles: 'None or minimal dust motes',
+          surfaces: 'Dry, normal textures'
+        },
+        'overcast': {
+          atmosphere: 'Soft diffused light, gray sky, muted mood',
+          particles: 'None',
+          surfaces: 'Flat lighting on all surfaces'
+        },
+        'rain_light': {
+          atmosphere: 'Gentle rain visible, wet surfaces, reflections',
+          particles: 'Rain droplets, splashes',
+          surfaces: 'Wet reflective surfaces, water streams'
+        },
+        'rain_heavy': {
+          atmosphere: 'Intense downpour, limited visibility, dramatic',
+          particles: 'Heavy rain sheets, mist, splashing',
+          surfaces: 'Flooding, intense reflections, waterfall effects'
+        },
+        'fog': {
+          atmosphere: 'Limited visibility, mysterious, sound muffled',
+          particles: 'Thick atmospheric haze, wisps',
+          surfaces: 'Moisture condensation, soft edges'
+        },
+        'snow': {
+          atmosphere: 'White falling particles, muffled sounds, cold',
+          particles: 'Snowflakes drifting, accumulation',
+          surfaces: 'Snow coverage, frost, ice formations'
+        },
+        'storm': {
+          atmosphere: 'Dark clouds, lightning flashes, wind visible, dramatic',
+          particles: 'Wind-blown debris, rain, leaves',
+          surfaces: 'Wet, damaged, wind-affected'
+        }
+      },
+      condition: {
+        'pristine': {
+          description: 'Perfect original state, well-maintained, untouched',
+          visualChanges: 'Clean surfaces, everything in place, no damage'
+        },
+        'lived_in': {
+          description: 'Normal use wear, personal touches, comfortable',
+          visualChanges: 'Minor clutter, some wear patterns, personal items visible'
+        },
+        'neglected': {
+          description: 'Lack of maintenance, dust accumulation, fading',
+          visualChanges: 'Dust layers, cobwebs, faded colors, minor disrepair'
+        },
+        'damaged_light': {
+          description: 'Minor damage from conflict or accident',
+          visualChanges: 'Broken items, scattered debris, scorch marks, cracks'
+        },
+        'damaged_heavy': {
+          description: 'Significant structural damage, aftermath of major event',
+          visualChanges: 'Collapsed sections, major debris, fire damage, destruction'
+        },
+        'destroyed': {
+          description: 'Near-total destruction, barely recognizable',
+          visualChanges: 'Ruins, rubble, smoke, complete devastation'
+        },
+        'repaired': {
+          description: 'Fixed after damage, signs of restoration',
+          visualChanges: 'New materials mixed with old, visible repair work, healing'
+        },
+        'transformed': {
+          description: 'Location has changed purpose or been significantly altered',
+          visualChanges: 'New elements added, repurposed space, evolution visible'
+        }
+      }
+    };
+
+    /**
+     * LOCATION_BIBLE_GENERATOR - Creates and manages location consistency
+     */
+    const LOCATION_BIBLE_GENERATOR = {
+      /**
+       * Extract unique locations from script scenes
+       */
+      extractLocationsFromScript: (scenes) => {
+        const locationMap = new Map();
+
+        for (const scene of scenes) {
+          // Try to identify location from scene data
+          const locationName = scene.location || scene.setting ||
+            LOCATION_BIBLE_GENERATOR.inferLocationFromVisual(scene.visual || scene.visualPrompt || '');
+
+          if (locationName && locationName !== 'unknown') {
+            const normalizedName = locationName.toLowerCase().trim();
+
+            if (!locationMap.has(normalizedName)) {
+              locationMap.set(normalizedName, {
+                id: `loc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                name: locationName,
+                normalizedName,
+                scenes: [],
+                firstAppearance: scene.sceneId || scene.id,
+                baseDescription: null,
+                archetype: null,
+                stateHistory: []
+              });
+            }
+
+            const loc = locationMap.get(normalizedName);
+            loc.scenes.push({
+              sceneId: scene.sceneId || scene.id,
+              visualContext: scene.visual || scene.visualPrompt || '',
+              inferredTimeOfDay: LOCATION_BIBLE_GENERATOR.inferTimeOfDay(scene),
+              inferredWeather: LOCATION_BIBLE_GENERATOR.inferWeather(scene),
+              inferredCondition: LOCATION_BIBLE_GENERATOR.inferCondition(scene)
+            });
+          }
+        }
+
+        return Array.from(locationMap.values());
+      },
+
+      /**
+       * Infer location name from visual description
+       */
+      inferLocationFromVisual: (visual) => {
+        if (!visual) return 'unknown';
+        const v = visual.toLowerCase();
+
+        // Check for common location keywords
+        const locationPatterns = [
+          { pattern: /\b(dojo|training hall|martial arts)\b/i, name: 'The Dojo' },
+          { pattern: /\b(office|corporate|boardroom|conference)\b/i, name: 'Corporate Office' },
+          { pattern: /\b(warehouse|factory|industrial|abandoned)\b/i, name: 'Abandoned Warehouse' },
+          { pattern: /\b(forest|woods|trees|jungle)\b/i, name: 'The Forest' },
+          { pattern: /\b(street|alley|urban|city)\b/i, name: 'City Streets' },
+          { pattern: /\b(rooftop|roof|skyline)\b/i, name: 'Rooftop' },
+          { pattern: /\b(beach|shore|coast|ocean)\b/i, name: 'The Beach' },
+          { pattern: /\b(lab|laboratory|research|science)\b/i, name: 'The Laboratory' },
+          { pattern: /\b(home|house|apartment|living room|bedroom)\b/i, name: 'Home' },
+          { pattern: /\b(hospital|medical|clinic)\b/i, name: 'Hospital' },
+          { pattern: /\b(bar|club|restaurant|cafe)\b/i, name: 'The Bar' },
+          { pattern: /\b(castle|fortress|palace|throne)\b/i, name: 'The Castle' },
+          { pattern: /\b(cave|cavern|underground)\b/i, name: 'The Cave' },
+          { pattern: /\b(ship|boat|vessel|deck)\b/i, name: 'The Ship' },
+          { pattern: /\b(mountain|peak|summit|cliff)\b/i, name: 'The Mountain' }
+        ];
+
+        for (const { pattern, name } of locationPatterns) {
+          if (pattern.test(v)) return name;
+        }
+
+        return 'unknown';
+      },
+
+      /**
+       * Infer time of day from scene context
+       */
+      inferTimeOfDay: (scene) => {
+        const text = `${scene.visual || ''} ${scene.visualPrompt || ''} ${scene.narration || ''}`.toLowerCase();
+
+        if (/\b(dawn|sunrise|first light|early morning)\b/.test(text)) return 'dawn';
+        if (/\b(morning|bright day|fresh day)\b/.test(text)) return 'morning';
+        if (/\b(noon|midday|harsh sun|overhead sun)\b/.test(text)) return 'midday';
+        if (/\b(afternoon|warm light|late day)\b/.test(text)) return 'afternoon';
+        if (/\b(golden hour|sunset|orange light|evening sun)\b/.test(text)) return 'golden_hour';
+        if (/\b(dusk|twilight|fading light)\b/.test(text)) return 'dusk';
+        if (/\b(night|darkness|moonlight|stars|neon)\b/.test(text)) return 'night';
+        if (/\b(midnight|deep night|dead of night)\b/.test(text)) return 'deep_night';
+
+        return 'day'; // default
+      },
+
+      /**
+       * Infer weather from scene context
+       */
+      inferWeather: (scene) => {
+        const text = `${scene.visual || ''} ${scene.visualPrompt || ''} ${scene.narration || ''}`.toLowerCase();
+
+        if (/\b(storm|thunder|lightning)\b/.test(text)) return 'storm';
+        if (/\b(heavy rain|downpour|torrential)\b/.test(text)) return 'rain_heavy';
+        if (/\b(rain|drizzle|wet|raining)\b/.test(text)) return 'rain_light';
+        if (/\b(fog|mist|haze|foggy)\b/.test(text)) return 'fog';
+        if (/\b(snow|blizzard|frost|winter)\b/.test(text)) return 'snow';
+        if (/\b(overcast|cloudy|gray sky)\b/.test(text)) return 'overcast';
+
+        return 'clear'; // default
+      },
+
+      /**
+       * Infer condition from scene context
+       */
+      inferCondition: (scene) => {
+        const text = `${scene.visual || ''} ${scene.visualPrompt || ''} ${scene.narration || ''}`.toLowerCase();
+
+        if (/\b(destroyed|ruins|rubble|devastat)\b/.test(text)) return 'destroyed';
+        if (/\b(heavily damaged|major damage|collapse|fire damage)\b/.test(text)) return 'damaged_heavy';
+        if (/\b(damaged|broken|debris|aftermath|battle.?damage)\b/.test(text)) return 'damaged_light';
+        if (/\b(repaired|restored|fixed|rebuilt)\b/.test(text)) return 'repaired';
+        if (/\b(abandoned|neglected|dusty|cobweb)\b/.test(text)) return 'neglected';
+        if (/\b(pristine|perfect|immaculate|spotless)\b/.test(text)) return 'pristine';
+
+        return 'lived_in'; // default
+      },
+
+      /**
+       * Match location to archetype for base description
+       */
+      matchArchetype: (locationName) => {
+        const name = locationName.toLowerCase();
+
+        if (/dojo|training|martial/.test(name)) return 'dojo_traditional';
+        if (/corporate|office|tower|boardroom/.test(name)) return 'corporate_modern';
+        if (/warehouse|factory|abandoned|industrial/.test(name)) return 'abandoned_industrial';
+        if (/home|house|apartment/.test(name)) return 'cozy_home';
+        if (/lab|laboratory|research/.test(name)) return 'high_tech_lab';
+        if (/street|alley|urban|city/.test(name)) return 'urban_street';
+        if (/forest|woods|jungle/.test(name)) return 'forest_ancient';
+        if (/rooftop|roof/.test(name)) return 'rooftop_urban';
+        if (/beach|coast|shore/.test(name)) return 'beach_coastal';
+
+        return null; // No matching archetype
+      },
+
+      /**
+       * Generate rich location description from archetype and context
+       */
+      generateLocationDescription: (location, archetype, customDetails = '') => {
+        if (!archetype || !LOCATION_ARCHETYPES[archetype]) {
+          // Generate generic description if no archetype
+          return {
+            baseDescription: customDetails || `${location.name} - a significant location in the story`,
+            keyElements: [],
+            colorPalette: 'Cinematic color palette appropriate to the setting',
+            atmosphere: 'Atmosphere matching the story tone'
+          };
+        }
+
+        const arch = LOCATION_ARCHETYPES[archetype];
+        return {
+          baseDescription: `${location.name}: ${arch.baseElements.slice(0, 4).join(', ')}`,
+          keyElements: arch.baseElements,
+          colorPalette: arch.colorPalette,
+          atmosphere: arch.atmosphere,
+          category: arch.category,
+          lightingSuggestions: arch.lightingSuggestions,
+          customDetails: customDetails
+        };
+      },
+
+      /**
+       * Build location state for a specific scene
+       */
+      buildLocationState: (location, sceneId) => {
+        // Find this scene in the location's history
+        const sceneData = location.scenes?.find(s => s.sceneId === sceneId);
+
+        if (!sceneData) {
+          return {
+            timeOfDay: 'day',
+            weather: 'clear',
+            condition: 'lived_in'
+          };
+        }
+
+        return {
+          timeOfDay: sceneData.inferredTimeOfDay || 'day',
+          weather: sceneData.inferredWeather || 'clear',
+          condition: sceneData.inferredCondition || 'lived_in'
+        };
+      },
+
+      /**
+       * Generate complete location prompt component for a scene
+       */
+      generateLocationPromptComponent: (location, sceneId) => {
+        if (!location) return '';
+
+        const archetype = location.archetype || LOCATION_BIBLE_GENERATOR.matchArchetype(location.name);
+        const arch = archetype ? LOCATION_ARCHETYPES[archetype] : null;
+        const state = LOCATION_BIBLE_GENERATOR.buildLocationState(location, sceneId);
+
+        const parts = [];
+
+        // Base location description
+        if (location.baseDescription?.baseDescription) {
+          parts.push(`LOCATION: ${location.baseDescription.baseDescription}`);
+        } else if (arch) {
+          parts.push(`LOCATION: ${location.name} - ${arch.baseElements.slice(0, 3).join(', ')}`);
+        } else {
+          parts.push(`LOCATION: ${location.name}`);
+        }
+
+        // Key visual elements from archetype
+        if (arch?.baseElements) {
+          parts.push(`KEY ELEMENTS: ${arch.baseElements.slice(0, 4).join('; ')}`);
+        }
+
+        // Time of day state
+        const timeState = LOCATION_STATE_MODIFIERS.timeOfDay[state.timeOfDay];
+        if (timeState) {
+          parts.push(`TIME: ${state.timeOfDay} - ${timeState.lighting}`);
+        }
+
+        // Weather state
+        const weatherState = LOCATION_STATE_MODIFIERS.weather[state.weather];
+        if (weatherState && state.weather !== 'clear') {
+          parts.push(`WEATHER: ${state.weather} - ${weatherState.atmosphere}`);
+          if (weatherState.particles !== 'None') {
+            parts.push(`PARTICLES: ${weatherState.particles}`);
+          }
+        }
+
+        // Condition state
+        const conditionState = LOCATION_STATE_MODIFIERS.condition[state.condition];
+        if (conditionState && state.condition !== 'lived_in') {
+          parts.push(`CONDITION: ${conditionState.description} - ${conditionState.visualChanges}`);
+        }
+
+        // Color palette
+        if (location.baseDescription?.colorPalette || arch?.colorPalette) {
+          parts.push(`PALETTE: ${location.baseDescription?.colorPalette || arch.colorPalette}`);
+        }
+
+        return parts.join('\n');
+      }
+    };
+
     /**
      * SCENE TYPES - How each scene functions in a film
      * Different from production MODE - these are the building blocks
@@ -26019,8 +26566,16 @@ Return ONLY valid JSON:
     {
       "id": 1,
       "sceneType": "opening_narration|dialogue|action|emotional|montage|revelation|closing_narration",
+      "location": {
+        "name": "The specific location name (e.g., 'The Dojo', 'Corporate Tower', 'City Streets')",
+        "timeOfDay": "dawn|morning|midday|afternoon|golden_hour|dusk|night|deep_night",
+        "weather": "clear|overcast|rain_light|rain_heavy|fog|snow|storm",
+        "condition": "pristine|lived_in|neglected|damaged_light|damaged_heavy|destroyed|repaired",
+        "conditionDetails": "Specific details about damage or changes if not pristine/lived_in"
+      },
       "visualPrompt": "[Camera Movement] Detailed cinematography for AI video generation",
       "visual": "[Camera Movement] Same as visualPrompt for backwards compatibility",
+      "sceneAction": "WHAT IS HAPPENING: Brief description of the action/interaction in this scene (e.g., 'Kai confronts the Shadow Warrior', 'Maya and Kai discuss their plan')",
       "audioLayer": {
         "type": "voiceover|dialogue|internal_monologue|action_sfx|music_only",
         "voiceover": "Narrator text if type=voiceover, otherwise null",
@@ -26080,19 +26635,47 @@ Return ONLY valid JSON:
       "narration": 0,
       "emotional": 0
     }
+  },
+  "locations": [
+    {
+      "name": "Location name (e.g., 'The Dojo', 'Corporate Tower')",
+      "description": "Detailed visual description of this location's architecture, key elements, atmosphere",
+      "keyElements": ["Key visual element 1", "Key visual element 2", "Key visual element 3"],
+      "colorPalette": "The dominant colors and textures of this location",
+      "atmosphere": "The mood and feeling of this place",
+      "scenesUsed": [1, 4, 7]
+    }
+  ],
+  "styleBible": {
+    "visualStyle": "Overall visual approach (e.g., 'ultra-cinematic noir thriller')",
+    "colorGrade": "Color grading approach (e.g., 'desaturated teal shadows, amber highlights')",
+    "lighting": "Lighting philosophy (e.g., 'harsh single-source, dramatic rim lights')",
+    "atmosphere": "Environmental elements (e.g., 'smoke, rain reflections, urban grit')",
+    "cameraLanguage": "Camera philosophy (e.g., 'handheld tension, slow push-ins for reveals')"
   }
 }
 
 CRITICAL REQUIREMENTS:
 1. The "characters" array MUST contain ALL characters with complete visual AND voice descriptions
 2. Each scene's "audioLayer" MUST match its "sceneType" - dialogue scenes need dialogue array, action needs sfx
-3. Use EXACT character visual descriptions in visualPrompt when they appear
-4. "narration" field must be populated from audioLayer for backwards compatibility:
-   - If audioLayer.type="voiceover", narration = audioLayer.voiceover
-   - If audioLayer.type="dialogue", narration = formatted dialogue lines
-   - If audioLayer.type="action_sfx" or "music_only", narration = null
+3. The "visualPrompt" must describe the SCENE ACTION - what is happening, where, how it looks cinematically
+   - DO NOT just describe a character standing there
+   - MUST include: the action taking place, character interactions, location details, cinematography
+   - Example: "Kai blocks The Shadow Warrior's strike in the rain-soaked dojo, their weapons locked, determination in his eyes"
+4. "narration" field must be populated from audioLayer for backwards compatibility
 5. At least 40% of scenes should be "dialogue" type for character-driven stories
-6. transition.purpose MUST explain WHY that transition was chosen`;
+6. transition.purpose MUST explain WHY that transition was chosen
+
+LOCATION CONSISTENCY RULES:
+7. The "locations" array MUST define EVERY unique location used in scenes
+8. When the story returns to a location, the base visual elements MUST stay the same
+   - Same architecture, same key elements, same atmosphere
+   - ONLY the state changes: timeOfDay, weather, condition
+9. Location condition changes must be LOGICAL:
+   - If battle happened at location in scene 3, show damage in scene 7
+   - If time passed, show appropriate changes
+10. Each scene's "location" field must reference a location from the "locations" array
+11. The "styleBible" must be consistent across ALL scenes - this is the visual DNA of the entire production`;
 
 
     // Log enrichment data for debugging
@@ -37077,49 +37660,92 @@ const IMAGE_PROMPT_GENERATOR = {
   },
 
   /**
-   * Build subject description from scene and character bible
-   * UPGRADED: Uses extracted blueprint rawVisual for rich scene descriptions
+   * Build subject description from scene - SCENE ACTION FOCUSED
+   * CRITICAL FIX: Returns SCENE DESCRIPTION, NOT character physical descriptions
+   * Character reference images handle visual consistency - prompts describe WHAT'S HAPPENING
    */
-  buildSubjectDescription: (scene, characterBible, vb = {}) => {
-    const ab = scene.actionBlueprint?.characterAction;
+  buildSubjectDescription: (scene, characterBible, vb = {}, locationBible = []) => {
+    const parts = [];
 
-    // PRIORITY 1: Use rawVisual from blueprint extraction (this is the cleaned visual text)
-    // This contains the full cinematographic description from script generation
-    if (vb.rawVisual && vb.rawVisual.length > 20) {
-      // rawVisual already contains the rich description, use it directly
-      return vb.rawVisual;
+    // PRIORITY 1: Use scene.visualPrompt or scene.visual (the cinematographic description from script)
+    // This is the PRIMARY source - the script's rich scene description
+    const visualPrompt = scene.visualPrompt || scene.visual || '';
+    const cleanedVisual = visualPrompt.replace(/\[.*?\]\s*/, '').trim();
+
+    if (cleanedVisual && cleanedVisual.length > 30) {
+      // The script's visual prompt should describe the scene action, not just a character
+      parts.push(cleanedVisual);
     }
 
-    // PRIORITY 2: Check for character action in blueprint
-    if (ab?.who) {
-      // Look up character in bible
-      const character = characterBible?.find(c =>
-        c.name?.toLowerCase() === ab.who.toLowerCase() ||
-        c.id === ab.who
-      );
+    // PRIORITY 2: Add scene action if available (what's happening)
+    if (scene.sceneAction) {
+      // Only add if not already covered in visual
+      if (!cleanedVisual.toLowerCase().includes(scene.sceneAction.toLowerCase().substring(0, 20))) {
+        parts.push(`ACTION: ${scene.sceneAction}`);
+      }
+    }
 
-      if (character) {
-        // Build detailed character description
-        const charDesc = [
-          character.physicalDescription,
-          character.clothingDescription,
-          ab.startPose ? `in ${ab.startPose} pose` : null,
-          ab.action || null
-        ].filter(Boolean).join(', ');
-        return charDesc;
+    // PRIORITY 3: Build location context if we have location data
+    if (scene.location && typeof scene.location === 'object') {
+      const loc = scene.location;
+      const locationParts = [];
+
+      if (loc.name) {
+        // Try to find this location in location bible for richer description
+        const bibleLoc = locationBible?.find(l =>
+          l.name?.toLowerCase() === loc.name.toLowerCase() ||
+          l.normalizedName === loc.name.toLowerCase()
+        );
+
+        if (bibleLoc?.keyElements && bibleLoc.keyElements.length > 0) {
+          locationParts.push(`SETTING: ${loc.name} - ${bibleLoc.keyElements.slice(0, 3).join(', ')}`);
+        } else {
+          locationParts.push(`SETTING: ${loc.name}`);
+        }
       }
 
-      // Use action blueprint if available
-      return `${ab.who} ${ab.startPose ? `in ${ab.startPose} pose` : ''} ${ab.action || ''}`.trim();
+      // Add time/weather/condition modifiers
+      if (loc.timeOfDay && loc.timeOfDay !== 'day') {
+        locationParts.push(`TIME: ${loc.timeOfDay}`);
+      }
+      if (loc.weather && loc.weather !== 'clear') {
+        locationParts.push(`WEATHER: ${loc.weather}`);
+      }
+      if (loc.condition && loc.condition !== 'lived_in' && loc.condition !== 'pristine') {
+        locationParts.push(`CONDITION: ${loc.condition}${loc.conditionDetails ? ` - ${loc.conditionDetails}` : ''}`);
+      }
+
+      if (locationParts.length > 0 && !cleanedVisual.toLowerCase().includes(loc.name?.toLowerCase() || '')) {
+        parts.push(locationParts.join('. '));
+      }
     }
 
-    // PRIORITY 3: Fall back to midground or direct visual
-    if (vb.midground) return vb.midground;
+    // PRIORITY 4: Add character names (NOT descriptions) if in scene
+    // Character reference images handle visual consistency - we just need names for context
+    if (scene.charactersInScene && scene.charactersInScene.length > 0) {
+      const charNames = scene.charactersInScene.join(' and ');
+      // Only add if not already mentioned in the visual
+      if (!cleanedVisual.toLowerCase().includes(charNames.toLowerCase().split(' ')[0])) {
+        parts.push(`FEATURING: ${charNames}`);
+      }
+    }
 
-    // PRIORITY 4: Use scene.visual or visualPrompt (original script text)
-    const visual = scene.visual || scene.visualPrompt || '';
-    // Strip camera movement brackets and return
-    return visual.replace(/\[.*?\]\s*/, '').trim();
+    // PRIORITY 5: Use rawVisual from blueprint if nothing else
+    if (parts.length === 0 && vb.rawVisual && vb.rawVisual.length > 20) {
+      parts.push(vb.rawVisual);
+    }
+
+    // PRIORITY 6: Use midground from visual blueprint
+    if (parts.length === 0 && vb.midground) {
+      parts.push(vb.midground);
+    }
+
+    // FALLBACK: Generic scene description
+    if (parts.length === 0) {
+      return 'A cinematic scene with dramatic composition';
+    }
+
+    return parts.join('. ');
   },
 
   /**
