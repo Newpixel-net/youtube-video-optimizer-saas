@@ -1,14 +1,6 @@
 [
   {
-    "origin": [
-      "https://ytseo.siteuo.com",
-      "https://ytseo-6d1b0.web.app",
-      "https://ytseo-6d1b0.firebaseapp.com",
-      "http://localhost:5000",
-      "http://localhost:5001",
-      "http://127.0.0.1:5000",
-      "http://127.0.0.1:5001"
-    ],
+    "origin": ["*"],
     "method": ["GET", "HEAD", "OPTIONS"],
     "maxAgeSeconds": 3600,
     "responseHeader": [
@@ -17,7 +9,11 @@
       "Access-Control-Allow-Methods",
       "Access-Control-Allow-Headers",
       "Content-Length",
-      "Content-Encoding"
+      "Content-Encoding",
+      "Content-Disposition",
+      "Cache-Control",
+      "Accept-Ranges",
+      "Content-Range"
     ]
   }
 ]
