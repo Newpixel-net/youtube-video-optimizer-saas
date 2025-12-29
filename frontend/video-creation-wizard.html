@@ -12550,14 +12550,16 @@
             html += '</div>';
 
             // Animate Button with Model Info
-            var isAnimating = animationStatus === 'generating';
-            var canAnimate = hasVoiceover && !isAnimating;
+            // Minimax AI Video does NOT require voiceover - it generates video from image + prompt
+            var isAnimating = animationStatus === 'generating' || animationStatus === 'processing';
+            var hasImage = storyboardScene && storyboardScene.imageUrl;
+            var canAnimate = hasImage && !isAnimating;
             html += '<div style="margin-top: 0.75rem;">';
             html += '<button onclick="animateSceneWithMinimax(' + sceneId + ')" ' + (!canAnimate ? 'disabled' : '') + ' style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: none; background: ' + (canAnimate ? 'linear-gradient(135deg, #06b6d4, #10b981)' : 'rgba(255,255,255,0.1)') + '; color: ' + (canAnimate ? 'white' : 'rgba(255,255,255,0.4)') + '; font-size: 0.8rem; font-weight: 600; cursor: ' + (canAnimate ? 'pointer' : 'not-allowed') + '; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">';
             if (isAnimating) {
                 html += '<span class="animate-spin">⏳</span> Generating AI Video...';
-            } else if (!hasVoiceover) {
-                html += '<span>🔒</span> Generate voiceover first';
+            } else if (!hasImage) {
+                html += '<span>🔒</span> Generate image first';
             } else {
                 html += '<span>🎬</span> Generate ' + videoModel.duration + ' AI Video';
             }
@@ -12679,7 +12681,18 @@
             } catch (error) {
                 console.error('Minimax video generation error:', error);
                 animScene.animationStatus = 'error';
-                showToast('Failed to generate AI video: ' + error.message, 'error');
+
+                // Provide specific error messages for common issues
+                var errorMsg = error.message || 'Unknown error';
+                if (errorMsg.includes('API key not configured') || errorMsg.includes('failed-precondition')) {
+                    showToast('Minimax API key not configured. Contact admin to set up the API key.', 'error');
+                } else if (errorMsg.includes('Invalid model') || errorMsg.includes('invalid-argument')) {
+                    showToast('Video configuration error: ' + errorMsg, 'error');
+                } else if (errorMsg.includes('quota') || errorMsg.includes('rate limit')) {
+                    showToast('API rate limit reached. Please wait and try again.', 'error');
+                } else {
+                    showToast('Failed to generate AI video: ' + errorMsg, 'error');
+                }
             }
 
             render();
@@ -13932,6 +13945,16 @@
         }
 
         async function animateScene(sceneId) {
+            // SMART ROUTING: Check video model provider to route to correct animation function
+            const videoModel = state.content.videoModel || { provider: 'minimax', model: 'hailuo-2.3' };
+
+            // If provider is minimax, use AI video generation
+            if (videoModel.provider === 'minimax' || !videoModel.provider) {
+                console.log('[animateScene] Routing to Minimax AI video for scene', sceneId);
+                return animateSceneWithMinimax(sceneId);
+            }
+
+            // Fallback: Legacy Ken Burns animation (requires voiceover + RunPod)
             const animScene = state.animation.scenes.find(s => s.sceneId === sceneId);
             const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
 

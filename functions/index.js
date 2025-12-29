@@ -32863,10 +32863,10 @@ exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data,
     throw new functions.https.HttpsError('invalid-argument', `Resolution ${resolution} not supported for ${duration} duration. Allowed: ${allowedResolutions.join(', ')}`);
   }
 
-  // Get Minimax API key
-  const minimaxKey = functions.config().minimax?.key;
+  // Get Minimax API key - supports both env vars and Firebase config
+  const minimaxKey = process.env.MINIMAX_API_KEY || functions.config().minimax?.key;
   if (!minimaxKey) {
-    throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured. Set with: firebase functions:config:set minimax.key="YOUR_KEY"');
+    throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured. Set MINIMAX_API_KEY in .env or use: firebase functions:config:set minimax.key="YOUR_KEY"');
   }
 
   try {
@@ -32975,7 +32975,8 @@ exports.creationWizardCheckMinimaxVideoStatus = functions.https.onCall(async (da
     throw new functions.https.HttpsError('invalid-argument', 'Task ID is required');
   }
 
-  const minimaxKey = functions.config().minimax?.key;
+  // Get Minimax API key - supports both env vars and Firebase config
+  const minimaxKey = process.env.MINIMAX_API_KEY || functions.config().minimax?.key;
   if (!minimaxKey) {
     throw new functions.https.HttpsError('failed-precondition', 'Minimax API key not configured');
   }
