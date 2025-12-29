@@ -26309,27 +26309,48 @@ ${ANTI_GENERIC_RULES.slice(0, 6).map(r => `- ${r}`).join('\n')}`;
       const charIntel = conceptEnrichment.characterIntelligence || {};
       const requestedCharacterCount = charIntel.suggestedCount || 0;
       const narrationMode = charIntel.narrationMode || 'voiceover';
-      const hasPreDefinedCharacters = conceptEnrichment.characters && conceptEnrichment.characters.length > 0;
 
       // Extract selected concept data
       const selectedConcept = conceptEnrichment.selectedConcept || null;
+
+      // Check for pre-defined characters - prefer selectedConcept.characters, then improvedData.characters
+      const conceptCharacters = selectedConcept?.characters || [];
+      const improvedCharacters = conceptEnrichment.characters || [];
+      const allCharacters = conceptCharacters.length > 0 ? conceptCharacters : improvedCharacters;
+      const hasPreDefinedCharacters = allCharacters.length > 0;
 
       // Build character bible section
       let characterBible = '';
 
       if (hasPreDefinedCharacters) {
-        // Use pre-defined characters from AI enhancement
+        // Use pre-defined characters - handles both selectedConcept format and improvedData format
+        const isConceptFormat = allCharacters[0]?.name !== undefined;
+
         characterBible = `
 
 🎭 CHARACTER BIBLE - REQUIRED CHARACTERS
 These characters MUST appear in your script with consistency:
 
-${conceptEnrichment.characters.map((char, idx) => `CHARACTER ${idx + 1}: ${char.archetype}
+${allCharacters.map((char, idx) => {
+          if (isConceptFormat) {
+            // Format from selectedConcept (has name, archetype, role, flaw, arc)
+            return `CHARACTER ${idx + 1}: ${char.name || 'Unnamed'}
+- Archetype: ${char.archetype || 'undefined'}
+- Role: ${char.role || 'protagonist'}
+- Fatal Flaw: ${char.flaw || 'to be developed'}
+- Character Arc: ${char.arc || 'transformation through the story'}
+- MUST appear in at least ${Math.max(2, Math.ceil(sceneCount / allCharacters.length))} scenes
+- Maintain EXACT visual consistency in every appearance`;
+          } else {
+            // Format from improvedData (has archetype, uniqueTwist, visualDescription)
+            return `CHARACTER ${idx + 1}: ${char.archetype}
 - Unique Twist: ${char.uniqueTwist}
 - Visual Description: ${char.visualDescription}
 - MUST appear in at least ${Math.max(2, Math.ceil(sceneCount / 2))} scenes
 - Maintain EXACT visual consistency in every appearance
-- Show character development/arc across scenes`).join('\n\n')}
+- Show character development/arc across scenes`;
+          }
+        }).join('\n\n')}
 
 CHARACTER DISTRIBUTION REQUIREMENTS:
 - Each character MUST appear in multiple scenes (not just one)
@@ -26365,7 +26386,7 @@ ${narrationMode === 'voiceover' ? '- Use third-person narration describing chara
 ${narrationMode === 'narrator' ? '- Use an omniscient narrator who knows all characters\' thoughts and feelings' : ''}`;
       }
 
-      // Build selected concept section
+      // Build selected concept section - FULL DATA from creationWizardGenerateConcepts
       let selectedConceptSection = '';
       if (selectedConcept) {
         selectedConceptSection = `
@@ -26373,9 +26394,44 @@ ${narrationMode === 'narrator' ? '- Use an omniscient narrator who knows all cha
 📋 SELECTED CONCEPT - THE CORE STORY
 Title: "${selectedConcept.title}"
 Logline: ${selectedConcept.logline}
+${selectedConcept.description ? `Description: ${selectedConcept.description}` : ''}
+${selectedConcept.theme ? `\n🎯 DEEPER MEANING/THEME: ${selectedConcept.theme}` : ''}
+
+${selectedConcept.narrativeStructure || selectedConcept.storyEngine ? `
+📖 NARRATIVE ARCHITECTURE (CRITICAL - defines story structure):
+${selectedConcept.narrativeStructure ? `- Structure: ${selectedConcept.narrativeStructure.replace(/_/g, ' ').toUpperCase()}` : ''}
+${selectedConcept.storyEngine ? `- Story Engine: ${selectedConcept.storyEngine.replace(/_/g, ' ')}` : ''}
+${selectedConcept.protagonistCount ? `- Protagonist Count: ${selectedConcept.protagonistCount}` : ''}
+YOUR SCENES MUST FOLLOW THIS STRUCTURE - it defines how the story unfolds!` : ''}
+
+${selectedConcept.characters && selectedConcept.characters.length > 0 ? `
+👥 CONCEPT CHARACTERS (from story development):
+${selectedConcept.characters.map((char, idx) => `
+CHARACTER ${idx + 1}: ${char.name || 'Unnamed'}
+- Archetype: ${char.archetype || 'undefined'}
+- Role: ${char.role || 'undefined'}
+- Fatal Flaw: ${char.flaw || 'none specified'}
+- Character Arc: ${char.arc || 'none specified'}`).join('\n')}
+
+These characters MUST appear with VISUAL CONSISTENCY across all their scenes!` : ''}
+
+${selectedConcept.keyRelationships && selectedConcept.keyRelationships.length > 0 ? `
+💫 KEY RELATIONSHIPS (drive scene dynamics):
+${selectedConcept.keyRelationships.map((rel, idx) => `${idx + 1}. ${rel.between}: ${rel.type} - Tension: ${rel.tension}`).join('\n')}
+Show these relationships EVOLVING across scenes!` : ''}
+
+${selectedConcept.worldSetting ? `
+🌍 WORLD SETTING (from concept):
+- Location: ${selectedConcept.worldSetting.location || 'unspecified'}
+- Unique Rule: ${selectedConcept.worldSetting.uniqueRule || 'none'}
+- Atmosphere: ${selectedConcept.worldSetting.atmosphere || 'cinematic'}` : ''}
+
 ${selectedConcept.uniqueElements && selectedConcept.uniqueElements.length > 0 ? `
-Unique Elements that MUST appear:
+✨ Unique Elements that MUST appear:
 ${selectedConcept.uniqueElements.map((elem, idx) => `${idx + 1}. ${elem}`).join('\n')}` : ''}
+
+${selectedConcept.mood ? `Mood: ${selectedConcept.mood}` : ''}
+${selectedConcept.tone ? `Tone: ${selectedConcept.tone}` : ''}
 ${selectedConcept.visualApproach ? `Visual Approach: ${selectedConcept.visualApproach}` : ''}
 
 This concept is THE FOUNDATION of your script. Every scene must serve this story.`;

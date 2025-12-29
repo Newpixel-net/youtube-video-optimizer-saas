@@ -6335,14 +6335,32 @@
                     suggestedMood: improvedData?.suggestedMood || selectedConcept?.mood || null,
                     suggestedTone: improvedData?.suggestedTone || selectedConcept?.tone || null,
 
-                    // From Selected Concept (creationWizardGenerateConcepts)
+                    // From Selected Concept (creationWizardGenerateConcepts) - FULL DATA!
+                    // CRITICAL: Pass ALL concept fields, not just a subset
                     selectedConcept: selectedConcept ? {
+                        // Basic info
                         title: selectedConcept.title,
                         logline: selectedConcept.logline || selectedConcept.description,
+                        description: selectedConcept.description,
                         uniqueElements: selectedConcept.uniqueElements || [],
                         mood: selectedConcept.mood,
                         tone: selectedConcept.tone,
-                        visualApproach: selectedConcept.visualApproach
+                        visualApproach: selectedConcept.visualApproach,
+                        theme: selectedConcept.theme,
+
+                        // Narrative Architecture - CRITICAL for script structure
+                        narrativeStructure: selectedConcept.narrativeStructure,
+                        storyEngine: selectedConcept.storyEngine,
+                        protagonistCount: selectedConcept.protagonistCount,
+
+                        // Characters - CRITICAL for character bible
+                        characters: selectedConcept.characters || [],
+
+                        // Relationships - CRITICAL for scene dynamics
+                        keyRelationships: selectedConcept.keyRelationships || [],
+
+                        // World Building - CRITICAL for location bible
+                        worldSetting: selectedConcept.worldSetting || null
                     } : null,
 
                     // From Character Intelligence UI
@@ -9190,113 +9208,141 @@
             `;
 
             // ==========================================
-            // GENERATED IDEAS SECTION
+            // UNIFIED CONCEPT SECTION - Your Concept + Alternatives
+            // Shows selected/primary concept with full details, with option to see alternatives
             // ==========================================
             if (hasIdeas) {
-                html += `
-                    <div class="content-card">
-                        <div class="content-card-header">
-                            <div class="content-card-icon">🎯</div>
-                            <div>
-                                <div class="content-card-title">Choose Your Concept</div>
-                                <div class="content-card-subtitle">Select an idea to develop further</div>
-                            </div>
-                        </div>
+                const selectedIdea = hasSelectedIdea ? concept.ideas[concept.selectedIdea] : concept.ideas[0];
+                const selectedIndex = hasSelectedIdea ? concept.selectedIdea : 0;
 
-                        <div class="idea-grid" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                `;
+                // Auto-select first concept if none selected
+                if (!hasSelectedIdea && concept.ideas.length > 0) {
+                    // Don't auto-select here, just show first as preview
+                }
 
-                concept.ideas.forEach((idea, index) => {
-                    const isSelected = concept.selectedIdea === index;
-                    html += `
-                        <div class="idea-card ${isSelected ? 'selected' : ''}"
-                             onclick="selectConceptIdea(${index})"
-                             style="cursor: pointer; padding: 1rem; border-radius: 0.75rem; background: ${isSelected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.03)'}; border: 2px solid ${isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; transition: all 0.2s;">
-                            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-                                <div style="width: 28px; height: 28px; border-radius: 50%; background: ${isSelected ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.8rem; flex-shrink: 0;">
-                                    ${index + 1}
-                                </div>
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 600; font-size: 0.9rem; color: white; margin-bottom: 0.25rem;">
-                                        ${idea.title || 'Untitled Concept'}
-                                    </div>
-                                    <div style="font-size: 0.8rem; color: rgba(255,255,255,0.7); line-height: 1.4;">
-                                        ${idea.logline || idea.description || ''}
-                                    </div>
-                                    ${idea.uniqueElements ? `
-                                    <div style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
-                                        ${idea.uniqueElements.slice(0, 3).map(el => `
-                                            <span style="font-size: 0.65rem; padding: 0.15rem 0.4rem; background: rgba(139, 92, 246, 0.2); border-radius: 0.25rem; color: #a78bfa;">
-                                                ${el}
-                                            </span>
-                                        `).join('')}
-                                    </div>
-                                    ` : ''}
-                                </div>
-                                ${isSelected ? `
-                                <div style="color: #10b981; font-size: 1.25rem;">✓</div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                });
-
-                html += `
-                        <!-- Generate More Concepts Button -->
-                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <button onclick="generateConceptIdeas()"
-                                    style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px dashed rgba(139, 92, 246, 0.5); background: transparent; color: #a78bfa; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;"
-                                    onmouseover="this.style.background='rgba(139, 92, 246, 0.1)'; this.style.borderStyle='solid';"
-                                    onmouseout="this.style.background='transparent'; this.style.borderStyle='dashed';">
-                                <span>🔄</span>
-                                <span>Generate More Concepts</span>
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }
-
-            // ==========================================
-            // REFINED CONCEPT (if idea selected)
-            // ==========================================
-            if (hasSelectedIdea && concept.ideas[concept.selectedIdea]) {
-                const selectedIdea = concept.ideas[concept.selectedIdea];
                 html += `
                     <div class="content-card">
                         <div class="content-card-header">
                             <div class="content-card-icon">🎬</div>
                             <div>
                                 <div class="content-card-title">Your Concept</div>
-                                <div class="content-card-subtitle">Ready for script generation</div>
+                                <div class="content-card-subtitle">${hasSelectedIdea ? 'Ready for script generation' : 'Select a concept direction below'}</div>
                             </div>
                         </div>
 
-                        <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1)); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1rem;">
-                            <div style="font-weight: 600; font-size: 1rem; color: white; margin-bottom: 0.5rem;">
-                                ${selectedIdea.title}
+                        <!-- PRIMARY CONCEPT DISPLAY - Full Rich Data -->
+                        <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(236, 72, 153, 0.1)); border: 2px solid ${hasSelectedIdea ? '#8b5cf6' : 'rgba(139, 92, 246, 0.3)'}; border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1rem;">
+                            <!-- Title & Logline -->
+                            <div style="font-weight: 700; font-size: 1.1rem; color: white; margin-bottom: 0.5rem;">
+                                ${selectedIdea?.title || 'Untitled Concept'}
                             </div>
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.5; margin-bottom: 0.75rem;">
-                                ${selectedIdea.logline || selectedIdea.description}
+                            <div style="font-size: 0.9rem; color: rgba(255,255,255,0.85); line-height: 1.6; margin-bottom: 1rem;">
+                                ${selectedIdea?.logline || selectedIdea?.description || ''}
                             </div>
 
-                            ${concept.styleReference ? `
-                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">
-                                <span style="color: #8b5cf6;">Visual Style:</span> ${concept.styleReference}
-                            </div>
-                            ` : ''}
-
-                            ${selectedIdea.mood ? `
-                            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                                <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: rgba(16, 185, 129, 0.2); border-radius: 0.25rem; color: #10b981;">
-                                    Mood: ${selectedIdea.mood}
+                            <!-- Narrative Architecture Badges -->
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                                ${selectedIdea?.narrativeStructure ? `
+                                <span style="font-size: 0.7rem; padding: 0.25rem 0.6rem; background: rgba(139, 92, 246, 0.3); border-radius: 0.35rem; color: #c4b5fd; font-weight: 500;">
+                                    📖 ${selectedIdea.narrativeStructure.replace(/_/g, ' ')}
                                 </span>
-                                ${selectedIdea.tone ? `
-                                <span style="font-size: 0.7rem; padding: 0.2rem 0.5rem; background: rgba(6, 182, 212, 0.2); border-radius: 0.25rem; color: #06b6d4;">
-                                    Tone: ${selectedIdea.tone}
+                                ` : ''}
+                                ${selectedIdea?.storyEngine ? `
+                                <span style="font-size: 0.7rem; padding: 0.25rem 0.6rem; background: rgba(236, 72, 153, 0.3); border-radius: 0.35rem; color: #f9a8d4; font-weight: 500;">
+                                    ⚡ ${selectedIdea.storyEngine.replace(/_/g, ' ')}
+                                </span>
+                                ` : ''}
+                                ${selectedIdea?.protagonistCount ? `
+                                <span style="font-size: 0.7rem; padding: 0.25rem 0.6rem; background: rgba(16, 185, 129, 0.3); border-radius: 0.35rem; color: #6ee7b7; font-weight: 500;">
+                                    👥 ${selectedIdea.protagonistCount} protagonist${selectedIdea.protagonistCount !== '1' && selectedIdea.protagonistCount !== 1 ? 's' : ''}
+                                </span>
+                                ` : ''}
+                                ${selectedIdea?.mood ? `
+                                <span style="font-size: 0.7rem; padding: 0.25rem 0.6rem; background: rgba(6, 182, 212, 0.3); border-radius: 0.35rem; color: #67e8f9; font-weight: 500;">
+                                    🎭 ${selectedIdea.mood}
+                                </span>
+                                ` : ''}
+                                ${selectedIdea?.tone ? `
+                                <span style="font-size: 0.7rem; padding: 0.25rem 0.6rem; background: rgba(251, 191, 36, 0.3); border-radius: 0.35rem; color: #fcd34d; font-weight: 500;">
+                                    🎨 ${selectedIdea.tone}
                                 </span>
                                 ` : ''}
                             </div>
+
+                            <!-- Characters Preview -->
+                            ${selectedIdea?.characters && selectedIdea.characters.length > 0 ? `
+                            <div style="margin-bottom: 1rem;">
+                                <div style="font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Characters</div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                    ${selectedIdea.characters.slice(0, 4).map(char => `
+                                        <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; padding: 0.5rem 0.75rem;">
+                                            <div style="font-size: 0.8rem; font-weight: 600; color: white;">${char.name || 'Unknown'}</div>
+                                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">${char.archetype || char.role || ''}</div>
+                                        </div>
+                                    `).join('')}
+                                    ${selectedIdea.characters.length > 4 ? `<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); align-self: center;">+${selectedIdea.characters.length - 4} more</div>` : ''}
+                                </div>
+                            </div>
                             ` : ''}
+
+                            <!-- World Setting -->
+                            ${selectedIdea?.worldSetting ? `
+                            <div style="margin-bottom: 1rem;">
+                                <div style="font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.5px;">World</div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">
+                                    ${selectedIdea.worldSetting.location || ''}${selectedIdea.worldSetting.atmosphere ? ` — ${selectedIdea.worldSetting.atmosphere}` : ''}
+                                </div>
+                            </div>
+                            ` : ''}
+
+                            <!-- Theme -->
+                            ${selectedIdea?.theme ? `
+                            <div style="background: rgba(255,255,255,0.03); border-radius: 0.5rem; padding: 0.75rem; border-left: 3px solid #8b5cf6;">
+                                <div style="font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">DEEPER MEANING</div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.8); font-style: italic;">${selectedIdea.theme}</div>
+                            </div>
+                            ` : ''}
+
+                            <!-- Visual Style -->
+                            ${concept.styleReference || selectedIdea?.visualApproach ? `
+                            <div style="margin-top: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.6);">
+                                <span style="color: #8b5cf6; font-weight: 500;">Visual Style:</span> ${concept.styleReference || selectedIdea?.visualApproach || ''}
+                            </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- ALTERNATIVE CONCEPTS - Collapsible -->
+                        ${concept.ideas.length > 1 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <div style="font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.7); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                                <span>Alternative Directions</span>
+                                <span style="font-size: 0.65rem; color: rgba(255,255,255,0.4);">(click to switch)</span>
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                ${concept.ideas.map((idea, index) => `
+                                    <div onclick="selectConceptIdea(${index})"
+                                         style="cursor: pointer; padding: 0.5rem 0.75rem; border-radius: 0.5rem; background: ${concept.selectedIdea === index ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${concept.selectedIdea === index ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; transition: all 0.2s; flex: 1; min-width: 150px; max-width: calc(33% - 0.5rem);">
+                                        <div style="font-size: 0.75rem; font-weight: 600; color: ${concept.selectedIdea === index ? '#c4b5fd' : 'white'}; margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
+                                            ${concept.selectedIdea === index ? '✓' : `${index + 1}.`} ${idea.title || 'Concept ' + (index + 1)}
+                                        </div>
+                                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                                            ${idea.narrativeStructure ? idea.narrativeStructure.replace(/_/g, ' ') : idea.mood || ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        <!-- Generate More Button -->
+                        <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; margin-top: 0.5rem;">
+                            <button onclick="generateConceptIdeas()"
+                                    style="width: 100%; padding: 0.65rem; border-radius: 0.5rem; border: 1px dashed rgba(139, 92, 246, 0.5); background: transparent; color: #a78bfa; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;"
+                                    onmouseover="this.style.background='rgba(139, 92, 246, 0.1)'; this.style.borderStyle='solid';"
+                                    onmouseout="this.style.background='transparent'; this.style.borderStyle='dashed';">
+                                <span>🔄</span>
+                                <span>Generate Different Concepts</span>
+                            </button>
                         </div>
 
                         <!-- Editable logline -->
@@ -9307,7 +9353,7 @@
                             <textarea id="concept-logline"
                                       placeholder="A one-sentence summary of your video..."
                                       style="width: 100%; min-height: 60px; padding: 0.65rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: vertical;"
-                                      onchange="updateConceptLogline(this.value)">${concept.logline || selectedIdea.logline || ''}</textarea>
+                                      onchange="updateConceptLogline(this.value)">${concept.logline || selectedIdea?.logline || ''}</textarea>
                         </div>
                     </div>
                 `;
