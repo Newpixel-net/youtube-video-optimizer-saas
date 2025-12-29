@@ -3743,6 +3743,13 @@
                     enabled: false,         // Toggle to enable/disable character bible
                     characters: []          // Array of { id, name, description, referenceImageUrl, referenceImageStatus, appliedToScenes[] }
                 },
+                // Location Bible - Ensures location consistency across scenes
+                // Locations maintain their visual identity with state changes (time, weather, condition)
+                locationBible: {
+                    enabled: false,         // Toggle to enable/disable location bible
+                    locations: [],          // Array of { id, name, description, keyElements[], colorPalette, atmosphere, scenesUsed[] }
+                    autoPopulated: false    // Whether locations were auto-extracted from script
+                },
                 technicalSpecs: {
                     enabled: true,          // Usually enabled by default
                     positive: '4K, ultra detailed, shallow DOF, cinematic, professional lighting',
@@ -5763,6 +5770,137 @@
             }
         }
 
+        // ==========================================
+        // AUTO-POPULATE LOCATION BIBLE FROM SCRIPT
+        // Extracts unique locations and builds consistency data
+        // ==========================================
+        function autoPopulateLocationBible(script) {
+            if (!script || !script.scenes) return;
+
+            initSceneMemory();
+
+            // Check if script already has locations array (new format)
+            if (script.locations && Array.isArray(script.locations) && script.locations.length > 0) {
+                // Use locations from script directly
+                state.storyboard.locationBible.locations = script.locations.map(loc => ({
+                    id: `loc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    name: loc.name,
+                    description: loc.description || '',
+                    keyElements: loc.keyElements || [],
+                    colorPalette: loc.colorPalette || '',
+                    atmosphere: loc.atmosphere || '',
+                    scenesUsed: loc.scenesUsed || []
+                }));
+                state.storyboard.locationBible.enabled = true;
+                state.storyboard.locationBible.autoPopulated = true;
+                console.log(`[Location Bible] Loaded ${state.storyboard.locationBible.locations.length} locations from script`);
+                return;
+            }
+
+            // Fallback: Extract locations from scene data
+            const locationMap = new Map();
+
+            for (const scene of script.scenes) {
+                let locationName = null;
+
+                // Try to get location from scene.location object (new format)
+                if (scene.location && typeof scene.location === 'object' && scene.location.name) {
+                    locationName = scene.location.name;
+                }
+                // Fallback: infer from visual description
+                else if (scene.visual || scene.visualPrompt) {
+                    locationName = inferLocationFromVisual(scene.visual || scene.visualPrompt);
+                }
+
+                if (locationName && locationName !== 'unknown') {
+                    const normalizedName = locationName.toLowerCase().trim();
+
+                    if (!locationMap.has(normalizedName)) {
+                        locationMap.set(normalizedName, {
+                            id: `loc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                            name: locationName,
+                            description: '',
+                            keyElements: [],
+                            colorPalette: '',
+                            atmosphere: '',
+                            scenesUsed: []
+                        });
+                    }
+
+                    const loc = locationMap.get(normalizedName);
+                    if (!loc.scenesUsed.includes(scene.id)) {
+                        loc.scenesUsed.push(scene.id);
+                    }
+                }
+            }
+
+            if (locationMap.size > 0) {
+                state.storyboard.locationBible.locations = Array.from(locationMap.values());
+                state.storyboard.locationBible.enabled = true;
+                state.storyboard.locationBible.autoPopulated = true;
+                console.log(`[Location Bible] Extracted ${locationMap.size} locations from script`);
+            }
+        }
+
+        // Infer location name from visual description (client-side version)
+        function inferLocationFromVisual(visual) {
+            if (!visual) return 'unknown';
+            const v = visual.toLowerCase();
+
+            const patterns = [
+                { regex: /\b(dojo|training hall|martial arts)\b/i, name: 'The Dojo' },
+                { regex: /\b(office|corporate|boardroom|conference|tower)\b/i, name: 'Corporate Office' },
+                { regex: /\b(warehouse|factory|industrial|abandoned)\b/i, name: 'Abandoned Warehouse' },
+                { regex: /\b(forest|woods|trees|jungle|rainforest)\b/i, name: 'The Forest' },
+                { regex: /\b(street|alley|urban|city)\b/i, name: 'City Streets' },
+                { regex: /\b(rooftop|roof|skyline)\b/i, name: 'Rooftop' },
+                { regex: /\b(beach|shore|coast|ocean|sea)\b/i, name: 'The Beach' },
+                { regex: /\b(lab|laboratory|research|science)\b/i, name: 'The Laboratory' },
+                { regex: /\b(home|house|apartment|living room|bedroom)\b/i, name: 'Home' },
+                { regex: /\b(hospital|medical|clinic)\b/i, name: 'Hospital' },
+                { regex: /\b(bar|club|restaurant|cafe)\b/i, name: 'The Bar' },
+                { regex: /\b(castle|fortress|palace|throne)\b/i, name: 'The Castle' },
+                { regex: /\b(cave|cavern|underground)\b/i, name: 'The Cave' },
+                { regex: /\b(mountain|peak|summit|cliff)\b/i, name: 'The Mountain' }
+            ];
+
+            for (const { regex, name } of patterns) {
+                if (regex.test(v)) return name;
+            }
+
+            return 'unknown';
+        }
+
+        // ==========================================
+        // AUTO-POPULATE STYLE BIBLE FROM SCRIPT
+        // Uses styleBible data if script provides it
+        // ==========================================
+        function autoPopulateStyleBible(script) {
+            if (!script) return;
+
+            initSceneMemory();
+
+            // Check if script has styleBible data (new format)
+            if (script.styleBible) {
+                const sb = script.styleBible;
+
+                // Only update if Style Bible is not already customized
+                if (!state.storyboard.styleBible.style) {
+                    if (sb.visualStyle) state.storyboard.styleBible.style = sb.visualStyle;
+                    if (sb.colorGrade) state.storyboard.styleBible.colorGrade = sb.colorGrade;
+                    if (sb.lighting) state.storyboard.styleBible.lighting = sb.lighting;
+                    if (sb.atmosphere) state.storyboard.styleBible.atmosphere = sb.atmosphere;
+                    if (sb.cameraLanguage) state.storyboard.styleBible.camera = sb.cameraLanguage;
+
+                    // Enable Style Bible if we have data
+                    if (sb.visualStyle || sb.colorGrade || sb.lighting) {
+                        state.storyboard.styleBible.enabled = true;
+                        console.log('[Style Bible] Auto-populated from script data');
+                    }
+                }
+            }
+        }
+
         // Technical Specs Management
         function toggleTechnicalSpecs(enabled) {
             initSceneMemory();
@@ -5777,42 +5915,85 @@
             scheduleAutoSave();
         }
 
-        // Assemble the full prompt using 4-layer architecture
+        // Assemble the full prompt using SCENE-FOCUSED architecture
+        // CRITICAL: Character reference images handle visual consistency - prompts describe WHAT'S HAPPENING
         function assembleScenePrompt(scene) {
             initSceneMemory();
             const parts = [];
 
-            // Layer 1: Style Bible (SAME for every scene)
-            if (state.storyboard.styleBible?.enabled) {
-                const bible = state.storyboard.styleBible;
-                if (bible.style) parts.push(`Style: ${bible.style}`);
-                if (bible.colorGrade) parts.push(`Color Grade: ${bible.colorGrade}`);
-                if (bible.lighting) parts.push(`Lighting: ${bible.lighting}`);
-                if (bible.atmosphere) parts.push(`Atmosphere: ${bible.atmosphere}`);
-                if (bible.camera) parts.push(`Camera: ${bible.camera}`);
-            }
-
-            // Layer 2: Character Bible (SAME for characters that appear in this scene)
-            if (state.storyboard.characterBible?.enabled) {
-                const chars = state.storyboard.characterBible.characters || [];
-                for (const char of chars) {
-                    // Include if character has no scene restrictions OR is assigned to this scene
-                    const includeInAll = !char.appliedToScenes || char.appliedToScenes.length === 0;
-                    const includeInScene = char.appliedToScenes && char.appliedToScenes.includes(scene.id);
-
-                    if ((includeInAll || includeInScene) && char.description) {
-                        parts.push(char.description);
-                    }
+            // Layer 1: SCENE CONTENT (PRIMARY - the action happening)
+            // This is the most important layer - what's actually happening in the scene
+            if (scene.visual || scene.visualPrompt) {
+                const sceneContent = scene.visual || scene.visualPrompt;
+                // Remove camera brackets for cleaner prompt
+                const cleanedContent = sceneContent.replace(/\[.*?\]\s*/, '').trim();
+                if (cleanedContent) {
+                    parts.push(cleanedContent);
                 }
             }
 
-            // Layer 3: Scene Content (UNIQUE per scene)
-            // This is the original visual prompt from the scene
-            if (scene.visual || scene.visualPrompt) {
-                parts.push(scene.visual || scene.visualPrompt);
+            // Layer 2: Scene Action (if available from script)
+            if (scene.sceneAction && !parts[0]?.toLowerCase().includes(scene.sceneAction.toLowerCase().substring(0, 15))) {
+                parts.push(`ACTION: ${scene.sceneAction}`);
             }
 
-            // Layer 4: Technical Specs (positive prompt additions)
+            // Layer 3: Location Context (from Location Bible if available)
+            if (scene.location && typeof scene.location === 'object') {
+                const loc = scene.location;
+                const locationParts = [];
+
+                // Find location in Location Bible for richer description
+                const bibleLoc = state.storyboard.locationBible?.locations?.find(l =>
+                    l.name?.toLowerCase() === loc.name?.toLowerCase()
+                );
+
+                if (bibleLoc?.keyElements?.length > 0) {
+                    locationParts.push(`SETTING: ${loc.name} - ${bibleLoc.keyElements.slice(0, 3).join(', ')}`);
+                } else if (loc.name) {
+                    locationParts.push(`SETTING: ${loc.name}`);
+                }
+
+                // Add state modifiers
+                if (loc.timeOfDay && loc.timeOfDay !== 'day') {
+                    locationParts.push(`TIME: ${loc.timeOfDay}`);
+                }
+                if (loc.weather && loc.weather !== 'clear') {
+                    locationParts.push(`WEATHER: ${loc.weather}`);
+                }
+                if (loc.condition && loc.condition !== 'lived_in' && loc.condition !== 'pristine') {
+                    locationParts.push(`CONDITION: ${loc.condition}`);
+                }
+
+                if (locationParts.length > 0) {
+                    parts.push(locationParts.join('. '));
+                }
+            }
+
+            // Layer 4: Style Bible (visual DNA for all scenes)
+            if (state.storyboard.styleBible?.enabled) {
+                const bible = state.storyboard.styleBible;
+                const styleParts = [];
+                if (bible.style) styleParts.push(bible.style);
+                if (bible.colorGrade) styleParts.push(bible.colorGrade);
+                if (bible.lighting) styleParts.push(bible.lighting);
+                if (bible.atmosphere) styleParts.push(bible.atmosphere);
+                if (styleParts.length > 0) {
+                    parts.push(`STYLE: ${styleParts.join(', ')}`);
+                }
+            }
+
+            // Layer 5: Character Names ONLY (NOT descriptions!)
+            // Character reference images handle visual consistency
+            // We only include names for context, not physical descriptions
+            if (state.storyboard.characterBible?.enabled && scene.charactersInScene?.length > 0) {
+                // Just note which characters are in the scene - their portraits are reference images
+                const charNames = scene.charactersInScene.join(' and ');
+                if (!parts.some(p => p.toLowerCase().includes(charNames.toLowerCase().split(' ')[0]))) {
+                    parts.push(`FEATURING: ${charNames}`);
+                }
+            }
+
+            // Layer 6: Technical Specs (quality markers)
             if (state.storyboard.technicalSpecs?.enabled && state.storyboard.technicalSpecs?.positive) {
                 parts.push(state.storyboard.technicalSpecs.positive);
             }
@@ -5828,7 +6009,8 @@
                 layerInfo: {
                     hasStyleBible: state.storyboard.styleBible?.enabled,
                     hasCharacterBible: state.storyboard.characterBible?.enabled,
-                    characterCount: state.storyboard.characterBible?.characters?.length || 0,
+                    hasLocationBible: state.storyboard.locationBible?.enabled,
+                    characterCount: scene.charactersInScene?.length || 0,
                     hasTechnicalSpecs: state.storyboard.technicalSpecs?.enabled
                 }
             };
@@ -6255,6 +6437,26 @@
                     } catch (extractError) {
                         console.warn('[Script] Character extraction optional step failed:', extractError);
                         // Don't show error to user - this is an optional enhancement
+                    }
+
+                    // ==========================================
+                    // AUTO-POPULATE LOCATION BIBLE FROM SCRIPT
+                    // Extract unique locations and their states
+                    // ==========================================
+                    try {
+                        autoPopulateLocationBible(script);
+                    } catch (locError) {
+                        console.warn('[Script] Location Bible population optional step failed:', locError);
+                    }
+
+                    // ==========================================
+                    // AUTO-POPULATE STYLE BIBLE FROM SCRIPT
+                    // If script contains styleBible data, use it
+                    // ==========================================
+                    try {
+                        autoPopulateStyleBible(script);
+                    } catch (styleError) {
+                        console.warn('[Script] Style Bible population optional step failed:', styleError);
                     }
 
                 } else {
