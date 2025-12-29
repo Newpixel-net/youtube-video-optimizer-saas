@@ -23848,6 +23848,7 @@ CRITICAL:
           },
           { role: 'user', content: prompt }
         ],
+        response_format: { type: 'json_object' }, // Force valid JSON output
         max_tokens: 4000,
         temperature: 0.85
       })
@@ -24128,6 +24129,7 @@ CRITICAL DIVERSITY CHECK before responding:
           },
           { role: 'user', content: prompt }
         ],
+        response_format: { type: 'json_object' }, // Force valid JSON output
         max_tokens: 4000,
         temperature: 0.95
       })
@@ -27097,6 +27099,7 @@ LOCATION CONSISTENCY RULES:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
+      response_format: { type: 'json_object' }, // CRITICAL: Force valid JSON output
       temperature: conceptEnrichment ? 0.85 : 0.8, // Slightly higher creativity for enriched concepts
       max_tokens: 6500 // Cinematic production requires more tokens for rich scene structure
     });
@@ -27330,6 +27333,7 @@ If there are no human characters or the video is purely abstract/conceptual/natu
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
+      response_format: { type: 'json_object' }, // Force valid JSON output
       temperature: 0.7,
       max_tokens: 2000
     });
@@ -27340,17 +27344,7 @@ If there are no human characters or the video is purely abstract/conceptual/natu
     // Parse the response
     let result;
     try {
-      // Clean JSON if wrapped in markdown
-      let cleanJson = responseText.trim();
-      if (cleanJson.startsWith('```json')) {
-        cleanJson = cleanJson.slice(7);
-      } else if (cleanJson.startsWith('```')) {
-        cleanJson = cleanJson.slice(3);
-      }
-      if (cleanJson.endsWith('```')) {
-        cleanJson = cleanJson.slice(0, -3);
-      }
-      result = JSON.parse(cleanJson.trim());
+      result = JSON.parse(responseText.trim());
     } catch (parseError) {
       console.error('[extractCharacters] Parse error:', parseError);
       // Return empty result on parse error
@@ -27457,13 +27451,13 @@ Return ONLY valid JSON:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
+      response_format: { type: 'json_object' }, // Force valid JSON output
       temperature: 0.8,
       max_tokens: 500
     });
 
     const responseText = completion.choices[0].message.content.trim();
-    const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const newScene = JSON.parse(cleanJson);
+    const newScene = JSON.parse(responseText);
 
     // Merge with existing scene data
     const updatedScene = {
@@ -39971,16 +39965,16 @@ Be specific and cinematic. This should feel like premium Hollywood production.`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
+      response_format: { type: 'json_object' }, // Force valid JSON output
       temperature: 0.7,
       max_tokens: 2000
     });
 
     const responseText = completion.choices[0].message.content.trim();
-    const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
     let blueprint;
     try {
-      blueprint = JSON.parse(cleanJson);
+      blueprint = JSON.parse(responseText);
     } catch (parseError) {
       console.error('[creationWizardGenerateSceneBlueprint] Parse error:', parseError);
       throw new functions.https.HttpsError('internal', 'Failed to parse blueprint response');
