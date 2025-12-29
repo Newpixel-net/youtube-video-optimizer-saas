@@ -26234,43 +26234,119 @@ exports.creationWizardGenerateScript = functions
       'suspense': 'Staccato strings, held breaths, sudden stings'
     };
 
-    // === VIDEO MODEL-AWARE TIMING ===
-    // Adjust scene structure based on AI video clip duration
+    // === HOLLYWOOD-STYLE SCENE ARCHITECTURE ===
+    // Scenes are narrative units (30-60s) composed of multiple shots (6-10s each)
+    // This mirrors professional film production where:
+    // - Scene = narrative beat (30-60 seconds)
+    // - Shot = individual video clip (6 or 10 seconds from Minimax)
+
     const clipDuration = videoModel.duration === '10s' ? 10 : 6;
     const isExtendedClip = clipDuration === 10;
 
-    // === SMART TIMING CALCULATION ===
-    // Pacing determines how much of each scene is narration vs visual-only breathing room
-    // Now optimized for video model clip duration (6s or 10s)
-    const pacingConfig = {
-      fast: {
-        narrationRatio: 0.90,
-        avgSceneDuration: isExtendedClip ? 10 : 6, // Align with clip duration
-        wordsPerSecond: 2.8
+    // === HOLLYWOOD SCENE CONFIGURATION ===
+    // Scene duration based on production mode and content format
+    const hollywoodSceneConfig = {
+      'short-form': {
+        // Social media content - shorter scenes
+        minSceneDuration: 15,
+        maxSceneDuration: 30,
+        targetSceneDuration: 20,
+        minShotsPerScene: 2,
+        maxShotsPerScene: 5
       },
-      medium: {
-        narrationRatio: 0.85,
-        avgSceneDuration: isExtendedClip ? 10 : 8,
-        wordsPerSecond: 2.5
+      'medium-form': {
+        // YouTube style - balanced scenes
+        minSceneDuration: 25,
+        maxSceneDuration: 45,
+        targetSceneDuration: 35,
+        minShotsPerScene: 3,
+        maxShotsPerScene: 7
       },
-      slow: {
-        narrationRatio: 0.70, // More visual breathing room
-        avgSceneDuration: isExtendedClip ? 10 : 6,
-        wordsPerSecond: 2.2
+      'long-form': {
+        // Documentary/Film style - cinematic scenes
+        minSceneDuration: 35,
+        maxSceneDuration: 60,
+        targetSceneDuration: 45,
+        minShotsPerScene: 4,
+        maxShotsPerScene: 10
+      },
+      'episodic': {
+        // TV series style
+        minSceneDuration: 30,
+        maxSceneDuration: 50,
+        targetSceneDuration: 40,
+        minShotsPerScene: 4,
+        maxShotsPerScene: 8
       }
     };
 
-    // Cinematic mode gets extra visual breathing room
+    const sceneConfig = hollywoodSceneConfig[contentFormat] || hollywoodSceneConfig['medium-form'];
+
+    // === SMART TIMING CALCULATION ===
+    // Pacing determines narration coverage and shot rhythm
+    const pacingConfig = {
+      fast: {
+        narrationRatio: 0.90,
+        sceneDurationMultiplier: 0.8,  // Shorter scenes for fast pacing
+        wordsPerSecond: 2.8,
+        shotsPerSceneMultiplier: 1.2   // More shots = more cuts = faster feel
+      },
+      medium: {
+        narrationRatio: 0.85,
+        sceneDurationMultiplier: 1.0,
+        wordsPerSecond: 2.5,
+        shotsPerSceneMultiplier: 1.0
+      },
+      slow: {
+        narrationRatio: 0.70,          // More visual breathing room
+        sceneDurationMultiplier: 1.2,  // Longer scenes for contemplative pacing
+        wordsPerSecond: 2.2,
+        shotsPerSceneMultiplier: 0.8   // Fewer shots = longer takes = cinematic feel
+      }
+    };
+
     const pacingSettings = pacingConfig[pacing] || pacingConfig.medium;
+
+    // Cinematic mode gets extra visual breathing room
     if (productionMode === 'cinematic') {
       pacingSettings.narrationRatio = Math.min(pacingSettings.narrationRatio, 0.70);
+      pacingSettings.sceneDurationMultiplier = 1.3;
     }
 
-    // Calculate optimal number of scenes based on target duration
-    const sceneCount = Math.max(4, Math.min(15, Math.round(targetDuration / pacingSettings.avgSceneDuration)));
+    // === HOLLYWOOD MATH: CALCULATE SCENE STRUCTURE ===
+    // Step 1: Calculate target scene duration (30-60s range)
+    const targetSceneDuration = Math.round(
+      sceneConfig.targetSceneDuration * pacingSettings.sceneDurationMultiplier
+    );
 
-    // Calculate per-scene target duration (how long each scene shows visually)
-    const visualDuration = Math.round(targetDuration / sceneCount);
+    // Clamp to valid range
+    const sceneDuration = Math.max(
+      sceneConfig.minSceneDuration,
+      Math.min(sceneConfig.maxSceneDuration, targetSceneDuration)
+    );
+
+    // Step 2: Calculate number of scenes for total video duration
+    const sceneCount = Math.max(2, Math.min(12, Math.round(targetDuration / sceneDuration)));
+
+    // Step 3: Recalculate actual scene duration to fit exactly
+    const actualSceneDuration = Math.round(targetDuration / sceneCount);
+
+    // Step 4: Calculate shots per scene based on clip duration (Minimax constraint)
+    // Formula: shotsPerScene = ceil(sceneDuration / clipDuration)
+    const baseShotsPerScene = Math.ceil(actualSceneDuration / clipDuration);
+    const shotsPerScene = Math.round(baseShotsPerScene * pacingSettings.shotsPerSceneMultiplier);
+
+    // Clamp shots to valid range
+    const actualShotsPerScene = Math.max(
+      sceneConfig.minShotsPerScene,
+      Math.min(sceneConfig.maxShotsPerScene, shotsPerScene)
+    );
+
+    // Step 5: Calculate per-shot duration to match scene duration exactly
+    const shotDuration = Math.round((actualSceneDuration / actualShotsPerScene) * 10) / 10;
+
+    // Visual duration for script (the whole scene)
+    const visualDuration = actualSceneDuration;
 
     // Calculate narration duration per scene (voiceover portion)
     const narrationDuration = Math.round(visualDuration * pacingSettings.narrationRatio);
@@ -26278,6 +26354,16 @@ exports.creationWizardGenerateScript = functions
     // Calculate approximate word count per scene - ENHANCED with content depth multiplier
     const baseWordsPerScene = Math.round(narrationDuration * pacingSettings.wordsPerSecond);
     const wordsPerScene = Math.round(baseWordsPerScene * depthSettings.wordsMultiplier);
+
+    // Log Hollywood scene math
+    console.log(`[creationWizardGenerateScript] Hollywood Scene Math:
+      Total Duration: ${targetDuration}s
+      Content Format: ${contentFormat}
+      Scene Duration: ${actualSceneDuration}s (target: ${sceneDuration}s)
+      Number of Scenes: ${sceneCount}
+      Shots per Scene: ${actualShotsPerScene} (${clipDuration}s clips)
+      Shot Duration: ${shotDuration}s
+      Narration per Scene: ${narrationDuration}s (~${wordsPerScene} words)`);
 
     // Build content depth requirements for the prompt
     const contentRequirements = [];
@@ -26733,18 +26819,31 @@ Tone: ${tone}
 Pacing: ${pacing} (${pacing === 'fast' ? 'energetic, quick cuts' : pacing === 'slow' ? 'contemplative, visual breathing room' : 'balanced pacing'})
 Content Depth: ${contentDepth.toUpperCase()}
 
+=== HOLLYWOOD-STYLE SCENE ARCHITECTURE ===
+Each SCENE is a complete narrative unit (~${actualSceneDuration} seconds)
+Each scene will be DECOMPOSED into ${actualShotsPerScene} SHOTS (${clipDuration}s video clips each)
+
+SCENE = Narrative beat (${actualSceneDuration}s) - what you're writing
+SHOT = Individual video clip (${clipDuration}s) - generated later from your scene
+
 === AI VIDEO TECHNOLOGY ===
-Each scene = ONE ${clipDuration}-second AI video clip (Minimax Hailuo ${videoModel.resolution || '1080p'})
-IMPORTANT: Visual descriptions MUST start with camera movement in [brackets]
-Available movements: Push in, Pull out, Pan left, Pan right, Tilt up, Tilt down, Zoom in, Zoom out, Tracking shot, Static shot
+Shots are generated using Minimax Hailuo (${videoModel.resolution || '1080p'})
+Each ${clipDuration}-second shot will be a separate AI video clip
+The scene's visual description will be decomposed into ${actualShotsPerScene} distinct shots
+
+IMPORTANT: Visual descriptions MUST be rich enough to support ${actualShotsPerScene} different camera angles/moments
+Include multiple visual elements, actions, and details that can be captured in separate shots.
+Start with camera movement in [brackets]: Push in, Pull out, Pan left, Pan right, Tilt up, Tilt down, Zoom in, Zoom out, Tracking shot, Static shot
 ${productionSettings.cameraDirections.length > 0 ? `Recommended for ${productionSettings.name}: ${productionSettings.cameraDirections.join(', ')}` : ''}
 
 === TIMING BREAKDOWN ===
-Total Duration: ${targetDuration} seconds
-Number of Scenes: ${sceneCount} (each = ${clipDuration}s AI video clip)
-Narration per Scene: ${narrationDuration} seconds
+Total Video Duration: ${targetDuration} seconds
+Number of Scenes: ${sceneCount}
+Duration per Scene: ${actualSceneDuration} seconds
+Shots per Scene: ${actualShotsPerScene} (each ${clipDuration}s)
+Total Shots: ~${sceneCount * actualShotsPerScene} video clips
+Narration per Scene: ${narrationDuration} seconds (~${wordsPerScene} words)
 Visual-Only Time: ${visualDuration - narrationDuration} seconds per scene
-Words per Scene: ~${wordsPerScene} words
 
 === CONTENT REQUIREMENTS ===
 ${contentRequirements.length > 0 ? contentRequirements.map((req, i) => `${i + 1}. ${req}`).join('\n') : '- Standard content depth'}
@@ -26982,9 +27081,14 @@ Return ONLY valid JSON:
   "totalDuration": ${targetDuration},
   "timing": {
     "sceneCount": ${sceneCount},
-    "avgSceneDuration": ${visualDuration},
+    "avgSceneDuration": ${actualSceneDuration},
     "pacing": "${pacing}",
-    "clipDuration": ${clipDuration}
+    "clipDuration": ${clipDuration},
+    "shotsPerScene": ${actualShotsPerScene},
+    "shotDuration": ${shotDuration},
+    "totalShots": ${sceneCount * actualShotsPerScene},
+    "contentFormat": "${contentFormat}",
+    "architecture": "hollywood"
   },
   "productionMode": "${productionMode}",
   "audioDesign": {
@@ -40800,6 +40904,7 @@ exports.creationWizardDecomposeSceneToShots = functions
   const {
     scene,           // { id, visualPrompt, narration, duration, ... }
     targetShotCount, // Optional: override automatic shot count
+    clipDuration: inputClipDuration, // Video clip duration (6 or 10 seconds from Minimax)
     genre,
     productionMode,
     styleBible,      // For visual consistency
@@ -40810,21 +40915,39 @@ exports.creationWizardDecomposeSceneToShots = functions
     throw new functions.https.HttpsError('invalid-argument', 'Scene with visualPrompt required');
   }
 
-  const sceneDuration = scene.duration || scene.visualDuration || 6;
+  // Scene duration - now supports Hollywood-style longer scenes (30-60s)
+  const sceneDuration = scene.duration || scene.visualDuration || 35;
   const sceneDescription = scene.visualPrompt || scene.visual || '';
   const narration = scene.narration || '';
+
+  // Clip duration from Minimax (6s or 10s)
+  const clipDuration = inputClipDuration || 6;
 
   try {
     // STEP 1: Analyze scene type based on keywords
     const sceneType = SHOT_DECOMPOSITION_ENGINE.analyzeSceneType(sceneDescription);
 
-    // STEP 2: Calculate optimal shot count using duration formula
-    // Formula: shots = ceil(duration / avgShotDuration) adjusted by scene type
-    const autoShotCount = SHOT_DECOMPOSITION_ENGINE.calculateShotCount(sceneDuration, sceneType);
-    const shotCount = Math.min(Math.max(targetShotCount || autoShotCount, 2), 6);
+    // STEP 2: Calculate optimal shot count using HOLLYWOOD FORMULA
+    // Formula: shots = ceil(sceneDuration / clipDuration)
+    // This ensures each shot matches Minimax video clip duration
+    const hollywoodShotCount = Math.ceil(sceneDuration / clipDuration);
+
+    // Also consider scene type for fine-tuning
+    const sceneTypeAdjustment = SHOT_DECOMPOSITION_ENGINE.calculateShotCount(sceneDuration, sceneType);
+
+    // Use targetShotCount if provided, otherwise use Hollywood calculation
+    // Clamp between 2 and 10 shots (for Hollywood-style scenes)
+    const shotCount = Math.min(Math.max(targetShotCount || hollywoodShotCount, 2), 10);
+
+    console.log(`[creationWizardDecomposeSceneToShots] Hollywood Shot Math:
+      Scene Duration: ${sceneDuration}s
+      Clip Duration: ${clipDuration}s
+      Hollywood Shot Count: ${hollywoodShotCount}
+      Scene Type Adjustment: ${sceneTypeAdjustment}
+      Final Shot Count: ${shotCount}`);
 
     // STEP 3: Generate shot sequence with precise duration math
-    // Each shot duration = sceneDuration / shotCount, adjusted by shot type weight
+    // Each shot duration = sceneDuration / shotCount (to fit exactly in scene)
     const baseSequence = SHOT_DECOMPOSITION_ENGINE.generateShotSequence(sceneType, shotCount, sceneDuration);
 
     console.log(`[creationWizardDecomposeSceneToShots] Scene ${scene.id}: ${sceneType} type, ${shotCount} shots, ${sceneDuration}s duration`);

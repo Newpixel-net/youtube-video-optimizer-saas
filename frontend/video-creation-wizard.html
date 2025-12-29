@@ -7433,14 +7433,18 @@
             try {
                 const decomposeFn = functions.httpsCallable('creationWizardDecomposeSceneToShots', { timeout: 120000 });
 
+                // Get clip duration from script timing or default to 6s (Minimax constraint)
+                const clipDuration = state.script.timing?.clipDuration || 6;
+
                 const result = await decomposeFn({
                     scene: {
                         id: sceneId,
                         visualPrompt: scene.visualPrompt || scene.visual,
                         narration: scene.narration,
-                        duration: scene.duration || 6
+                        duration: scene.duration || 35  // Hollywood-style scene duration (30-60s)
                     },
                     targetShotCount: state.storyboard.multiShotMode.defaultShotCount,
+                    clipDuration: clipDuration,  // Pass clip duration for Hollywood math: shots = sceneDuration / clipDuration
                     genre: state.concept.genre,
                     productionMode: state.concept.productionMode || 'premium',
                     styleBible: state.storyboard.styleBible?.enabled ? state.storyboard.styleBible : null,
@@ -7682,31 +7686,55 @@
                                 </div>
                             </div>
 
-                            ${modalStatus === 'idle' ? `
+                            ${modalStatus === 'idle' ? (() => {
+                                // Hollywood Math: Calculate recommended shots based on scene duration
+                                const clipDur = state.script.timing?.clipDuration || 6;
+                                const sceneDur = scene.duration || 35;
+                                const recommendedShots = Math.ceil(sceneDur / clipDur);
+                                const shotDur = Math.round((sceneDur / shotCount) * 10) / 10;
+
+                                return `
+                                <!-- Hollywood Scene Math -->
+                                <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 1rem;">
+                                    <div style="font-size: 0.7rem; color: #67e8f9; font-weight: 600; margin-bottom: 0.5rem;">🎬 HOLLYWOOD MATH</div>
+                                    <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: rgba(255,255,255,0.7);">
+                                        <span>Scene: <strong style="color: white;">${sceneDur}s</strong></span>
+                                        <span>÷</span>
+                                        <span>Clip: <strong style="color: white;">${clipDur}s</strong></span>
+                                        <span>=</span>
+                                        <span>Recommended: <strong style="color: #10b981;">${recommendedShots} shots</strong></span>
+                                    </div>
+                                </div>
+
                                 <!-- Shot Count Selector -->
                                 <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1rem;">
                                     <div style="font-size: 0.9rem; color: white; font-weight: 600; margin-bottom: 0.75rem;">How many shots?</div>
-                                    <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
-                                        ${[2, 3, 4, 5, 6].map(count => `
+                                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                                        ${[2, 3, 4, 5, 6, 7, 8].map(count => `
                                             <button onclick="setDecompositionShotCount(${count})"
-                                                    style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: 2px solid ${shotCount === count ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; background: ${shotCount === count ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 1.1rem; font-weight: 600; transition: all 0.2s;">
-                                                ${count}
+                                                    style="flex: 1; min-width: 45px; padding: 0.6rem 0.3rem; border-radius: 0.5rem; border: 2px solid ${shotCount === count ? '#8b5cf6' : count === recommendedShots ? '#10b981' : 'rgba(255,255,255,0.2)'}; background: ${shotCount === count ? 'rgba(139, 92, 246, 0.3)' : count === recommendedShots ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)'}; color: white; cursor: pointer; font-size: 1rem; font-weight: 600; transition: all 0.2s; position: relative;">
+                                                ${count}${count === recommendedShots ? '<span style="position: absolute; top: -6px; right: -6px; background: #10b981; color: white; font-size: 0.5rem; padding: 1px 4px; border-radius: 4px;">✓</span>' : ''}
                                             </button>
                                         `).join('')}
                                     </div>
-                                    <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 1rem;">
+                                    <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 0.5rem;">
                                         ${shotCount === 2 ? 'Minimal: Wide → Close-up' :
                                           shotCount === 3 ? 'Standard: Wide → Medium → Close-up' :
                                           shotCount === 4 ? 'Dynamic: Establishing → Wide → Medium → Close-up' :
                                           shotCount === 5 ? 'Cinematic: Establishing → Wide → Medium → Close-up → Detail' :
-                                          'Epic: Full coverage with multiple angles and details'}
+                                          shotCount === 6 ? 'Professional: Full shot progression with multiple angles' :
+                                          shotCount === 7 ? 'Hollywood: Complete coverage with reaction shots' :
+                                          'Epic: Maximum coverage for complex scenes'}
+                                    </div>
+                                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-bottom: 1rem;">
+                                        Each shot will be ~${shotDur}s (${clipDur}s video clips)
                                     </div>
                                     <button onclick="startDecompositionFromModal()"
                                             style="width: 100%; padding: 0.875rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border: none; border-radius: 0.5rem; color: white; font-size: 1rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                                         ✂️ Decompose into ${shotCount} Shots
                                     </button>
                                 </div>
-                            ` : modalStatus === 'decomposing' ? `
+                            `; })()` : modalStatus === 'decomposing' ? `
                                 <!-- Loading State -->
                                 <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.75rem; padding: 2rem; text-align: center;">
                                     <div style="width: 50px; height: 50px; margin: 0 auto 1rem; border: 3px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
