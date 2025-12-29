@@ -24,6 +24,93 @@ const { GoogleGenAI } = require('@google/genai');
 const { fal } = require('@fal-ai/client');
 const sharp = require('sharp');
 
+// ==============================================
+// IMAGE DIMENSION ENFORCEMENT
+// Ensures consistent exact pixel dimensions for all aspect ratios
+// ==============================================
+
+/**
+ * Get exact target dimensions for a given aspect ratio
+ * Returns HD-quality dimensions that match the exact ratio
+ */
+function getTargetDimensions(aspectRatio, quality = 'hd') {
+  // Define exact pixel dimensions for each aspect ratio
+  const dimensionMap = {
+    // HD quality (default for scene images)
+    hd: {
+      '16:9': { width: 1920, height: 1080 },  // Full HD
+      '9:16': { width: 1080, height: 1920 },  // Full HD vertical
+      '1:1': { width: 1080, height: 1080 },   // Square
+      '4:3': { width: 1440, height: 1080 },   // Standard
+      '3:4': { width: 1080, height: 1440 },   // Portrait
+      '4:5': { width: 1080, height: 1350 },   // Instagram portrait
+      '5:4': { width: 1350, height: 1080 },   // Landscape variant
+      '3:2': { width: 1620, height: 1080 },   // Classic photo
+      '2:3': { width: 1080, height: 1620 }    // Portrait photo
+    },
+    // Standard quality (lighter/faster)
+    standard: {
+      '16:9': { width: 1280, height: 720 },   // HD 720p
+      '9:16': { width: 720, height: 1280 },
+      '1:1': { width: 720, height: 720 },
+      '4:3': { width: 960, height: 720 },
+      '3:4': { width: 720, height: 960 },
+      '4:5': { width: 720, height: 900 },
+      '5:4': { width: 900, height: 720 },
+      '3:2': { width: 1080, height: 720 },
+      '2:3': { width: 720, height: 1080 }
+    },
+    // 4K quality (for upscaling)
+    '4k': {
+      '16:9': { width: 3840, height: 2160 },  // 4K UHD
+      '9:16': { width: 2160, height: 3840 },
+      '1:1': { width: 2160, height: 2160 },
+      '4:3': { width: 2880, height: 2160 },
+      '3:4': { width: 2160, height: 2880 },
+      '4:5': { width: 2160, height: 2700 },
+      '5:4': { width: 2700, height: 2160 },
+      '3:2': { width: 3240, height: 2160 },
+      '2:3': { width: 2160, height: 3240 }
+    }
+  };
+
+  const qualityDimensions = dimensionMap[quality] || dimensionMap.hd;
+  const dimensions = qualityDimensions[aspectRatio];
+
+  // Fallback to 16:9 HD if aspect ratio not found
+  if (!dimensions) {
+    console.warn(`Unknown aspect ratio: ${aspectRatio}, defaulting to 16:9 HD`);
+    return dimensionMap.hd['16:9'];
+  }
+
+  return dimensions;
+}
+
+/**
+ * Enforce exact dimensions on an image buffer
+ * Uses cover fit with center positioning for consistent cropping
+ */
+async function enforceImageDimensions(imageBuffer, aspectRatio, quality = 'hd') {
+  const { width, height } = getTargetDimensions(aspectRatio, quality);
+
+  try {
+    const processedBuffer = await sharp(imageBuffer)
+      .resize(width, height, {
+        fit: 'cover',
+        position: 'center'
+      })
+      .png({ quality: 95, compressionLevel: 6 })
+      .toBuffer();
+
+    console.log(`Image resized to exact dimensions: ${width}x${height} (${aspectRatio})`);
+    return { buffer: processedBuffer, width, height, mimeType: 'image/png' };
+  } catch (error) {
+    console.error('Error enforcing image dimensions:', error);
+    // Return original if resize fails
+    return { buffer: imageBuffer, width: null, height: null, mimeType: 'image/png' };
+  }
+}
+
 // Explicit initialization with project ID and storage bucket
 admin.initializeApp({
   projectId: 'ytseo-6d1b0',
@@ -7218,6 +7305,154 @@ exports.upscaleThumbnail = functions
   });
 
 // =============================================
+// SCENE IMAGE UPSCALE - Upscale to HD or 4K
+// Uses fal.ai AuraSR for high-quality upscaling
+// =============================================
+
+/**
+ * upscaleSceneImage - Upscale a scene/storyboard image to HD or 4K
+ * Uses fal.ai AuraSR (FREE) for 4x upscaling
+ * Enforces exact dimensions based on aspect ratio
+ *
+ * @param {string} imageUrl - URL of the image to upscale
+ * @param {string} aspectRatio - Aspect ratio (e.g., '16:9', '9:16')
+ * @param {string} quality - Target quality: 'hd' (1920x1080) or '4k' (3840x2160)
+ * @param {string} sceneId - Optional scene ID for tracking
+ * @returns {object} { success, upscaledUrl, width, height, quality }
+ */
+exports.upscaleSceneImage = functions
+  .runWith({ timeoutSeconds: 180, memory: '2GB' })
+  .https.onCall(async (data, context) => {
+    const uid = await verifyAuth(context);
+    checkRateLimit(uid, 'upscaleSceneImage', 10);
+
+    const { imageUrl, aspectRatio = '16:9', quality = 'hd', sceneId } = data;
+    const TOKEN_COST = quality === '4k' ? 3 : 1; // 4K costs more
+
+    if (!imageUrl) {
+      throw new functions.https.HttpsError('invalid-argument', 'Image URL is required');
+    }
+
+    try {
+      // Check token balance
+      const tokenDoc = await db.collection('creativeTokens').doc(uid).get();
+      if (!tokenDoc.exists) {
+        throw new functions.https.HttpsError('failed-precondition', 'Token balance not found');
+      }
+
+      const balance = tokenDoc.data().balance || 0;
+      if (balance < TOKEN_COST) {
+        throw new functions.https.HttpsError('resource-exhausted',
+          `Insufficient tokens. Need ${TOKEN_COST}, have ${balance}`);
+      }
+
+      // Get target dimensions based on aspect ratio and quality
+      const targetDimensions = getTargetDimensions(aspectRatio, quality);
+      const { width: targetWidth, height: targetHeight } = targetDimensions;
+
+      console.log(`Starting ${quality.toUpperCase()} upscale for scene image`);
+      console.log(`Target dimensions: ${targetWidth}x${targetHeight} (${aspectRatio})`);
+
+      // Configure fal.ai client
+      fal.config({
+        credentials: process.env.FAL_KEY || functions.config().fal?.key
+      });
+
+      // Call AuraSR for 4x upscale (FREE!)
+      const result = await fal.subscribe('fal-ai/aura-sr', {
+        input: {
+          image_url: imageUrl,
+          upscaling_factor: 4,
+          overlapping_tiles: true // Removes seams for better quality
+        }
+      });
+
+      if (!result.data?.image?.url) {
+        throw new Error('Upscale failed - no image returned');
+      }
+
+      const upscaledUrl = result.data.image.url;
+      console.log(`AuraSR upscale complete: ${upscaledUrl}`);
+
+      // Download upscaled image and resize to exact target dimensions
+      const upscaledResponse = await axios.get(upscaledUrl, {
+        responseType: 'arraybuffer',
+        timeout: 60000 // Longer timeout for 4K images
+      });
+
+      const resizedBuffer = await sharp(upscaledResponse.data)
+        .resize(targetWidth, targetHeight, {
+          fit: 'cover',
+          position: 'center'
+        })
+        .png({ quality: 95, compressionLevel: 6 })
+        .toBuffer();
+
+      // Upload to Firebase Storage
+      const storage = admin.storage().bucket();
+      const timestamp = Date.now();
+      const qualitySuffix = quality === '4k' ? '4k' : 'hd';
+      const storagePath = `scene-upscales/${uid}/${timestamp}_${qualitySuffix}.png`;
+      const file = storage.file(storagePath);
+
+      await file.save(resizedBuffer, {
+        metadata: {
+          contentType: 'image/png',
+          metadata: {
+            originalUrl: imageUrl,
+            upscaleModel: 'aura-sr',
+            quality: quality,
+            aspectRatio: aspectRatio,
+            width: String(targetWidth),
+            height: String(targetHeight),
+            sceneId: sceneId || 'unknown'
+          }
+        }
+      });
+
+      await file.makePublic();
+      const finalUrl = `https://storage.googleapis.com/${storage.name}/${storagePath}`;
+
+      // Deduct tokens
+      await db.collection('creativeTokens').doc(uid).update({
+        balance: admin.firestore.FieldValue.increment(-TOKEN_COST),
+        lastUsed: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Log usage
+      await logUsage(uid, 'scene_upscale', {
+        originalUrl: imageUrl,
+        upscaledUrl: finalUrl,
+        quality: quality,
+        aspectRatio: aspectRatio,
+        dimensions: `${targetWidth}x${targetHeight}`,
+        sceneId: sceneId,
+        tokenCost: TOKEN_COST
+      });
+
+      const newBalance = balance - TOKEN_COST;
+      console.log(`Scene upscale complete: ${finalUrl} (${targetWidth}x${targetHeight})`);
+
+      return {
+        success: true,
+        upscaledUrl: finalUrl,
+        originalUrl: imageUrl,
+        width: targetWidth,
+        height: targetHeight,
+        quality: quality,
+        aspectRatio: aspectRatio,
+        tokenCost: TOKEN_COST,
+        remainingBalance: newBalance
+      };
+
+    } catch (error) {
+      console.error('Scene upscale error:', error);
+      throw new functions.https.HttpsError('internal',
+        sanitizeErrorMessage(error, 'Scene upscale failed. Please try again.'));
+    }
+  });
+
+// =============================================
 // THUMBNAIL EDITING - AI Inpainting/Generative Fill
 // Uses Gemini for targeted modifications with mask
 // =============================================
@@ -11499,20 +11734,25 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                 if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
                   // Found an image
                   const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
-                  const mimeType = inlineData.mimeType || inlineData.mime_type || 'image/png';
-                  const extension = mimeType.includes('jpeg') ? 'jpg' : 'png';
+                  const rawBuffer = Buffer.from(imageBytes, 'base64');
 
-                  const fileName = `creative-studio/${uid}/${timestamp}-gemini-${imgIdx + 1}.${extension}`;
+                  // Enforce exact dimensions based on aspect ratio
+                  // This ensures consistent 1920x1080 for 16:9, etc.
+                  const { buffer: processedBuffer, width: targetWidth, height: targetHeight, mimeType: processedMimeType } =
+                    await enforceImageDimensions(rawBuffer, geminiAspectRatio, 'hd');
+
+                  const fileName = `creative-studio/${uid}/${timestamp}-gemini-${imgIdx + 1}.png`;
                   const file = storage.file(fileName);
 
-                  const buffer = Buffer.from(imageBytes, 'base64');
-                  await file.save(buffer, {
+                  await file.save(processedBuffer, {
                     metadata: {
-                      contentType: mimeType,
+                      contentType: processedMimeType,
                       metadata: {
                         prompt: finalPrompt.substring(0, 500),
                         model: geminiImageModelId,
-                        aspectRatio: geminiAspectRatio,  // Track aspect ratio in metadata
+                        aspectRatio: geminiAspectRatio,
+                        width: String(targetWidth),
+                        height: String(targetHeight),
                         generatedAt: new Date().toISOString()
                       }
                     }
@@ -11526,10 +11766,12 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
                     url: publicUrl,
                     fileName: fileName,
                     seed: Math.floor(Math.random() * 1000000),
-                    aspectRatio: geminiAspectRatio  // Include in response
+                    aspectRatio: geminiAspectRatio,
+                    width: targetWidth,
+                    height: targetHeight
                   });
 
-                  console.log(`Gemini image ${imgIdx + 1} saved: ${fileName} (aspect: ${geminiAspectRatio})`);
+                  console.log(`Gemini image ${imgIdx + 1} saved: ${fileName} (${targetWidth}x${targetHeight}, ${geminiAspectRatio})`);
                   break; // Only take first image from this response
                 }
               }
@@ -11652,18 +11894,25 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
           const imageBytes = genImage.image?.imageBytes;
           if (!imageBytes) continue;
 
+          const rawBuffer = Buffer.from(imageBytes, 'base64');
+
+          // Enforce exact dimensions based on aspect ratio
+          const { buffer: processedBuffer, width: targetWidth, height: targetHeight, mimeType: processedMimeType } =
+            await enforceImageDimensions(rawBuffer, validAspectRatio, 'hd');
+
           const fileName = `creative-studio/${uid}/${timestamp}-${i + 1}.png`;
           const file = storage.file(fileName);
 
-          const buffer = Buffer.from(imageBytes, 'base64');
-          await file.save(buffer, {
+          await file.save(processedBuffer, {
             metadata: {
-              contentType: 'image/png',
+              contentType: processedMimeType,
               metadata: {
                 userId: uid,
                 prompt: prompt.substring(0, 200),
                 model: imagenModelId,
-                aspectRatio: validAspectRatio
+                aspectRatio: validAspectRatio,
+                width: String(targetWidth),
+                height: String(targetHeight)
               }
             }
           });
@@ -11675,8 +11924,13 @@ exports.generateCreativeImage = functions.https.onCall(async (data, context) => 
           generatedImages.push({
             url: publicUrl,
             fileName: fileName,
-            seed: Math.floor(Math.random() * 1000000)
+            seed: Math.floor(Math.random() * 1000000),
+            aspectRatio: validAspectRatio,
+            width: targetWidth,
+            height: targetHeight
           });
+
+          console.log(`Imagen image ${i + 1} saved: ${fileName} (${targetWidth}x${targetHeight}, ${validAspectRatio})`);
         }
       }
 
