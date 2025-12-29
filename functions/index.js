@@ -41554,33 +41554,85 @@ exports.creationWizardCheckShotVideoStatus = functions.https.onCall(async (data,
     );
 
     const statusData = statusResponse.data;
-    const status = statusData.status;
+    console.log('[creationWizardCheckShotVideoStatus] Minimax response:', JSON.stringify(statusData, null, 2));
+
+    // Handle different response formats
+    const status = statusData.status || statusData.base_resp?.status_msg;
+    const fileId = statusData.file_id;
 
     // Map Minimax status to our status
+    // Minimax statuses: Queueing, Processing, Success, Fail
     let mappedStatus = 'processing';
     let videoUrl = null;
 
-    if (status === 'Success') {
+    if (status === 'Success' || status === 'Finished') {
       mappedStatus = 'ready';
 
-      // Get video URL from file_id
-      if (statusData.file_id) {
+      // Get video URL - check multiple possible locations
+      videoUrl = statusData.video_url || statusData.download_url;
+
+      // If no direct URL, try file_id retrieval
+      if (!videoUrl && fileId) {
         try {
+          console.log('[creationWizardCheckShotVideoStatus] Fetching file with ID:', fileId);
           const fileResponse = await axios.get(
-            `https://api.minimax.io/v1/files/retrieve?file_id=${statusData.file_id}`,
+            `https://api.minimax.io/v1/files/retrieve?file_id=${fileId}`,
             {
               headers: { 'Authorization': `Bearer ${minimaxKey}` },
               timeout: 30000
             }
           );
-          videoUrl = fileResponse.data.file?.download_url;
+          console.log('[creationWizardCheckShotVideoStatus] File response:', JSON.stringify(fileResponse.data, null, 2));
+          videoUrl = fileResponse.data.file?.download_url || fileResponse.data.download_url;
         } catch (fileError) {
-          console.error('[creationWizardCheckShotVideoStatus] Error fetching file:', fileError);
+          console.error('[creationWizardCheckShotVideoStatus] Error fetching file:', fileError.message);
         }
       }
-    } else if (status === 'Fail') {
+
+      // If we have a video URL, download and upload to Firebase Storage for persistence
+      if (videoUrl) {
+        try {
+          console.log('[creationWizardCheckShotVideoStatus] Downloading video from:', videoUrl);
+          const videoResponse = await axios.get(videoUrl, {
+            responseType: 'arraybuffer',
+            timeout: 120000 // 2 minutes for video download
+          });
+
+          const videoBuffer = Buffer.from(videoResponse.data);
+          const fileName = `shot_videos/${taskId}_${Date.now()}.mp4`;
+          const file = admin.storage().bucket().file(fileName);
+
+          await file.save(videoBuffer, {
+            metadata: {
+              contentType: 'video/mp4',
+              metadata: {
+                taskId,
+                shotId,
+                source: 'minimax'
+              }
+            }
+          });
+
+          // Make the file publicly accessible
+          await file.makePublic();
+
+          // Get the public URL
+          videoUrl = `https://storage.googleapis.com/${admin.storage().bucket().name}/${fileName}`;
+          console.log('[creationWizardCheckShotVideoStatus] Video uploaded to Firebase:', videoUrl);
+
+        } catch (uploadError) {
+          console.error('[creationWizardCheckShotVideoStatus] Error uploading video:', uploadError.message);
+          // Keep the original Minimax URL as fallback
+        }
+      }
+    } else if (status === 'Fail' || status === 'Failed' || status === 'Error') {
       mappedStatus = 'error';
+      console.log('[creationWizardCheckShotVideoStatus] Video generation failed:', statusData);
+    } else if (status === 'Queueing' || status === 'Processing' || status === 'Pending') {
+      mappedStatus = 'processing';
     }
+
+    console.log(`[creationWizardCheckShotVideoStatus] Mapped status: ${status} -> ${mappedStatus}, videoUrl: ${videoUrl ? 'yes' : 'no'}`);
 
     return {
       success: true,
