@@ -24809,7 +24809,7 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
       'quest_progress': {
         name: 'Quest/Goal Progress',
         description: 'Movement toward clear objective drives each scene',
-        examples: ['Lord of the Rings', 'Inception', 'Ocean\\'s Eleven'],
+        examples: ['Lord of the Rings', 'Inception', 'Oceans Eleven'],
         sceneGenerator: 'Objective clear → Obstacle appears → Overcome/Adapt → Closer to goal',
         bestPairedWith: ['quest_journey', 'ensemble', 'heros_journey']
       },
@@ -24848,7 +24848,7 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
       'loyal_friend': { role: 'supporting', description: 'Steadfast companion through all trials', flaw: 'blind loyalty', arc: 'must choose between loyalties' },
       'love_interest': { role: 'supporting', description: 'Romantic connection that humanizes protagonist', flaw: 'own agenda', arc: 'becomes partner not prize' },
       'rival': { role: 'supporting', description: 'Competitor who pushes protagonist to excel', flaw: 'jealousy', arc: 'becomes ally or doubles down' },
-      'innocent': { role: 'supporting', description: 'Pure character who represents what\\'s worth fighting for', flaw: 'naivety', arc: 'loss of innocence or protected' },
+      'innocent': { role: 'supporting', description: 'Pure character who represents whats worth fighting for', flaw: 'naivety', arc: 'loss of innocence or protected' },
 
       // ANTAGONISTS
       'mastermind': { role: 'antagonist', description: 'Intelligent planner, always steps ahead', flaw: 'arrogance', arc: 'undone by underestimating others' },
