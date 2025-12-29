@@ -8466,7 +8466,10 @@
 
             }, 2000);
 
-            // Track this polling interval for cleanup
+            // Track this polling interval for cleanup (ensure array exists)
+            if (!state.storyboard.multiShotMode.activePollingIntervals) {
+                state.storyboard.multiShotMode.activePollingIntervals = [];
+            }
             state.storyboard.multiShotMode.activePollingIntervals.push(pollInterval);
         }
 
@@ -8474,7 +8477,8 @@
          * Remove a polling interval from tracking
          */
         function removePollingInterval(interval) {
-            const intervals = state.storyboard.multiShotMode.activePollingIntervals;
+            const intervals = state.storyboard.multiShotMode?.activePollingIntervals;
+            if (!intervals || !Array.isArray(intervals)) return;
             const idx = intervals.indexOf(interval);
             if (idx > -1) {
                 intervals.splice(idx, 1);
@@ -8485,12 +8489,14 @@
          * Clean up all active polling intervals
          */
         function cleanupAllPollingIntervals() {
-            const intervals = state.storyboard.multiShotMode.activePollingIntervals;
-            intervals.forEach(interval => {
-                clearInterval(interval);
-            });
-            state.storyboard.multiShotMode.activePollingIntervals = [];
-            console.log('[Polling] Cleaned up all polling intervals');
+            const intervals = state.storyboard.multiShotMode?.activePollingIntervals;
+            if (intervals && Array.isArray(intervals)) {
+                intervals.forEach(interval => {
+                    clearInterval(interval);
+                });
+                state.storyboard.multiShotMode.activePollingIntervals = [];
+                console.log('[Polling] Cleaned up all polling intervals');
+            }
         }
 
         /**
@@ -8598,7 +8604,10 @@
 
             }, 2000);
 
-            // Track this polling interval for cleanup
+            // Track this polling interval for cleanup (ensure array exists)
+            if (!state.storyboard.multiShotMode.activePollingIntervals) {
+                state.storyboard.multiShotMode.activePollingIntervals = [];
+            }
             state.storyboard.multiShotMode.activePollingIntervals.push(pollInterval);
         }
 
