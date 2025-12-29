@@ -40259,3 +40259,744 @@ exports.PROMPT_CHAIN_ARCHITECTURE = {
   SCENE_PIPELINE,
   QUALITY_VALIDATOR
 };
+
+// =============================================================================
+// PHASE 12: SHOT DECOMPOSITION ENGINE
+// Transforms single scenes into multi-shot cinematic sequences
+// =============================================================================
+
+/**
+ * SHOT_DECOMPOSITION_ENGINE
+ *
+ * Professional cinematography breaks scenes into multiple shots for visual interest.
+ * A 30-second scene typically contains 4-8 different shots that when combined
+ * create a cohesive, dynamic viewing experience.
+ *
+ * This engine decomposes scene descriptions into shot sequences while maintaining
+ * visual consistency across all shots in the scene.
+ */
+const SHOT_DECOMPOSITION_ENGINE = {
+  // Shot type library with cinematographic purpose
+  shotTypes: {
+    'establishing_wide': {
+      name: 'Establishing Wide',
+      description: 'Sets the scene, shows full environment',
+      cameraDistance: 'far',
+      typicalDuration: { min: 2, max: 4 },
+      promptPrefix: '[Extreme wide establishing shot]',
+      useCases: ['scene_opening', 'location_change', 'time_passage'],
+      psychology: 'Context, scale, isolation'
+    },
+    'wide': {
+      name: 'Wide Shot',
+      description: 'Full body visible with environment context',
+      cameraDistance: 'far',
+      typicalDuration: { min: 2, max: 4 },
+      promptPrefix: '[Wide shot, full body]',
+      useCases: ['action', 'movement', 'group_interaction'],
+      psychology: 'Action clarity, spatial awareness'
+    },
+    'medium_wide': {
+      name: 'Medium Wide',
+      description: 'Waist up, balances subject and environment',
+      cameraDistance: 'medium',
+      typicalDuration: { min: 2, max: 3 },
+      promptPrefix: '[Medium wide shot, waist up]',
+      useCases: ['walking', 'dialogue_with_context', 'transitions'],
+      psychology: 'Balance, natural conversation distance'
+    },
+    'medium': {
+      name: 'Medium Shot',
+      description: 'Standard conversational framing',
+      cameraDistance: 'medium',
+      typicalDuration: { min: 1.5, max: 3 },
+      promptPrefix: '[Medium shot, chest to head]',
+      useCases: ['dialogue', 'reactions', 'standard_coverage'],
+      psychology: 'Engagement, intimacy without intrusion'
+    },
+    'medium_closeup': {
+      name: 'Medium Close-up',
+      description: 'Shoulders and head, emotional focus',
+      cameraDistance: 'close',
+      typicalDuration: { min: 1.5, max: 2.5 },
+      promptPrefix: '[Medium close-up, shoulders and head]',
+      useCases: ['emotional_dialogue', 'important_moments', 'character_focus'],
+      psychology: 'Emotional connection, importance'
+    },
+    'closeup': {
+      name: 'Close-up',
+      description: 'Face fills frame, maximum emotion',
+      cameraDistance: 'close',
+      typicalDuration: { min: 1, max: 2 },
+      promptPrefix: '[Close-up shot, face fills frame]',
+      useCases: ['emotional_peaks', 'reveals', 'reactions'],
+      psychology: 'Intense emotion, vulnerability, truth'
+    },
+    'extreme_closeup': {
+      name: 'Extreme Close-up',
+      description: 'Single feature (eye, hand, object)',
+      cameraDistance: 'very_close',
+      typicalDuration: { min: 0.5, max: 1.5 },
+      promptPrefix: '[Extreme close-up, detail shot]',
+      useCases: ['symbolic_moments', 'tension', 'detail_reveals'],
+      psychology: 'Symbolism, tension, obsession'
+    },
+    'insert': {
+      name: 'Insert Shot',
+      description: 'Object or detail relevant to action',
+      cameraDistance: 'close',
+      typicalDuration: { min: 0.5, max: 1.5 },
+      promptPrefix: '[Insert shot, object detail]',
+      useCases: ['props', 'hands', 'meaningful_objects'],
+      psychology: 'Narrative importance, foreshadowing'
+    },
+    'over_shoulder': {
+      name: 'Over-the-Shoulder',
+      description: 'POV from behind one character looking at another',
+      cameraDistance: 'medium',
+      typicalDuration: { min: 1.5, max: 2.5 },
+      promptPrefix: '[Over-the-shoulder shot]',
+      useCases: ['dialogue', 'confrontation', 'connection'],
+      psychology: 'Perspective, dialogue intimacy'
+    },
+    'reaction': {
+      name: 'Reaction Shot',
+      description: 'Character responding to something',
+      cameraDistance: 'close',
+      typicalDuration: { min: 1, max: 2 },
+      promptPrefix: '[Reaction shot, close-up]',
+      useCases: ['responses', 'reveals', 'emotional_beats'],
+      psychology: 'Audience identification, emotional mirror'
+    },
+    'pov': {
+      name: 'Point of View',
+      description: 'What the character sees',
+      cameraDistance: 'varies',
+      typicalDuration: { min: 1, max: 3 },
+      promptPrefix: '[POV shot, first-person perspective]',
+      useCases: ['discovery', 'reveals', 'immersion'],
+      psychology: 'Immersion, identification, discovery'
+    }
+  },
+
+  // Camera movements for each shot type
+  cameraMovements: {
+    'static': { name: 'Static', description: 'Camera locked in place', energy: 'calm' },
+    'slow_push': { name: 'Slow Push In', description: 'Gradual move toward subject', energy: 'building' },
+    'slow_pull': { name: 'Slow Pull Out', description: 'Gradual move away from subject', energy: 'releasing' },
+    'tracking': { name: 'Tracking', description: 'Camera follows subject movement', energy: 'dynamic' },
+    'pan': { name: 'Pan', description: 'Camera rotates horizontally', energy: 'revealing' },
+    'tilt': { name: 'Tilt', description: 'Camera rotates vertically', energy: 'revealing' },
+    'crane_up': { name: 'Crane Up', description: 'Camera rises vertically', energy: 'epic' },
+    'crane_down': { name: 'Crane Down', description: 'Camera descends vertically', energy: 'grounding' },
+    'handheld': { name: 'Handheld', description: 'Subtle organic movement', energy: 'intimate' },
+    'orbit': { name: 'Orbit', description: 'Camera circles subject', energy: 'dramatic' }
+  },
+
+  // Scene type patterns - what shots work well for different scene types
+  scenePatterns: {
+    'action': {
+      name: 'Action Sequence',
+      recommendedShots: ['wide', 'medium', 'closeup', 'insert'],
+      pacing: 'fast',
+      avgShotsPerScene: 5,
+      shotDurationMultiplier: 0.7
+    },
+    'dialogue': {
+      name: 'Dialogue Scene',
+      recommendedShots: ['medium', 'over_shoulder', 'closeup', 'reaction'],
+      pacing: 'moderate',
+      avgShotsPerScene: 4,
+      shotDurationMultiplier: 1.0
+    },
+    'emotional': {
+      name: 'Emotional Moment',
+      recommendedShots: ['medium_closeup', 'closeup', 'extreme_closeup', 'reaction'],
+      pacing: 'slow',
+      avgShotsPerScene: 3,
+      shotDurationMultiplier: 1.3
+    },
+    'establishing': {
+      name: 'Establishing Scene',
+      recommendedShots: ['establishing_wide', 'wide', 'medium_wide'],
+      pacing: 'slow',
+      avgShotsPerScene: 2,
+      shotDurationMultiplier: 1.5
+    },
+    'revelation': {
+      name: 'Reveal/Discovery',
+      recommendedShots: ['medium', 'pov', 'reaction', 'closeup'],
+      pacing: 'building',
+      avgShotsPerScene: 4,
+      shotDurationMultiplier: 1.1
+    },
+    'montage': {
+      name: 'Montage Sequence',
+      recommendedShots: ['wide', 'medium', 'closeup', 'insert'],
+      pacing: 'fast',
+      avgShotsPerScene: 6,
+      shotDurationMultiplier: 0.6
+    },
+    'contemplative': {
+      name: 'Contemplative/Reflective',
+      recommendedShots: ['wide', 'medium_closeup', 'closeup'],
+      pacing: 'very_slow',
+      avgShotsPerScene: 2,
+      shotDurationMultiplier: 1.5
+    }
+  },
+
+  // Transition types between shots
+  shotTransitions: {
+    'cut': { name: 'Cut', description: 'Instant transition', energy: 'neutral' },
+    'match_cut': { name: 'Match Cut', description: 'Visual element matches next shot', energy: 'connected' },
+    'dissolve': { name: 'Dissolve', description: 'Gradual blend', energy: 'dreamy' },
+    'l_cut': { name: 'L-Cut', description: 'Audio continues over visual cut', energy: 'continuous' },
+    'j_cut': { name: 'J-Cut', description: 'Next audio starts before visual cut', energy: 'anticipatory' }
+  },
+
+  /**
+   * Analyze scene type from description
+   */
+  analyzeSceneType(sceneDescription) {
+    const desc = sceneDescription.toLowerCase();
+
+    // Action keywords
+    if (desc.match(/fight|chase|run|escape|battle|action|attack|defend|sprint/)) {
+      return 'action';
+    }
+    // Dialogue keywords
+    if (desc.match(/talk|speak|conversation|discuss|argue|negotiate|explain/)) {
+      return 'dialogue';
+    }
+    // Emotional keywords
+    if (desc.match(/cry|mourn|grieve|love|embrace|tender|emotional|heartbreak|joy/)) {
+      return 'emotional';
+    }
+    // Establishing keywords
+    if (desc.match(/arrive|enter|morning|location|city|landscape|establish/)) {
+      return 'establishing';
+    }
+    // Revelation keywords
+    if (desc.match(/discover|reveal|find|realize|truth|secret|uncover/)) {
+      return 'revelation';
+    }
+    // Contemplative keywords
+    if (desc.match(/think|ponder|contemplate|reflect|alone|silent|stare/)) {
+      return 'contemplative';
+    }
+    // Default to dialogue
+    return 'dialogue';
+  },
+
+  /**
+   * Calculate optimal number of shots based on scene duration
+   */
+  calculateShotCount(sceneDuration, sceneType) {
+    const pattern = this.scenePatterns[sceneType];
+    const baseShotCount = pattern.avgShotsPerScene;
+
+    // Adjust based on duration (assume 5s per shot baseline)
+    const durationFactor = sceneDuration / (baseShotCount * 5);
+
+    // Calculate shot count, clamped between 2 and 8
+    return Math.max(2, Math.min(8, Math.round(baseShotCount * durationFactor)));
+  },
+
+  /**
+   * Generate shot sequence for a scene
+   */
+  generateShotSequence(sceneType, shotCount, sceneDuration) {
+    const pattern = this.scenePatterns[sceneType];
+    const recommendedShots = pattern.recommendedShots;
+    const sequence = [];
+
+    // Calculate base duration per shot
+    const totalDuration = sceneDuration;
+    let remainingDuration = totalDuration;
+
+    for (let i = 0; i < shotCount; i++) {
+      // Cycle through recommended shots
+      const shotTypeKey = recommendedShots[i % recommendedShots.length];
+      const shotType = this.shotTypes[shotTypeKey];
+
+      // Calculate duration for this shot
+      const isLastShot = (i === shotCount - 1);
+      let shotDuration;
+
+      if (isLastShot) {
+        shotDuration = remainingDuration;
+      } else {
+        const baseDuration = (shotType.typicalDuration.min + shotType.typicalDuration.max) / 2;
+        shotDuration = Math.round(baseDuration * pattern.shotDurationMultiplier * 10) / 10;
+        shotDuration = Math.max(1, Math.min(shotDuration, remainingDuration - (shotCount - i - 1)));
+      }
+
+      remainingDuration -= shotDuration;
+
+      // Determine camera movement based on shot type and position
+      let cameraMovement = 'static';
+      if (i === 0) cameraMovement = 'slow_push'; // Opening shot
+      else if (isLastShot) cameraMovement = 'slow_pull'; // Closing shot
+      else if (pattern.pacing === 'fast') cameraMovement = 'tracking';
+      else if (shotTypeKey.includes('closeup')) cameraMovement = 'static';
+
+      sequence.push({
+        shotIndex: i + 1,
+        shotType: shotTypeKey,
+        shotTypeName: shotType.name,
+        duration: shotDuration,
+        cameraMovement: cameraMovement,
+        promptPrefix: shotType.promptPrefix,
+        purpose: shotType.useCases[0],
+        transition: isLastShot ? 'cut' : 'cut'
+      });
+    }
+
+    return sequence;
+  }
+};
+
+/**
+ * creationWizardDecomposeSceneToShots - Decomposes a scene into multiple cinematic shots
+ *
+ * Takes a scene description and uses AI to intelligently break it into
+ * multiple shots that maintain visual consistency when assembled.
+ */
+exports.creationWizardDecomposeSceneToShots = functions
+  .runWith({
+    timeoutSeconds: 120,
+    memory: '512MB'
+  })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    scene,           // { id, visualPrompt, narration, duration, ... }
+    targetShotCount, // Optional: override automatic shot count
+    genre,
+    productionMode,
+    styleBible,      // For visual consistency
+    characterBible   // For character consistency
+  } = data;
+
+  if (!scene || !scene.visualPrompt) {
+    throw new functions.https.HttpsError('invalid-argument', 'Scene with visualPrompt required');
+  }
+
+  const sceneDuration = scene.duration || scene.visualDuration || 6;
+  const sceneDescription = scene.visualPrompt || scene.visual || '';
+
+  try {
+    // Analyze scene type
+    const sceneType = SHOT_DECOMPOSITION_ENGINE.analyzeSceneType(sceneDescription);
+
+    // Calculate optimal shot count
+    const autoShotCount = SHOT_DECOMPOSITION_ENGINE.calculateShotCount(sceneDuration, sceneType);
+    const shotCount = targetShotCount || autoShotCount;
+
+    // Generate base shot sequence
+    const baseSequence = SHOT_DECOMPOSITION_ENGINE.generateShotSequence(sceneType, shotCount, sceneDuration);
+
+    console.log(`[creationWizardDecomposeSceneToShots] Scene ${scene.id}: ${sceneType} type, ${shotCount} shots, ${sceneDuration}s duration`);
+
+    // Use GPT-4o to generate specific prompts for each shot
+    const systemPrompt = `You are a Hollywood cinematographer decomposing a scene into multiple shots.
+Your task is to take a scene description and create specific, detailed prompts for each shot in the sequence.
+
+CRITICAL RULES:
+1. VISUAL CONSISTENCY: All shots must feel like they're from the SAME scene
+   - Same lighting conditions across all shots
+   - Same color palette and atmosphere
+   - Characters maintain exact same appearance (clothes, hair, features)
+   - Environment details remain consistent
+
+2. SHOT PROGRESSION: Each shot should build on the previous
+   - Start wide, move closer for emotional moments
+   - Each shot reveals new information or emotion
+   - Natural flow between shots
+
+3. CINEMATIC QUALITY: Every prompt must include:
+   - Camera angle and movement
+   - Lighting direction and quality
+   - Atmosphere and mood
+   - Specific character details (if applicable)
+   - Environmental details
+
+4. NO REPETITION: Each shot must show a DIFFERENT moment/angle
+   - Don't just reframe the same content
+   - Progress the action or emotion
+
+Output JSON with this structure:
+{
+  "shots": [
+    {
+      "shotIndex": 1,
+      "shotType": "wide|medium|closeup|etc",
+      "duration": 2.5,
+      "cameraMovement": "static|push_in|tracking|etc",
+      "prompt": "Full detailed image generation prompt for this specific shot...",
+      "purpose": "What this shot accomplishes narratively",
+      "focusElement": "What the viewer should look at",
+      "transitionToNext": "cut|dissolve|match_cut"
+    }
+  ],
+  "consistencyAnchors": {
+    "lighting": "Description of consistent lighting across all shots",
+    "colorPalette": "The color scheme used throughout",
+    "atmosphere": "The mood/atmosphere maintained",
+    "characterAppearance": "Exact character description to maintain",
+    "environmentKey": "Key environmental elements that appear in multiple shots"
+  },
+  "sceneType": "action|dialogue|emotional|etc",
+  "totalDuration": 12.5
+}`;
+
+    const userPrompt = `Decompose this scene into ${shotCount} distinct cinematic shots:
+
+SCENE DESCRIPTION:
+${sceneDescription}
+
+SCENE DURATION: ${sceneDuration} seconds
+SCENE TYPE DETECTED: ${sceneType}
+
+SHOT SEQUENCE TEMPLATE (use these shot types and durations as a guide):
+${JSON.stringify(baseSequence, null, 2)}
+
+GENRE: ${genre || 'cinematic'}
+PRODUCTION MODE: ${productionMode || 'premium'}
+
+${styleBible ? `STYLE REFERENCE:
+${JSON.stringify(styleBible, null, 2)}` : ''}
+
+${characterBible && characterBible.length > 0 ? `CHARACTERS (maintain exact appearance in all shots):
+${JSON.stringify(characterBible, null, 2)}` : ''}
+
+${scene.narration ? `NARRATION (for timing/mood reference):
+"${scene.narration}"` : ''}
+
+Create ${shotCount} unique shots that:
+1. Cover different moments/angles of this scene
+2. Maintain perfect visual consistency
+3. Progress naturally from one to the next
+4. Each has a detailed, specific image generation prompt (150+ words each)
+
+Remember: These shots will be generated as separate images and then animated.
+Visual consistency is CRITICAL - same lighting, colors, character appearance in every shot.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.7,
+      max_tokens: 4000
+    });
+
+    const responseText = completion.choices[0].message.content.trim();
+    let shotData;
+
+    try {
+      shotData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('[creationWizardDecomposeSceneToShots] Parse error:', parseError);
+      throw new functions.https.HttpsError('internal', 'Failed to parse shot decomposition response');
+    }
+
+    // Validate and normalize shots
+    if (!shotData.shots || !Array.isArray(shotData.shots) || shotData.shots.length === 0) {
+      throw new functions.https.HttpsError('internal', 'No shots generated');
+    }
+
+    // Add scene reference to each shot
+    const normalizedShots = shotData.shots.map((shot, idx) => ({
+      id: `${scene.id}_shot_${idx + 1}`,
+      sceneId: scene.id,
+      shotIndex: shot.shotIndex || idx + 1,
+      shotType: shot.shotType || baseSequence[idx]?.shotType || 'medium',
+      duration: shot.duration || baseSequence[idx]?.duration || 2,
+      cameraMovement: shot.cameraMovement || baseSequence[idx]?.cameraMovement || 'static',
+      prompt: shot.prompt,
+      purpose: shot.purpose || 'scene coverage',
+      focusElement: shot.focusElement || 'main subject',
+      transition: shot.transitionToNext || 'cut',
+      // Generation status
+      imageUrl: null,
+      videoUrl: null,
+      status: 'pending'
+    }));
+
+    // Log usage
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'shot_decomposition',
+      model: 'gpt-4o',
+      sceneId: scene.id,
+      shotCount: normalizedShots.length,
+      inputTokens: completion.usage?.prompt_tokens || 0,
+      outputTokens: completion.usage?.completion_tokens || 0,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      sceneId: scene.id,
+      sceneType: shotData.sceneType || sceneType,
+      totalDuration: shotData.totalDuration || sceneDuration,
+      shotCount: normalizedShots.length,
+      shots: normalizedShots,
+      consistencyAnchors: shotData.consistencyAnchors || {
+        lighting: 'Consistent scene lighting',
+        colorPalette: 'Scene color palette',
+        atmosphere: 'Scene atmosphere'
+      },
+      usage: {
+        promptTokens: completion.usage?.prompt_tokens || 0,
+        completionTokens: completion.usage?.completion_tokens || 0
+      }
+    };
+
+  } catch (error) {
+    console.error('[creationWizardDecomposeSceneToShots] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to decompose scene'));
+  }
+});
+
+/**
+ * creationWizardGenerateAllShotsForScene - Generates images for all shots in a decomposed scene
+ * Maintains visual consistency by using the first shot as anchor
+ */
+exports.creationWizardGenerateAllShotsForScene = functions
+  .runWith({
+    timeoutSeconds: 540, // 9 minutes for multiple image generation
+    memory: '2GB'
+  })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const {
+    sceneId,
+    shots,              // Array of shot objects from decomposition
+    consistencyAnchors, // Visual consistency requirements
+    model,              // Image generation model
+    aspectRatio,
+    characterReference  // Optional character reference image
+  } = data;
+
+  if (!shots || !Array.isArray(shots) || shots.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Shots array required');
+  }
+
+  const results = [];
+  let anchorImageUrl = null;
+
+  try {
+    console.log(`[creationWizardGenerateAllShotsForScene] Starting generation of ${shots.length} shots for scene ${sceneId}`);
+
+    for (let i = 0; i < shots.length; i++) {
+      const shot = shots[i];
+
+      try {
+        // Build enhanced prompt with consistency requirements
+        let enhancedPrompt = shot.prompt;
+
+        // Add consistency anchors to prompt
+        if (consistencyAnchors) {
+          const consistencyAddition = `\n\nCONSISTENCY REQUIREMENTS (match exactly):
+- Lighting: ${consistencyAnchors.lighting}
+- Colors: ${consistencyAnchors.colorPalette}
+- Atmosphere: ${consistencyAnchors.atmosphere}
+${consistencyAnchors.characterAppearance ? `- Character: ${consistencyAnchors.characterAppearance}` : ''}`;
+          enhancedPrompt += consistencyAddition;
+        }
+
+        // Call image generation
+        const generateFn = exports.generateCreativeImage;
+
+        // Prepare request
+        const requestData = {
+          prompt: enhancedPrompt,
+          model: model || 'nanobanana-pro',
+          quantity: 1,
+          aspectRatio: aspectRatio || '16:9',
+          quality: 'hd'
+        };
+
+        // Add character reference if available
+        if (characterReference) {
+          requestData.characterReference = characterReference;
+        }
+
+        // For shots after the first, use the anchor image as style reference
+        // This helps maintain visual consistency
+        if (i > 0 && anchorImageUrl) {
+          // Note: Style reference would need base64 conversion
+          // For now, we rely on prompt consistency
+          enhancedPrompt = `[Match visual style of previous shot exactly]\n\n${enhancedPrompt}`;
+          requestData.prompt = enhancedPrompt;
+        }
+
+        // Generate the image (call internal function)
+        const imageResult = await generateCreativeImageInternal(uid, requestData);
+
+        if (imageResult.success && imageResult.images && imageResult.images.length > 0) {
+          const imageUrl = imageResult.images[0].url;
+
+          // Store anchor image from first shot
+          if (i === 0) {
+            anchorImageUrl = imageUrl;
+          }
+
+          results.push({
+            shotId: shot.id,
+            shotIndex: shot.shotIndex,
+            status: 'ready',
+            imageUrl: imageUrl,
+            prompt: shot.prompt,
+            duration: shot.duration
+          });
+
+          console.log(`[creationWizardGenerateAllShotsForScene] Shot ${i + 1}/${shots.length} generated successfully`);
+        } else {
+          results.push({
+            shotId: shot.id,
+            shotIndex: shot.shotIndex,
+            status: 'failed',
+            error: 'No image returned',
+            prompt: shot.prompt
+          });
+        }
+
+        // Small delay between generations to avoid rate limiting
+        if (i < shots.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+      } catch (shotError) {
+        console.error(`[creationWizardGenerateAllShotsForScene] Shot ${i + 1} failed:`, shotError);
+        results.push({
+          shotId: shot.id,
+          shotIndex: shot.shotIndex,
+          status: 'failed',
+          error: shotError.message || 'Generation failed',
+          prompt: shot.prompt
+        });
+      }
+    }
+
+    const successCount = results.filter(r => r.status === 'ready').length;
+
+    return {
+      success: successCount > 0,
+      sceneId,
+      totalShots: shots.length,
+      successCount,
+      failedCount: shots.length - successCount,
+      anchorImageUrl,
+      shots: results
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateAllShotsForScene] Error:', error);
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate shots'));
+  }
+});
+
+/**
+ * Internal helper for image generation (avoids auth re-check)
+ */
+async function generateCreativeImageInternal(uid, requestData) {
+  const { prompt, model, quantity, aspectRatio, quality, characterReference } = requestData;
+
+  // Similar to generateCreativeImage but without auth check
+  const geminiApiKey = functions.config().gemini?.key;
+  if (!geminiApiKey) {
+    throw new Error('Gemini API key not configured');
+  }
+
+  const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+  const storage = admin.storage().bucket();
+  const timestamp = Date.now();
+  const generatedImages = [];
+
+  // Determine model
+  const geminiImageModelMap = {
+    'nanobanana-pro': 'gemini-2.0-flash-exp',
+    'nanobanana': 'gemini-2.0-flash-exp'
+  };
+  const geminiModelId = geminiImageModelMap[model] || 'gemini-2.0-flash-exp';
+
+  // Build content parts
+  const contentParts = [];
+
+  // Add character reference if provided
+  if (characterReference && characterReference.base64) {
+    contentParts.push({
+      inlineData: {
+        mimeType: characterReference.mimeType || 'image/png',
+        data: characterReference.base64
+      }
+    });
+  }
+
+  // Build enhanced prompt
+  const aspectInstruction = `[Generate in ${aspectRatio} aspect ratio, high quality, detailed, cinematic]\n\n`;
+  contentParts.push({ text: aspectInstruction + prompt });
+
+  try {
+    const result = await ai.models.generateContent({
+      model: geminiModelId,
+      contents: [{ role: 'user', parts: contentParts }],
+      config: {
+        responseModalities: ['image', 'text']
+      }
+    });
+
+    const candidates = result.candidates || (result.response && result.response.candidates);
+    if (candidates && candidates.length > 0) {
+      const parts = candidates[0].content?.parts || candidates[0].parts || [];
+      for (const part of parts) {
+        const inlineData = part.inlineData || part.inline_data;
+        if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
+          const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
+          const rawBuffer = Buffer.from(imageBytes, 'base64');
+
+          // Process image
+          const { buffer: processedBuffer, width, height } = await enforceImageDimensions(rawBuffer, aspectRatio, 'hd');
+
+          const fileName = `creative-studio/${uid}/${timestamp}-shot-${Date.now()}.png`;
+          const file = storage.file(fileName);
+
+          await file.save(processedBuffer, {
+            metadata: { contentType: 'image/png' }
+          });
+
+          await file.makePublic();
+          const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+          generatedImages.push({
+            url: publicUrl,
+            fileName,
+            width,
+            height
+          });
+          break;
+        }
+      }
+    }
+
+    return {
+      success: generatedImages.length > 0,
+      images: generatedImages
+    };
+
+  } catch (error) {
+    console.error('[generateCreativeImageInternal] Error:', error);
+    throw error;
+  }
+}
+
+// Export the shot decomposition engine
+exports.SHOT_DECOMPOSITION_ENGINE = SHOT_DECOMPOSITION_ENGINE;
