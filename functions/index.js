@@ -40683,27 +40683,30 @@ const SHOT_DECOMPOSITION_ENGINE = {
       prompt += (movementDescriptions[shot.cameraMovement] || '') + ' ';
 
       // Build the scene description based on shot type
-      if (shot.shotType.includes('establishing') || shot.shotType === 'wide') {
-        // Wide/establishing shots focus on environment
+      // IMPORTANT: Always show characters FULLY (head to toe) to avoid cropping
+      if (shot.shotType.includes('establishing') || shot.shotType === 'wide' || shot.shotType === 'medium_wide') {
+        // Wide/establishing shots - show FULL BODY of characters in environment
         prompt += extractedElements.environment + ' ';
         prompt += extractedElements.atmosphere + ' ';
         if (extractedElements.subject) {
-          prompt += `${extractedElements.subject} visible in the scene. `;
+          prompt += `${extractedElements.subject} shown FULL BODY from head to feet, standing in the scene. `;
+          prompt += 'Ensure entire body is visible, no cropping of heads or limbs. ';
         }
-      } else if (shot.shotType.includes('closeup')) {
-        // Closeups focus on subject details
+      } else if (shot.shotType.includes('closeup') || shot.shotType === 'extreme_closeup') {
+        // Closeups focus on face/upper body
         if (extractedElements.subject) {
-          prompt += `Detailed view of ${extractedElements.subject}. `;
+          prompt += `Close-up view of ${extractedElements.subject}, face and upper body clearly visible. `;
         }
         prompt += extractedElements.emotionalContext + ' ';
-        prompt += 'Sharp focus on facial features and expression. ';
+        prompt += 'Sharp focus on facial features and expression, head fully in frame. ';
       } else {
-        // Medium shots balance subject and environment
+        // Medium shots show waist-up or full body
         if (extractedElements.subject) {
-          prompt += extractedElements.subject + ' ';
+          prompt += extractedElements.subject + ', shown from waist up with head clearly visible. ';
         }
         prompt += extractedElements.action + ' ';
         prompt += `with ${extractedElements.environment} visible in background. `;
+        prompt += 'Character fully framed, no cropping of head or shoulders. ';
       }
 
       // Add lighting and atmosphere (consistent across all shots)
@@ -40718,11 +40721,17 @@ const SHOT_DECOMPOSITION_ENGINE = {
       }
 
       // Add character bible elements if provided
+      // IMPORTANT: Include full character details to ensure proper rendering
       if (characterBible && characterBible.length > 0) {
-        const mainChar = characterBible[0];
-        if (mainChar.description) {
-          prompt += `Character: ${mainChar.description} `;
-        }
+        prompt += 'CHARACTERS (must be shown clearly with faces visible): ';
+        characterBible.forEach((char, idx) => {
+          if (char.description || char.name) {
+            const charName = char.name || `Character ${idx + 1}`;
+            const charDesc = char.description || '';
+            prompt += `${charName}: ${charDesc}. `;
+          }
+        });
+        prompt += 'All characters must have faces clearly visible, not cut off. ';
       }
 
       // Add technical quality
@@ -41912,6 +41921,7 @@ exports.creationWizardBatchDecomposeScenes = functions
   const {
     scenes,             // Array of scene objects { id, visualPrompt, narration, duration }
     targetShotCount,    // Default shots per scene
+    clipDuration: inputClipDuration, // Video clip duration (6 or 10 seconds from Minimax)
     genre,
     productionMode,
     styleBible,         // Global style bible for consistency
@@ -41919,11 +41929,14 @@ exports.creationWizardBatchDecomposeScenes = functions
     globalConsistency   // { enabled: true, anchorSceneId: null } - use first scene as anchor
   } = data;
 
+  // MINIMAX CONSTRAINT: Clip duration must be exactly 6 or 10 seconds
+  const clipDuration = inputClipDuration === 10 ? 10 : 6;
+
   if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
     throw new functions.https.HttpsError('invalid-argument', 'Scenes array is required');
   }
 
-  console.log(`[creationWizardBatchDecomposeScenes] Starting batch decomposition of ${scenes.length} scenes`);
+  console.log(`[creationWizardBatchDecomposeScenes] Starting batch decomposition of ${scenes.length} scenes, clipDuration: ${clipDuration}s`);
 
   try {
     // Step 1: Generate a GLOBAL visual consistency profile
@@ -42015,9 +42028,13 @@ Return JSON:
       try {
         // Analyze scene type
         const sceneType = SHOT_DECOMPOSITION_ENGINE.analyzeSceneType(sceneDescription);
-        const shotCount = SHOT_DECOMPOSITION_ENGINE.calculateShotCount(sceneDuration, sceneType);
-        const actualShotCount = Math.min(Math.max(defaultShots, 2), shotCount);
-        const baseSequence = SHOT_DECOMPOSITION_ENGINE.generateShotSequence(sceneType, actualShotCount, sceneDuration);
+
+        // Calculate shot count using Hollywood formula: ceil(sceneDuration / clipDuration)
+        const hollywoodShotCount = Math.ceil(sceneDuration / clipDuration);
+        const actualShotCount = Math.min(Math.max(targetShotCount || hollywoodShotCount, 2), 10);
+
+        // Generate sequence with EXACT Minimax clip duration
+        const baseSequence = SHOT_DECOMPOSITION_ENGINE.generateShotSequence(sceneType, actualShotCount, sceneDuration, clipDuration);
 
         // Build prompt with global consistency requirements
         const systemPrompt = `You are a Hollywood cinematographer decomposing Scene ${i + 1} of ${scenes.length} into shots.
@@ -42059,14 +42076,15 @@ Return JSON:
     {
       "shotIndex": 1,
       "shotType": "wide|medium|closeup|etc",
-      "duration": 2.5,
       "cameraMovement": "movement type",
       "prompt": "DETAILED prompt (150+ words) including global visual DNA...",
       "purpose": "narrative purpose"
     }
   ],
   "sceneConsistencyNotes": "How this scene connects to others visually"
-}`;
+}
+
+IMPORTANT: Do NOT include duration in your response - durations are fixed at ${clipDuration || 6} seconds per shot.`;
 
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o',
@@ -42081,13 +42099,16 @@ Return JSON:
 
         const shotData = JSON.parse(completion.choices[0].message.content.trim());
 
-        // Normalize shots
+        // MINIMAX CONSTRAINT: Each shot must be exactly 6s or 10s
+        const validClipDuration = clipDuration === 10 ? 10 : 6;
+
+        // Normalize shots - FORCE duration to be exactly clipDuration
         const normalizedShots = (shotData.shots || []).map((shot, idx) => ({
           id: `${scene.id}_shot_${idx + 1}`,
           sceneId: scene.id,
           shotIndex: shot.shotIndex || idx + 1,
           shotType: shot.shotType || baseSequence[idx]?.shotType || 'medium',
-          duration: shot.duration || baseSequence[idx]?.duration || 2,
+          duration: validClipDuration, // ALWAYS use Minimax clip duration (6 or 10)
           cameraMovement: shot.cameraMovement || baseSequence[idx]?.cameraMovement || 'static',
           prompt: shot.prompt,
           purpose: shot.purpose || 'scene coverage',

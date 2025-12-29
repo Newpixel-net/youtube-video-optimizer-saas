@@ -7561,6 +7561,9 @@
 
         /**
          * Generate a single shot image
+         *
+         * IMPORTANT: Shot 1 uses the scene's existing image as its base.
+         * The scene's main image is NEVER overwritten by shot generation.
          */
         async function generateSingleShotImage(sceneId, shotIndex) {
             const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
@@ -7570,6 +7573,19 @@
             }
 
             const shot = decomposed.shots[shotIndex];
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+
+            // SHOT 1 SPECIAL HANDLING: If scene already has an image, use it for Shot 1
+            if (shotIndex === 0 && storyboardScene?.imageUrl && !shot.imageUrl) {
+                shot.imageUrl = storyboardScene.imageUrl;
+                shot.status = 'ready';
+                shot.fromSceneImage = true; // Mark as derived from scene image
+                showToast(`✅ Shot 1 initialized with scene image. Use "Regen" for a different shot.`, 'success');
+                renderShotDecompositionModal();
+                scheduleAutoSave();
+                return;
+            }
+
             shot.status = 'generating';
             renderShotDecompositionModal();
             showToast(`🎨 Generating shot ${shotIndex + 1}...`, 'info');
@@ -7609,18 +7625,13 @@
                 if (result.data.success && result.data.images && result.data.images.length > 0) {
                     shot.imageUrl = result.data.images[0].url;
                     shot.status = 'ready';
+                    shot.fromSceneImage = false;
 
-                    // SYNC: If this is Shot 1, also update the scene's main image
-                    if (shotIndex === 0) {
-                        const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
-                        if (storyboardScene) {
-                            storyboardScene.imageUrl = shot.imageUrl;
-                            storyboardScene.status = 'ready';
-                            console.log(`[Frame Chain] Shot 1 image synced to Scene ${sceneId} main image`);
-                        }
-                    }
+                    // NOTE: We do NOT sync back to scene image anymore.
+                    // The scene's main image stays as it was originally generated.
+                    // Shot images are independent and based on their specific prompts.
 
-                    showToast(`✅ Shot ${shotIndex + 1} generated!${shotIndex === 0 ? ' (Scene image updated)' : ''}`, 'success');
+                    showToast(`✅ Shot ${shotIndex + 1} generated!`, 'success');
                 } else {
                     throw new Error(result.data.message || 'No image returned');
                 }
@@ -8281,6 +8292,10 @@
 
             try {
                 const generateVideoFn = functions.httpsCallable('creationWizardGenerateShotVideo', { timeout: 120000 });
+
+                // Use shot's duration from decomposition (should be exactly 6 or 10 seconds)
+                const shotDuration = shot.duration === 10 ? '10s' : '6s';
+
                 const result = await generateVideoFn({
                     sceneId,
                     shotId: shot.id,
@@ -8288,7 +8303,7 @@
                     imageUrl: shot.imageUrl,
                     prompt: shot.prompt,
                     cameraMovement: shot.cameraMovement,
-                    duration: '6s'
+                    duration: shotDuration
                 });
 
                 if (result.data.success) {
@@ -9188,9 +9203,14 @@
                 }));
 
                 const batchDecomposeFn = functions.httpsCallable('creationWizardBatchDecomposeScenes', { timeout: 540000 });
+
+                // Get clip duration from script timing (Minimax only supports 6 or 10 seconds)
+                const clipDuration = state.script.timing?.clipDuration || 6;
+
                 const result = await batchDecomposeFn({
                     projectId: state.projectId,
                     scenes: scenesData,
+                    clipDuration: clipDuration, // CRITICAL: Pass clip duration for correct shot calculations
                     visualStyle: state.storyboard.visualStyle || {},
                     scriptSummary: state.script?.content?.substring(0, 500) || ''
                 });
