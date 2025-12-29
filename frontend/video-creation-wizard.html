@@ -9345,16 +9345,6 @@
                             </button>
                         </div>
 
-                        <!-- Editable logline -->
-                        <div style="margin-top: 1rem;">
-                            <label style="display: block; font-size: 0.8rem; font-weight: 600; color: white; margin-bottom: 0.35rem;">
-                                One-Line Summary (Logline)
-                            </label>
-                            <textarea id="concept-logline"
-                                      placeholder="A one-sentence summary of your video..."
-                                      style="width: 100%; min-height: 60px; padding: 0.65rem; background: rgba(30,30,50,1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; resize: vertical;"
-                                      onchange="updateConceptLogline(this.value)">${concept.logline || selectedIdea?.logline || ''}</textarea>
-                        </div>
                     </div>
                 `;
             }
@@ -9991,7 +9981,15 @@
             const characterIntel = state.characterIntelligence;
 
             // Determine if using new production flow
-            const usingNewFlow = production?.type && selectedConcept;
+            // ROBUST CHECK: If we have a selected concept, use new flow regardless of production.type
+            // This handles edge cases like autosave state restoration
+            const usingNewFlow = selectedConcept && selectedConcept.title;
+
+            // FALLBACK: Ensure state.content.topic is populated from selected concept
+            // This ensures the hidden input always has the correct value
+            if (selectedConcept && (!state.content.topic || state.content.topic.trim() === '')) {
+                state.content.topic = selectedConcept.title + ': ' + (selectedConcept.logline || selectedConcept.description || '');
+            }
 
             return `
                 <div class="content-card">
