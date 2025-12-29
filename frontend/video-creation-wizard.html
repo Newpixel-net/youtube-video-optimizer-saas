@@ -3713,8 +3713,15 @@
             // Step 4: Storyboard
             storyboard: {
                 status: 'idle', // idle, generating, ready, error
-                scenes: [],     // Array of { sceneId, status, imageUrl, prompt, jobId, source }
+                scenes: [],     // Array of { sceneId, status, imageUrl, prompt, jobId, source, shots: [] }
                 characterReference: null,
+                // Phase 12: Multi-Shot Scene Architecture
+                multiShotMode: {
+                    enabled: false,             // Toggle multi-shot mode
+                    defaultShotCount: 3,        // Default shots per scene (2-6)
+                    autoDecompose: false,       // Auto-decompose scenes when enabled
+                    decomposedScenes: {}        // { sceneId: { shots: [], consistencyAnchors: {}, status: 'pending'|'ready' } }
+                },
                 styleReference: null,
                 modifyingScene: null,  // Scene ID being modified in modal
                 modifyPrompt: null,    // Current prompt in modify modal
@@ -6154,6 +6161,211 @@
             scheduleAutoSave();
         }
 
+        // ==========================================
+        // PHASE 12D: VIDEO EFFECTS, TRANSITIONS & AUDIO
+        // ==========================================
+
+        /**
+         * Video effect presets with their filter values
+         */
+        const VIDEO_EFFECT_PRESETS = {
+            'cinematic': { saturation: 0.9, contrast: 1.1, brightness: 0.02, gamma: 1.05, vignette: 0.3 },
+            'vibrant': { saturation: 1.3, contrast: 1.15, brightness: 0.05, gamma: 1.0, vignette: 0 },
+            'dramatic': { saturation: 0.8, contrast: 1.3, brightness: -0.05, gamma: 0.95, vignette: 0.5 },
+            'warm': { saturation: 1.1, contrast: 1.05, brightness: 0.03, gamma: 1.0, vignette: 0.2 },
+            'cool': { saturation: 0.95, contrast: 1.1, brightness: 0, gamma: 1.02, vignette: 0.15 },
+            'vintage': { saturation: 0.7, contrast: 0.95, brightness: 0.05, gamma: 1.1, vignette: 0.4, grain: 0.15 },
+            'documentary': { saturation: 1.0, contrast: 1.05, brightness: 0, gamma: 1.0, vignette: 0 },
+            'noir': { saturation: 0, contrast: 1.4, brightness: -0.02, gamma: 0.9, vignette: 0.6 }
+        };
+
+        /**
+         * Set video effect preset
+         */
+        async function setVideoEffectPreset(preset) {
+            if (!state.storyboard.videoEffects) {
+                state.storyboard.videoEffects = {};
+            }
+
+            if (preset && VIDEO_EFFECT_PRESETS[preset]) {
+                state.storyboard.videoEffects.preset = preset;
+                state.storyboard.videoEffects.filters = VIDEO_EFFECT_PRESETS[preset];
+
+                // Save to backend
+                try {
+                    const applyEffectsFn = functions.httpsCallable('creationWizardApplyVideoEffects', { timeout: 60000 });
+                    await applyEffectsFn({
+                        projectId: state.projectId,
+                        preset: preset,
+                        customFilters: {},
+                        applyToScenes: 'all'
+                    });
+                    showToast(`Applied ${preset} color grading`, 'success');
+                } catch (error) {
+                    console.error('[Video Effects] Error:', error);
+                    showToast('Failed to apply effects', 'error');
+                }
+            } else {
+                state.storyboard.videoEffects.preset = null;
+                state.storyboard.videoEffects.filters = null;
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Set transition mode
+         */
+        function setTransitionMode(mode) {
+            if (!state.storyboard.transitions) {
+                state.storyboard.transitions = { autoMode: true };
+            }
+            state.storyboard.transitions.mode = mode;
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Toggle auto transitions
+         */
+        async function toggleAutoTransitions(enabled) {
+            if (!state.storyboard.transitions) {
+                state.storyboard.transitions = {};
+            }
+            state.storyboard.transitions.autoMode = enabled;
+
+            if (enabled && state.storyboard.multiShotMode?.decomposedScenes) {
+                // Configure transitions for all decomposed scenes
+                try {
+                    const sceneIds = Object.keys(state.storyboard.multiShotMode.decomposedScenes);
+                    for (const sceneId of sceneIds) {
+                        const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+                        if (decomposed?.shots?.length > 1) {
+                            const configureFn = functions.httpsCallable('creationWizardConfigureShotTransitions', { timeout: 60000 });
+                            await configureFn({
+                                projectId: state.projectId,
+                                sceneId: sceneId,
+                                shots: decomposed.shots,
+                                autoMode: true,
+                                mood: state.storyboard.visualStyle?.mood || 'neutral'
+                            });
+                        }
+                    }
+                    showToast('Auto-transitions configured', 'success');
+                } catch (error) {
+                    console.error('[Auto Transitions] Error:', error);
+                }
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Set audio ducking preset
+         */
+        function setAudioDuckingPreset(preset) {
+            if (!state.storyboard.audioDucking) {
+                state.storyboard.audioDucking = { enabled: true };
+            }
+            state.storyboard.audioDucking.preset = preset;
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Toggle audio ducking
+         */
+        async function toggleAudioDucking(enabled) {
+            if (!state.storyboard.audioDucking) {
+                state.storyboard.audioDucking = {};
+            }
+            state.storyboard.audioDucking.enabled = enabled;
+
+            if (enabled) {
+                try {
+                    const configureFn = functions.httpsCallable('creationWizardConfigureAudioDucking', { timeout: 60000 });
+                    await configureFn({
+                        projectId: state.projectId,
+                        preset: state.storyboard.audioDucking.preset || 'standard',
+                        voiceSegments: [], // Will be calculated during export
+                        musicDuration: 0
+                    });
+                    showToast('Audio ducking enabled', 'success');
+                } catch (error) {
+                    console.error('[Audio Ducking] Error:', error);
+                }
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Set title card style
+         */
+        function setTitleCardStyle(style) {
+            if (!state.storyboard.titleCards) {
+                state.storyboard.titleCards = { enabled: true };
+            }
+            state.storyboard.titleCards.style = style;
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Toggle title cards
+         */
+        async function toggleTitleCards(enabled) {
+            if (!state.storyboard.titleCards) {
+                state.storyboard.titleCards = {};
+            }
+            state.storyboard.titleCards.enabled = enabled;
+
+            if (enabled && state.storyboard.scenes?.length > 0) {
+                try {
+                    const generateFn = functions.httpsCallable('creationWizardGenerateTitleCards', { timeout: 120000 });
+                    const scenes = state.storyboard.scenes.map((scene, idx) => ({
+                        sceneId: scene.sceneId || idx + 1,
+                        title: scene.title || `Scene ${idx + 1}`,
+                        subtitle: scene.description?.substring(0, 50)
+                    }));
+
+                    await generateFn({
+                        projectId: state.projectId,
+                        scenes: scenes,
+                        style: state.storyboard.titleCards.style || 'modern',
+                        options: { includeChapterCards: false }
+                    });
+                    showToast('Title cards generated', 'success');
+                } catch (error) {
+                    console.error('[Title Cards] Error:', error);
+                }
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Load Phase 4 configuration from backend
+         */
+        async function loadPhase4Config() {
+            try {
+                const getConfigFn = functions.httpsCallable('creationWizardGetPhase4Config', { timeout: 30000 });
+                const result = await getConfigFn({});
+
+                if (result.data.success) {
+                    state.phase4Config = result.data.config;
+                    return result.data.config;
+                }
+            } catch (error) {
+                console.error('[Phase 4 Config] Error:', error);
+            }
+            return null;
+        }
+
         /**
          * Load prompt chain configuration from backend
          */
@@ -7158,6 +7370,1119 @@
         function closeUpscaleModal() {
             const modal = document.getElementById('upscale-quality-modal');
             if (modal) modal.remove();
+        }
+
+        // ==========================================
+        // PHASE 12: MULTI-SHOT SCENE FUNCTIONS
+        // ==========================================
+
+        /**
+         * Toggle multi-shot mode for storyboard generation
+         */
+        function toggleMultiShotMode(enabled) {
+            state.storyboard.multiShotMode.enabled = enabled;
+            render();
+            scheduleAutoSave();
+
+            if (enabled) {
+                showToast('🎬 Multi-Shot Mode enabled! Each scene will have multiple camera angles.', 'success');
+            } else {
+                showToast('Multi-Shot Mode disabled', 'info');
+            }
+        }
+
+        /**
+         * Set default shot count for multi-shot mode
+         */
+        function setDefaultShotCount(count) {
+            state.storyboard.multiShotMode.defaultShotCount = Math.max(2, Math.min(6, parseInt(count)));
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Decompose a scene into multiple shots using AI
+         */
+        async function decomposeSceneToShots(sceneId) {
+            const scene = state.script.scenes.find(s => s.id === sceneId);
+            if (!scene) {
+                showToast('Scene not found', 'error');
+                return;
+            }
+
+            // Mark as processing
+            if (!state.storyboard.multiShotMode.decomposedScenes) {
+                state.storyboard.multiShotMode.decomposedScenes = {};
+            }
+            state.storyboard.multiShotMode.decomposedScenes[sceneId] = {
+                status: 'decomposing',
+                shots: [],
+                consistencyAnchors: null
+            };
+            render();
+            showToast('🎬 Decomposing scene into shots...', 'info');
+
+            try {
+                const decomposeFn = functions.httpsCallable('creationWizardDecomposeSceneToShots', { timeout: 120000 });
+
+                const result = await decomposeFn({
+                    scene: {
+                        id: sceneId,
+                        visualPrompt: scene.visualPrompt || scene.visual,
+                        narration: scene.narration,
+                        duration: scene.duration || 6
+                    },
+                    targetShotCount: state.storyboard.multiShotMode.defaultShotCount,
+                    genre: state.concept.genre,
+                    productionMode: state.concept.productionMode || 'premium',
+                    styleBible: state.storyboard.styleBible?.enabled ? state.storyboard.styleBible : null,
+                    characterBible: state.storyboard.characterBible?.enabled ? state.storyboard.characterBible.characters : null
+                });
+
+                if (result.data.success) {
+                    state.storyboard.multiShotMode.decomposedScenes[sceneId] = {
+                        status: 'ready',
+                        sceneType: result.data.sceneType,
+                        totalDuration: result.data.totalDuration,
+                        shots: result.data.shots,
+                        consistencyAnchors: result.data.consistencyAnchors,
+                        selectedShot: 0
+                    };
+
+                    showToast(`✅ Scene decomposed into ${result.data.shotCount} shots!`, 'success');
+                    render();
+                    scheduleAutoSave();
+                } else {
+                    throw new Error(result.data.message || 'Failed to decompose scene');
+                }
+
+            } catch (error) {
+                console.error('Scene decomposition error:', error);
+                state.storyboard.multiShotMode.decomposedScenes[sceneId] = {
+                    status: 'error',
+                    error: error.message || 'Failed to decompose scene',
+                    shots: []
+                };
+                showToast(`Failed to decompose scene: ${error.message}`, 'error');
+                render();
+            }
+        }
+
+        /**
+         * Generate all shots for a decomposed scene
+         */
+        async function generateAllShotsForScene(sceneId) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || decomposed.status !== 'ready' || !decomposed.shots.length) {
+                showToast('Scene must be decomposed first', 'error');
+                return;
+            }
+
+            // Mark all shots as generating
+            decomposed.shots.forEach(shot => {
+                shot.status = 'generating';
+            });
+            render();
+            showToast(`🎨 Generating ${decomposed.shots.length} shots...`, 'info');
+
+            // Get character reference if available
+            let characterReference = null;
+            if (state.storyboard.characterBible?.enabled && state.storyboard.characterBible.characters.length > 0) {
+                const charWithRef = state.storyboard.characterBible.characters.find(c => c.referenceImageBase64);
+                if (charWithRef) {
+                    characterReference = {
+                        base64: charWithRef.referenceImageBase64,
+                        mimeType: 'image/png'
+                    };
+                }
+            }
+
+            // Generate each shot sequentially for better consistency
+            for (let i = 0; i < decomposed.shots.length; i++) {
+                const shot = decomposed.shots[i];
+
+                try {
+                    // Build enhanced prompt with consistency anchors
+                    let enhancedPrompt = shot.prompt;
+                    if (decomposed.consistencyAnchors) {
+                        enhancedPrompt += `\n\nCONSISTENCY: Lighting=${decomposed.consistencyAnchors.lighting || 'cinematic'}, Colors=${decomposed.consistencyAnchors.colorPalette || 'scene palette'}, Atmosphere=${decomposed.consistencyAnchors.atmosphere || 'consistent'}`;
+                    }
+
+                    // Call image generation
+                    const generateFn = functions.httpsCallable('generateCreativeImage', { timeout: 300000 });
+                    const requestData = {
+                        prompt: enhancedPrompt,
+                        model: state.storyboard.imageModel || 'nanobanana-pro',
+                        quantity: 1,
+                        aspectRatio: state.platform.aspectRatio || '16:9',
+                        quality: 'hd'
+                    };
+
+                    if (characterReference) {
+                        requestData.characterReference = characterReference;
+                    }
+
+                    const result = await generateFn(requestData);
+
+                    if (result.data.success && result.data.images && result.data.images.length > 0) {
+                        shot.imageUrl = result.data.images[0].url;
+                        shot.status = 'ready';
+                        showToast(`Shot ${i + 1}/${decomposed.shots.length} complete!`, 'success');
+                    } else {
+                        shot.status = 'error';
+                        shot.error = 'No image returned';
+                    }
+
+                } catch (error) {
+                    console.error(`Shot ${i + 1} generation error:`, error);
+                    shot.status = 'error';
+                    shot.error = error.message || 'Generation failed';
+                }
+
+                render();
+
+                // Small delay between shots to avoid rate limiting
+                if (i < decomposed.shots.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+
+            // Check results
+            const successCount = decomposed.shots.filter(s => s.status === 'ready').length;
+            if (successCount === decomposed.shots.length) {
+                showToast(`✅ All ${successCount} shots generated successfully!`, 'success');
+            } else {
+                showToast(`Generated ${successCount}/${decomposed.shots.length} shots. Some failed.`, 'warning');
+            }
+
+            scheduleAutoSave();
+        }
+
+        /**
+         * Generate a single shot
+         */
+        async function generateSingleShot(sceneId, shotIndex) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || !decomposed.shots[shotIndex]) {
+                showToast('Shot not found', 'error');
+                return;
+            }
+
+            const shot = decomposed.shots[shotIndex];
+            shot.status = 'generating';
+            render();
+
+            try {
+                let enhancedPrompt = shot.prompt;
+                if (decomposed.consistencyAnchors) {
+                    enhancedPrompt += `\n\nCONSISTENCY: Lighting=${decomposed.consistencyAnchors.lighting || 'cinematic'}, Colors=${decomposed.consistencyAnchors.colorPalette || 'scene palette'}`;
+                }
+
+                const generateFn = functions.httpsCallable('generateCreativeImage', { timeout: 300000 });
+                const result = await generateFn({
+                    prompt: enhancedPrompt,
+                    model: state.storyboard.imageModel || 'nanobanana-pro',
+                    quantity: 1,
+                    aspectRatio: state.platform.aspectRatio || '16:9',
+                    quality: 'hd'
+                });
+
+                if (result.data.success && result.data.images && result.data.images.length > 0) {
+                    shot.imageUrl = result.data.images[0].url;
+                    shot.status = 'ready';
+                    showToast(`Shot ${shotIndex + 1} generated!`, 'success');
+                } else {
+                    throw new Error('No image returned');
+                }
+
+            } catch (error) {
+                console.error(`Shot ${shotIndex + 1} generation error:`, error);
+                shot.status = 'error';
+                shot.error = error.message || 'Generation failed';
+                showToast(`Shot ${shotIndex + 1} failed: ${error.message}`, 'error');
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Select a shot to view in the main preview
+         */
+        function selectShot(sceneId, shotIndex) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (decomposed) {
+                decomposed.selectedShot = shotIndex;
+                render();
+            }
+        }
+
+        /**
+         * Clear shot decomposition for a scene
+         */
+        function clearShotDecomposition(sceneId) {
+            if (state.storyboard.multiShotMode.decomposedScenes[sceneId]) {
+                delete state.storyboard.multiShotMode.decomposedScenes[sceneId];
+                render();
+                scheduleAutoSave();
+                showToast('Shot decomposition cleared', 'info');
+            }
+        }
+
+        // ==========================================
+        // PHASE 12B: SHOT VIDEO GENERATION
+        // ==========================================
+
+        /**
+         * Generate videos for all shots in a scene
+         */
+        async function generateAllShotVideosForScene(sceneId) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || decomposed.status !== 'ready' || !decomposed.shots.length) {
+                showToast('Generate images first before creating videos', 'error');
+                return;
+            }
+
+            // Check that all shots have images
+            const shotsWithImages = decomposed.shots.filter(s => s.imageUrl && s.status === 'ready');
+            if (shotsWithImages.length === 0) {
+                showToast('No shot images ready. Generate images first.', 'error');
+                return;
+            }
+
+            // Mark shots as generating video
+            shotsWithImages.forEach(shot => {
+                shot.videoStatus = 'generating';
+            });
+            render();
+            showToast(`🎬 Starting video generation for ${shotsWithImages.length} shots...`, 'info');
+
+            try {
+                const generateVideosFn = functions.httpsCallable('creationWizardGenerateAllShotVideos', { timeout: 540000 });
+                const result = await generateVideosFn({
+                    sceneId,
+                    shots: shotsWithImages.map(shot => ({
+                        id: shot.id,
+                        imageUrl: shot.imageUrl,
+                        prompt: shot.prompt,
+                        cameraMovement: shot.cameraMovement,
+                        duration: shot.duration
+                    }))
+                });
+
+                if (result.data.success) {
+                    // Store task IDs for polling
+                    result.data.shots.forEach(resultShot => {
+                        const shot = decomposed.shots.find(s => s.id === resultShot.shotId);
+                        if (shot && resultShot.taskId) {
+                            shot.videoTaskId = resultShot.taskId;
+                            shot.videoStatus = 'processing';
+                        } else if (shot && resultShot.status === 'error') {
+                            shot.videoStatus = 'error';
+                            shot.videoError = resultShot.error;
+                        }
+                    });
+
+                    showToast(`🎬 ${result.data.startedCount} video generations started! Polling for completion...`, 'success');
+
+                    // Start polling for video completion
+                    startShotVideoPolling(sceneId);
+                } else {
+                    throw new Error('Failed to start video generation');
+                }
+
+            } catch (error) {
+                console.error('Shot video generation error:', error);
+                shotsWithImages.forEach(shot => {
+                    shot.videoStatus = 'error';
+                    shot.videoError = error.message;
+                });
+                showToast(`Video generation failed: ${error.message}`, 'error');
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Generate video for a single shot
+         */
+        async function generateSingleShotVideo(sceneId, shotIndex) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || !decomposed.shots[shotIndex]) {
+                showToast('Shot not found', 'error');
+                return;
+            }
+
+            const shot = decomposed.shots[shotIndex];
+            if (!shot.imageUrl || shot.status !== 'ready') {
+                showToast('Generate image first before creating video', 'error');
+                return;
+            }
+
+            shot.videoStatus = 'generating';
+            render();
+            showToast(`🎬 Starting video for shot ${shotIndex + 1}...`, 'info');
+
+            try {
+                const generateVideoFn = functions.httpsCallable('creationWizardGenerateShotVideo', { timeout: 120000 });
+                const result = await generateVideoFn({
+                    sceneId,
+                    shotId: shot.id,
+                    shotIndex,
+                    imageUrl: shot.imageUrl,
+                    prompt: shot.prompt,
+                    cameraMovement: shot.cameraMovement,
+                    duration: '6s'
+                });
+
+                if (result.data.success) {
+                    shot.videoTaskId = result.data.taskId;
+                    shot.videoStatus = 'processing';
+                    showToast(`Shot ${shotIndex + 1} video started! Polling...`, 'success');
+
+                    // Start polling for this shot
+                    startSingleShotVideoPolling(sceneId, shotIndex, result.data.taskId);
+                } else {
+                    throw new Error('Failed to start video generation');
+                }
+
+            } catch (error) {
+                console.error('Shot video error:', error);
+                shot.videoStatus = 'error';
+                shot.videoError = error.message;
+                showToast(`Video failed: ${error.message}`, 'error');
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Poll for shot video completion (all shots in a scene)
+         */
+        function startShotVideoPolling(sceneId) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed) return;
+
+            const processingShots = decomposed.shots.filter(s => s.videoStatus === 'processing' && s.videoTaskId);
+            if (processingShots.length === 0) return;
+
+            let pollCount = 0;
+            const maxPolls = 120; // 4 minutes max (2s intervals)
+
+            const pollInterval = setInterval(async () => {
+                pollCount++;
+
+                if (pollCount > maxPolls) {
+                    clearInterval(pollInterval);
+                    processingShots.forEach(shot => {
+                        if (shot.videoStatus === 'processing') {
+                            shot.videoStatus = 'error';
+                            shot.videoError = 'Timed out';
+                        }
+                    });
+                    render();
+                    return;
+                }
+
+                const checkStatusFn = functions.httpsCallable('creationWizardCheckShotVideoStatus');
+
+                for (const shot of processingShots) {
+                    if (shot.videoStatus !== 'processing') continue;
+
+                    try {
+                        const result = await checkStatusFn({
+                            taskId: shot.videoTaskId,
+                            shotId: shot.id
+                        });
+
+                        if (result.data.status === 'ready' && result.data.videoUrl) {
+                            shot.videoUrl = result.data.videoUrl;
+                            shot.videoStatus = 'ready';
+                            showToast(`🎬 Shot ${shot.shotIndex + 1} video ready!`, 'success');
+                        } else if (result.data.status === 'error') {
+                            shot.videoStatus = 'error';
+                            shot.videoError = 'Generation failed';
+                        }
+
+                    } catch (error) {
+                        console.error('Poll error:', error);
+                    }
+                }
+
+                render();
+
+                // Check if all done
+                const stillProcessing = decomposed.shots.filter(s => s.videoStatus === 'processing');
+                if (stillProcessing.length === 0) {
+                    clearInterval(pollInterval);
+
+                    const readyCount = decomposed.shots.filter(s => s.videoStatus === 'ready').length;
+                    if (readyCount === decomposed.shots.length) {
+                        showToast(`✅ All ${readyCount} shot videos ready!`, 'success');
+                    }
+                    scheduleAutoSave();
+                }
+
+            }, 2000);
+        }
+
+        /**
+         * Poll for single shot video completion
+         */
+        function startSingleShotVideoPolling(sceneId, shotIndex, taskId) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || !decomposed.shots[shotIndex]) return;
+
+            const shot = decomposed.shots[shotIndex];
+            let pollCount = 0;
+            const maxPolls = 120;
+
+            const pollInterval = setInterval(async () => {
+                pollCount++;
+
+                if (pollCount > maxPolls || shot.videoStatus !== 'processing') {
+                    clearInterval(pollInterval);
+                    if (shot.videoStatus === 'processing') {
+                        shot.videoStatus = 'error';
+                        shot.videoError = 'Timed out';
+                        render();
+                    }
+                    return;
+                }
+
+                try {
+                    const checkStatusFn = functions.httpsCallable('creationWizardCheckShotVideoStatus');
+                    const result = await checkStatusFn({ taskId, shotId: shot.id });
+
+                    if (result.data.status === 'ready' && result.data.videoUrl) {
+                        clearInterval(pollInterval);
+                        shot.videoUrl = result.data.videoUrl;
+                        shot.videoStatus = 'ready';
+                        showToast(`🎬 Shot ${shotIndex + 1} video ready!`, 'success');
+                        render();
+                        scheduleAutoSave();
+                    } else if (result.data.status === 'error') {
+                        clearInterval(pollInterval);
+                        shot.videoStatus = 'error';
+                        shot.videoError = 'Generation failed';
+                        render();
+                    }
+
+                } catch (error) {
+                    console.error('Poll error:', error);
+                }
+
+            }, 2000);
+        }
+
+        /**
+         * Preview the assembled scene video sequence
+         */
+        async function previewSceneVideoSequence(sceneId) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed) {
+                showToast('No shot data found', 'error');
+                return;
+            }
+
+            const shotsWithVideos = decomposed.shots.filter(s => s.videoUrl && s.videoStatus === 'ready');
+            if (shotsWithVideos.length === 0) {
+                showToast('No shot videos ready. Generate videos first.', 'error');
+                return;
+            }
+
+            // Create video preview modal
+            const modal = document.createElement('div');
+            modal.id = 'shot-video-preview-modal';
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; padding: 1rem;';
+
+            const playlist = shotsWithVideos.map(s => s.videoUrl);
+            let currentIndex = 0;
+
+            modal.innerHTML = `
+                <div style="max-width: 900px; width: 100%; background: #1a1a2e; border-radius: 1rem; overflow: hidden;">
+                    <div style="padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: white;">🎬 Scene ${sceneId} - Shot Sequence</div>
+                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">${shotsWithVideos.length} shots ready</div>
+                        </div>
+                        <button onclick="document.getElementById('shot-video-preview-modal').remove()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">×</button>
+                    </div>
+                    <div style="position: relative; background: black;">
+                        <video id="shot-sequence-video" style="width: 100%; max-height: 500px;" controls>
+                            <source src="${playlist[0]}" type="video/mp4">
+                        </video>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem;">
+                            ${shotsWithVideos.map((shot, idx) => `
+                                <div onclick="playShot(${idx})" style="flex-shrink: 0; cursor: pointer; border: 2px solid ${idx === 0 ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; border-radius: 0.4rem; overflow: hidden; width: 80px;" data-shot-idx="${idx}">
+                                    ${shot.imageUrl ? `<img src="${shot.imageUrl}" style="width: 100%; height: 50px; object-fit: cover;">` : '<div style="width: 100%; height: 50px; background: rgba(255,255,255,0.1);"></div>'}
+                                    <div style="padding: 0.2rem; text-align: center;">
+                                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.6);">${shot.shotType?.replace('_', ' ') || 'Shot ' + (idx + 1)}</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                            <button onclick="playAllSequentially()" style="flex: 1; padding: 0.6rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border: none; border-radius: 0.5rem; color: white; cursor: pointer; font-weight: 600;">
+                                ▶️ Play All Sequentially
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Add playShot function to window
+            window.playShot = function(idx) {
+                const video = document.getElementById('shot-sequence-video');
+                if (video && playlist[idx]) {
+                    video.src = playlist[idx];
+                    video.play();
+
+                    // Update selected thumbnail
+                    document.querySelectorAll('#shot-video-preview-modal [data-shot-idx]').forEach((el, i) => {
+                        el.style.borderColor = i === idx ? '#8b5cf6' : 'rgba(255,255,255,0.2)';
+                    });
+                }
+            };
+
+            // Add playAllSequentially function
+            window.playAllSequentially = function() {
+                const video = document.getElementById('shot-sequence-video');
+                let idx = 0;
+
+                function playNext() {
+                    if (idx < playlist.length) {
+                        video.src = playlist[idx];
+                        video.play();
+
+                        document.querySelectorAll('#shot-video-preview-modal [data-shot-idx]').forEach((el, i) => {
+                            el.style.borderColor = i === idx ? '#8b5cf6' : 'rgba(255,255,255,0.2)';
+                        });
+
+                        idx++;
+                    }
+                }
+
+                video.onended = playNext;
+                playNext();
+            };
+        }
+
+        /**
+         * Render multi-shot timeline HTML for a scene
+         */
+        function renderMultiShotTimeline(sceneId) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || !decomposed.shots || decomposed.shots.length === 0) {
+                return '';
+            }
+
+            const selectedShot = decomposed.selectedShot || 0;
+            const imagesReady = decomposed.shots.filter(s => s.status === 'ready' && s.imageUrl).length;
+            const videosReady = decomposed.shots.filter(s => s.videoStatus === 'ready' && s.videoUrl).length;
+            const videosProcessing = decomposed.shots.filter(s => s.videoStatus === 'processing' || s.videoStatus === 'generating').length;
+
+            return `
+                <div style="margin-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem;">
+                    <!-- Header with action buttons -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.3rem;">
+                        <span style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                            📽️ ${decomposed.shots.length} SHOTS
+                            ${imagesReady > 0 ? `<span style="color: #10b981;">• ${imagesReady} 🖼️</span>` : ''}
+                            ${videosReady > 0 ? `<span style="color: #06b6d4;">• ${videosReady} 🎬</span>` : ''}
+                            ${videosProcessing > 0 ? `<span style="color: #f59e0b;">• ${videosProcessing} ⏳</span>` : ''}
+                        </span>
+                        <div style="display: flex; gap: 0.25rem;">
+                            <button onclick="generateAllShotsForScene(${sceneId})"
+                                    style="padding: 0.2rem 0.4rem; font-size: 0.55rem; background: linear-gradient(135deg, rgba(139,92,246,0.3), rgba(6,182,212,0.3)); border: 1px solid rgba(139,92,246,0.4); border-radius: 0.3rem; color: white; cursor: pointer;">
+                                🎨 Images
+                            </button>
+                            ${imagesReady > 0 ? `
+                                <button onclick="generateAllShotVideosForScene(${sceneId})"
+                                        style="padding: 0.2rem 0.4rem; font-size: 0.55rem; background: linear-gradient(135deg, rgba(6,182,212,0.3), rgba(16,185,129,0.3)); border: 1px solid rgba(6,182,212,0.4); border-radius: 0.3rem; color: white; cursor: pointer;">
+                                    🎬 Videos
+                                </button>
+                            ` : ''}
+                            ${videosReady > 0 ? `
+                                <button onclick="previewSceneVideoSequence(${sceneId})"
+                                        style="padding: 0.2rem 0.4rem; font-size: 0.55rem; background: linear-gradient(135deg, rgba(16,185,129,0.3), rgba(34,197,94,0.3)); border: 1px solid rgba(16,185,129,0.4); border-radius: 0.3rem; color: white; cursor: pointer;">
+                                    ▶️ Preview
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Shot thumbnails -->
+                    <div style="display: flex; gap: 0.3rem; overflow-x: auto; padding-bottom: 0.3rem;">
+                        ${decomposed.shots.map((shot, idx) => `
+                            <div onclick="selectShot(${sceneId}, ${idx})"
+                                 style="flex-shrink: 0; width: 55px; cursor: pointer; border: 2px solid ${selectedShot === idx ? '#8b5cf6' : 'rgba(255,255,255,0.2)'}; border-radius: 0.3rem; overflow: hidden; background: rgba(0,0,0,0.3); position: relative;">
+                                ${shot.status === 'ready' && shot.imageUrl ? `
+                                    <div style="position: relative;">
+                                        <img src="${shot.imageUrl}" style="width: 100%; height: 35px; object-fit: cover;">
+                                        ${shot.videoStatus === 'ready' ? `
+                                            <div style="position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; background: rgba(16,185,129,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                                <span style="font-size: 6px;">▶</span>
+                                            </div>
+                                        ` : shot.videoStatus === 'processing' || shot.videoStatus === 'generating' ? `
+                                            <div style="position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; background: rgba(245,158,11,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                                <div class="animate-spin" style="width: 6px; height: 6px; border: 1px solid rgba(0,0,0,0.3); border-top-color: white; border-radius: 50%;"></div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                ` : shot.status === 'generating' ? `
+                                    <div style="width: 100%; height: 35px; display: flex; align-items: center; justify-content: center; background: rgba(139,92,246,0.2);">
+                                        <div class="animate-spin" style="width: 12px; height: 12px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>
+                                    </div>
+                                ` : `
+                                    <div onclick="event.stopPropagation(); generateSingleShot(${sceneId}, ${idx})"
+                                         style="width: 100%; height: 35px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); font-size: 0.8rem; color: rgba(255,255,255,0.4);">
+                                        ${shot.status === 'error' ? '⚠️' : '🎨'}
+                                    </div>
+                                `}
+                                <div style="font-size: 0.45rem; text-align: center; padding: 0.1rem; color: rgba(255,255,255,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: rgba(0,0,0,0.5);">
+                                    ${shot.shotType?.replace('_', ' ').substring(0, 8) || `Shot ${idx + 1}`}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==========================================
+        // PHASE 12C: BATCH OPERATIONS & GLOBAL CONSISTENCY
+        // ==========================================
+
+        /**
+         * Batch decompose ALL scenes at once with global visual consistency
+         */
+        async function batchDecomposeAllScenes() {
+            if (!state.storyboard.scenes || state.storyboard.scenes.length === 0) {
+                showToast('No scenes to decompose', 'warning');
+                return;
+            }
+
+            // Initialize batch state
+            if (!state.storyboard.multiShotMode) {
+                state.storyboard.multiShotMode = { enabled: true, decomposedScenes: {} };
+            }
+            state.storyboard.multiShotMode.enabled = true;
+            state.storyboard.multiShotMode.batchStatus = {
+                status: 'processing',
+                totalScenes: state.storyboard.scenes.length,
+                processedScenes: 0,
+                startTime: Date.now()
+            };
+            render();
+
+            showToast('Starting batch decomposition with global visual consistency...', 'info');
+
+            try {
+                // Prepare scenes data for the batch function
+                const scenesData = state.storyboard.scenes.map(scene => ({
+                    sceneId: scene.sceneId,
+                    description: scene.description || scene.content,
+                    duration: scene.duration || 5,
+                    shotCount: state.storyboard.multiShotMode?.defaultShotCount || 3
+                }));
+
+                const batchDecomposeFn = functions.httpsCallable('creationWizardBatchDecomposeScenes', { timeout: 540000 });
+                const result = await batchDecomposeFn({
+                    projectId: state.projectId,
+                    scenes: scenesData,
+                    visualStyle: state.storyboard.visualStyle || {},
+                    scriptSummary: state.script?.content?.substring(0, 500) || ''
+                });
+
+                if (result.data.success) {
+                    // Store global visual profile
+                    state.storyboard.multiShotMode.globalVisualProfile = result.data.globalVisualProfile;
+
+                    // Store decomposed scenes
+                    result.data.decomposedScenes.forEach(sceneResult => {
+                        if (sceneResult.success) {
+                            state.storyboard.multiShotMode.decomposedScenes[sceneResult.sceneId] = {
+                                shots: sceneResult.shots,
+                                consistencyAnchors: sceneResult.consistencyAnchors,
+                                status: 'decomposed',
+                                globalVisualDNA: result.data.globalVisualProfile
+                            };
+                        }
+                    });
+
+                    state.storyboard.multiShotMode.batchStatus = {
+                        status: 'complete',
+                        totalScenes: state.storyboard.scenes.length,
+                        processedScenes: result.data.decomposedScenes.filter(s => s.success).length,
+                        completedAt: Date.now()
+                    };
+
+                    showToast(`Decomposed ${result.data.decomposedScenes.filter(s => s.success).length}/${state.storyboard.scenes.length} scenes!`, 'success');
+                } else {
+                    throw new Error(result.data.error || 'Batch decomposition failed');
+                }
+
+            } catch (error) {
+                console.error('Batch decomposition error:', error);
+                state.storyboard.multiShotMode.batchStatus = {
+                    status: 'error',
+                    error: error.message
+                };
+                showToast(`Batch decomposition failed: ${error.message}`, 'error');
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Batch generate ALL shot images across all scenes
+         */
+        async function batchGenerateAllShotImages() {
+            const decomposedScenes = state.storyboard.multiShotMode?.decomposedScenes || {};
+            const sceneIds = Object.keys(decomposedScenes);
+
+            if (sceneIds.length === 0) {
+                showToast('No decomposed scenes found. Please decompose scenes first.', 'warning');
+                return;
+            }
+
+            // Count total shots
+            let totalShots = 0;
+            sceneIds.forEach(sceneId => {
+                const scene = decomposedScenes[sceneId];
+                if (scene?.shots) {
+                    totalShots += scene.shots.filter(s => s.status !== 'ready').length;
+                }
+            });
+
+            if (totalShots === 0) {
+                showToast('All shot images are already generated!', 'info');
+                return;
+            }
+
+            // Initialize batch image generation state
+            state.storyboard.multiShotMode.batchImageStatus = {
+                status: 'processing',
+                totalShots: totalShots,
+                processedShots: 0,
+                startTime: Date.now()
+            };
+            render();
+
+            showToast(`Generating ${totalShots} shot images across ${sceneIds.length} scenes...`, 'info');
+
+            try {
+                // Prepare shots data
+                const allShots = [];
+                sceneIds.forEach(sceneId => {
+                    const scene = decomposedScenes[sceneId];
+                    if (scene?.shots) {
+                        scene.shots.forEach((shot, idx) => {
+                            if (shot.status !== 'ready') {
+                                allShots.push({
+                                    sceneId: sceneId,
+                                    shotIndex: idx,
+                                    shotType: shot.shotType,
+                                    prompt: shot.prompt,
+                                    cameraMovement: shot.cameraMovement,
+                                    duration: shot.duration
+                                });
+                                // Mark as generating
+                                shot.status = 'generating';
+                            }
+                        });
+                    }
+                });
+                render();
+
+                const batchGenerateFn = functions.httpsCallable('creationWizardBatchGenerateShotImages', { timeout: 540000 });
+                const result = await batchGenerateFn({
+                    projectId: state.projectId,
+                    shots: allShots,
+                    globalVisualProfile: state.storyboard.multiShotMode.globalVisualProfile || {},
+                    imageModel: state.storyboard.imageModel || 'nanobanana-pro',
+                    aspectRatio: state.platform.aspectRatio || '16:9'
+                });
+
+                if (result.data.success) {
+                    // Update shots with generated images
+                    let successCount = 0;
+                    result.data.results.forEach(shotResult => {
+                        const scene = decomposedScenes[shotResult.sceneId];
+                        if (scene && scene.shots[shotResult.shotIndex]) {
+                            const shot = scene.shots[shotResult.shotIndex];
+                            if (shotResult.success && shotResult.imageUrl) {
+                                shot.imageUrl = shotResult.imageUrl;
+                                shot.status = 'ready';
+                                successCount++;
+                            } else {
+                                shot.status = 'error';
+                                shot.error = shotResult.error || 'Generation failed';
+                            }
+                        }
+                    });
+
+                    state.storyboard.multiShotMode.batchImageStatus = {
+                        status: 'complete',
+                        totalShots: totalShots,
+                        processedShots: successCount,
+                        completedAt: Date.now()
+                    };
+
+                    showToast(`Generated ${successCount}/${totalShots} shot images!`, 'success');
+                } else {
+                    throw new Error(result.data.error || 'Batch image generation failed');
+                }
+
+            } catch (error) {
+                console.error('Batch image generation error:', error);
+                state.storyboard.multiShotMode.batchImageStatus = {
+                    status: 'error',
+                    error: error.message
+                };
+                showToast(`Batch image generation failed: ${error.message}`, 'error');
+            }
+
+            render();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Export multi-shot project with all sequences
+         */
+        async function exportMultiShotProject() {
+            const decomposedScenes = state.storyboard.multiShotMode?.decomposedScenes || {};
+            const sceneIds = Object.keys(decomposedScenes);
+
+            if (sceneIds.length === 0) {
+                showToast('No multi-shot scenes to export', 'warning');
+                return;
+            }
+
+            showToast('Preparing multi-shot project export...', 'info');
+
+            try {
+                // Prepare scene sequences
+                const sceneSequences = [];
+                sceneIds.forEach(sceneId => {
+                    const scene = decomposedScenes[sceneId];
+                    if (scene?.shots) {
+                        const shots = scene.shots.map((shot, idx) => ({
+                            shotIndex: idx,
+                            shotType: shot.shotType,
+                            imageUrl: shot.imageUrl,
+                            videoUrl: shot.videoUrl,
+                            duration: shot.duration || 3
+                        }));
+                        sceneSequences.push({
+                            sceneId: sceneId,
+                            shots: shots,
+                            consistencyAnchors: scene.consistencyAnchors
+                        });
+                    }
+                });
+
+                const exportFn = functions.httpsCallable('creationWizardExportMultiShotProject', { timeout: 120000 });
+                const result = await exportFn({
+                    projectId: state.projectId,
+                    projectTitle: state.topic || 'Untitled Project',
+                    sceneSequences: sceneSequences,
+                    globalVisualProfile: state.storyboard.multiShotMode.globalVisualProfile || {},
+                    audioTrack: state.audioTrack?.url || null
+                });
+
+                if (result.data.success) {
+                    // Show export modal with manifest
+                    showExportMultiShotModal(result.data.manifest);
+                    showToast('Export manifest ready!', 'success');
+                } else {
+                    throw new Error(result.data.error || 'Export failed');
+                }
+
+            } catch (error) {
+                console.error('Export error:', error);
+                showToast(`Export failed: ${error.message}`, 'error');
+            }
+        }
+
+        /**
+         * Show export modal with multi-shot manifest
+         */
+        function showExportMultiShotModal(manifest) {
+            const modal = document.createElement('div');
+            modal.id = 'export-multishot-modal';
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 2rem;';
+
+            modal.innerHTML = `
+                <div style="max-width: 700px; width: 100%; background: #1a1a2e; border-radius: 1rem; overflow: hidden; max-height: 90vh; overflow-y: auto;">
+                    <div style="padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 1.2rem; font-weight: 600; color: white;">Multi-Shot Project Export</div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">${manifest.projectTitle}</div>
+                            </div>
+                            <button onclick="document.getElementById('export-multishot-modal').remove()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer;">x</button>
+                        </div>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <!-- Summary -->
+                        <div style="background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem;">
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center;">
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #8b5cf6;">${manifest.totalScenes}</div>
+                                    <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">Scenes</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #06b6d4;">${manifest.totalShots}</div>
+                                    <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">Total Shots</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #10b981;">${Math.round(manifest.totalDuration)}s</div>
+                                    <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">Duration</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Visual Profile -->
+                        ${manifest.globalVisualProfile ? `
+                            <div style="background: rgba(255,255,255,0.05); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem;">
+                                <div style="font-size: 0.8rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">Global Visual DNA</div>
+                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5;">
+                                    ${manifest.globalVisualProfile.colorPalette ? `<span style="color: #f59e0b;">Colors:</span> ${manifest.globalVisualProfile.colorPalette}<br>` : ''}
+                                    ${manifest.globalVisualProfile.lighting ? `<span style="color: #f59e0b;">Lighting:</span> ${manifest.globalVisualProfile.lighting}<br>` : ''}
+                                    ${manifest.globalVisualProfile.style ? `<span style="color: #f59e0b;">Style:</span> ${manifest.globalVisualProfile.style}` : ''}
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        <!-- Scene List -->
+                        <div style="font-size: 0.8rem; font-weight: 600; color: white; margin-bottom: 0.5rem;">Scene Sequences</div>
+                        <div style="max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 0.5rem; padding: 0.5rem;">
+                            ${manifest.scenes.map((scene, idx) => `
+                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">${idx + 1}.</span>
+                                        <span style="font-size: 0.75rem; color: white;">Scene ${scene.sceneId}</span>
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem; font-size: 0.65rem;">
+                                        <span style="color: rgba(255,255,255,0.5);">${scene.shotCount} shots</span>
+                                        <span style="color: rgba(255,255,255,0.4);">${scene.duration}s</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <!-- Export Actions -->
+                        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button onclick="downloadExportManifest()" style="flex: 1; padding: 0.75rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border: none; border-radius: 0.5rem; color: white; cursor: pointer; font-weight: 600;">
+                                Download JSON Manifest
+                            </button>
+                            <button onclick="copyFFmpegCommand()" style="flex: 1; padding: 0.75rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; cursor: pointer; font-weight: 600;">
+                                Copy FFmpeg Command
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            // Store manifest for download
+            window.currentExportManifest = manifest;
+
+            window.downloadExportManifest = function() {
+                const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${manifest.projectTitle.replace(/[^a-z0-9]/gi, '_')}_multishot_export.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('Manifest downloaded!', 'success');
+            };
+
+            window.copyFFmpegCommand = function() {
+                if (manifest.ffmpegConcatFile) {
+                    navigator.clipboard.writeText(manifest.ffmpegConcatFile);
+                    showToast('FFmpeg concat file copied to clipboard!', 'success');
+                } else {
+                    showToast('No FFmpeg command available', 'warning');
+                }
+            };
+        }
+
+        /**
+         * Render global visual profile display
+         */
+        function renderGlobalVisualProfile() {
+            const profile = state.storyboard.multiShotMode?.globalVisualProfile;
+            if (!profile) return '';
+
+            return `
+                <div style="background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(6,182,212,0.1)); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.5rem; padding: 0.75rem; margin-top: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <span style="font-size: 0.75rem;">🧬</span>
+                        <span style="font-size: 0.7rem; font-weight: 600; color: white;">Global Visual DNA</span>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.6rem;">
+                        ${profile.colorPalette ? `<span style="background: rgba(245,158,11,0.2); padding: 0.2rem 0.4rem; border-radius: 0.25rem; color: #f59e0b;">${profile.colorPalette}</span>` : ''}
+                        ${profile.lighting ? `<span style="background: rgba(6,182,212,0.2); padding: 0.2rem 0.4rem; border-radius: 0.25rem; color: #06b6d4;">${profile.lighting}</span>` : ''}
+                        ${profile.style ? `<span style="background: rgba(139,92,246,0.2); padding: 0.2rem 0.4rem; border-radius: 0.25rem; color: #8b5cf6;">${profile.style}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Render batch operation progress
+         */
+        function renderBatchProgress() {
+            const batchStatus = state.storyboard.multiShotMode?.batchStatus;
+            const batchImageStatus = state.storyboard.multiShotMode?.batchImageStatus;
+
+            if (!batchStatus && !batchImageStatus) return '';
+
+            let html = '';
+
+            if (batchStatus && batchStatus.status === 'processing') {
+                const progress = Math.round((batchStatus.processedScenes / batchStatus.totalScenes) * 100);
+                html += `
+                    <div style="background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.5rem; padding: 0.5rem; margin-top: 0.5rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+                            <span style="font-size: 0.65rem; color: rgba(255,255,255,0.7);">Decomposing scenes...</span>
+                            <span style="font-size: 0.6rem; color: #8b5cf6;">${batchStatus.processedScenes}/${batchStatus.totalScenes}</span>
+                        </div>
+                        <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+                            <div style="height: 100%; background: linear-gradient(90deg, #8b5cf6, #06b6d4); width: ${progress}%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (batchImageStatus && batchImageStatus.status === 'processing') {
+                const progress = Math.round((batchImageStatus.processedShots / batchImageStatus.totalShots) * 100);
+                html += `
+                    <div style="background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.3); border-radius: 0.5rem; padding: 0.5rem; margin-top: 0.5rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+                            <span style="font-size: 0.65rem; color: rgba(255,255,255,0.7);">Generating shot images...</span>
+                            <span style="font-size: 0.6rem; color: #06b6d4;">${batchImageStatus.processedShots}/${batchImageStatus.totalShots}</span>
+                        </div>
+                        <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+                            <div style="height: 100%; background: linear-gradient(90deg, #06b6d4, #10b981); width: ${progress}%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return html;
         }
 
         function startImagePolling(sceneId, jobId) {
@@ -10499,6 +11824,95 @@
                         </div>
                     </div>
 
+                    <!-- Phase 12: Multi-Shot Mode Toggle -->
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="color: rgba(255,255,255,0.7); font-size: 0.75rem;">📽️ Multi-Shot Mode</div>
+                                <span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 0.75rem; color: white; font-weight: 600;">NEW</span>
+                            </div>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" ${state.storyboard.multiShotMode?.enabled ? 'checked' : ''} onchange="toggleMultiShotMode(this.checked)" style="cursor: pointer; accent-color: #8b5cf6;">
+                                <span style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">Enable</span>
+                            </label>
+                        </div>
+                        ${state.storyboard.multiShotMode?.enabled ? `
+                            <div style="background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.5rem; padding: 0.75rem;">
+                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">
+                                    🎬 Each scene will have multiple camera angles for cinematic variety
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;">
+                                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Shots per scene:</div>
+                                    <select onchange="setDefaultShotCount(this.value)" style="padding: 0.3rem 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(139,92,246,0.3); border-radius: 0.3rem; color: white; font-size: 0.7rem;">
+                                        ${[2,3,4,5,6].map(n => `<option value="${n}" ${state.storyboard.multiShotMode?.defaultShotCount === n ? 'selected' : ''}>${n} shots</option>`).join('')}
+                                    </select>
+                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">
+                                        (Wide → Medium → Close-up progression)
+                                    </div>
+                                </div>
+
+                                <!-- Phase 12C: Batch Operations -->
+                                <div style="border-top: 1px solid rgba(139,92,246,0.2); padding-top: 0.75rem; margin-top: 0.5rem;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                        <div style="font-size: 0.7rem; font-weight: 600; color: white;">Batch Operations</div>
+                                        <span style="font-size: 0.5rem; padding: 0.1rem 0.3rem; background: linear-gradient(135deg, #10b981, #06b6d4); border-radius: 0.5rem; color: white;">FAST</span>
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                        <button onclick="batchDecomposeAllScenes()"
+                                                ${state.storyboard.multiShotMode?.batchStatus?.status === 'processing' ? 'disabled' : ''}
+                                                style="flex: 1; min-width: 120px; padding: 0.5rem 0.75rem; font-size: 0.65rem; background: ${state.storyboard.multiShotMode?.batchStatus?.status === 'processing' ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, rgba(139,92,246,0.4), rgba(168,85,247,0.4))'}; border: 1px solid rgba(139,92,246,0.5); border-radius: 0.4rem; color: white; cursor: ${state.storyboard.multiShotMode?.batchStatus?.status === 'processing' ? 'wait' : 'pointer'}; transition: all 0.2s;">
+                                            ${state.storyboard.multiShotMode?.batchStatus?.status === 'processing' ? '⏳ Decomposing...' : '🎯 Decompose All Scenes'}
+                                        </button>
+                                        <button onclick="batchGenerateAllShotImages()"
+                                                ${!Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length || state.storyboard.multiShotMode?.batchImageStatus?.status === 'processing' ? 'disabled' : ''}
+                                                style="flex: 1; min-width: 120px; padding: 0.5rem 0.75rem; font-size: 0.65rem; background: ${state.storyboard.multiShotMode?.batchImageStatus?.status === 'processing' ? 'rgba(255,255,255,0.1)' : Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length ? 'linear-gradient(135deg, rgba(6,182,212,0.4), rgba(16,185,129,0.4))' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length ? 'rgba(6,182,212,0.5)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.4rem; color: ${Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length ? 'white' : 'rgba(255,255,255,0.4)'}; cursor: ${!Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length || state.storyboard.multiShotMode?.batchImageStatus?.status === 'processing' ? 'not-allowed' : 'pointer'}; transition: all 0.2s;">
+                                            ${state.storyboard.multiShotMode?.batchImageStatus?.status === 'processing' ? '⏳ Generating...' : '🎨 Generate All Images'}
+                                        </button>
+                                        <button onclick="exportMultiShotProject()"
+                                                ${!Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length ? 'disabled' : ''}
+                                                style="flex: 1; min-width: 100px; padding: 0.5rem 0.75rem; font-size: 0.65rem; background: ${Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length ? 'linear-gradient(135deg, rgba(16,185,129,0.4), rgba(34,197,94,0.4))' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.4rem; color: ${Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length ? 'white' : 'rgba(255,255,255,0.4)'}; cursor: ${!Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length ? 'not-allowed' : 'pointer'}; transition: all 0.2s;">
+                                            📦 Export Project
+                                        </button>
+                                    </div>
+
+                                    <!-- Batch Progress -->
+                                    ${renderBatchProgress()}
+
+                                    <!-- Global Visual DNA Display -->
+                                    ${renderGlobalVisualProfile()}
+
+                                    <!-- Stats Summary -->
+                                    ${Object.keys(state.storyboard.multiShotMode?.decomposedScenes || {}).length > 0 ? `
+                                        <div style="margin-top: 0.75rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.4rem;">
+                                            <div style="display: flex; justify-content: space-around; text-align: center;">
+                                                <div>
+                                                    <div style="font-size: 1rem; font-weight: 700; color: #8b5cf6;">${Object.keys(state.storyboard.multiShotMode.decomposedScenes).length}</div>
+                                                    <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5);">Scenes</div>
+                                                </div>
+                                                <div>
+                                                    <div style="font-size: 1rem; font-weight: 700; color: #06b6d4;">${Object.values(state.storyboard.multiShotMode.decomposedScenes).reduce((acc, s) => acc + (s.shots?.length || 0), 0)}</div>
+                                                    <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5);">Total Shots</div>
+                                                </div>
+                                                <div>
+                                                    <div style="font-size: 1rem; font-weight: 700; color: #10b981;">${Object.values(state.storyboard.multiShotMode.decomposedScenes).reduce((acc, s) => acc + (s.shots?.filter(sh => sh.status === 'ready')?.length || 0), 0)}</div>
+                                                    <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5);">Images Ready</div>
+                                                </div>
+                                                <div>
+                                                    <div style="font-size: 1rem; font-weight: 700; color: #f59e0b;">${Object.values(state.storyboard.multiShotMode.decomposedScenes).reduce((acc, s) => acc + (s.shots?.filter(sh => sh.videoStatus === 'ready')?.length || 0), 0)}</div>
+                                                    <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5);">Videos Ready</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        ` : `
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4);">
+                                Break each scene into multiple shots (wide, medium, close-up) for professional cinematography
+                            </div>
+                        `}
+                    </div>
+
                     <!-- Phase 3B: Visual Style Controls -->
                     <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
@@ -10721,6 +12135,121 @@
                             ` : ''}
                         </div>
                     </div>
+
+                    <!-- Phase 12D: Video Effects, Transitions & Audio -->
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.9rem;">🎥</span>
+                                <span style="color: rgba(255,255,255,0.7); font-size: 0.75rem; font-weight: 600;">Effects & Audio</span>
+                            </div>
+                            <span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #ec4899, #f43f5e); border-radius: 0.75rem; color: white; font-weight: 600;">PRO</span>
+                        </div>
+
+                        <!-- Video Effects Preset -->
+                        <div style="background: ${state.storyboard.videoEffects?.preset ? 'rgba(236, 72, 153, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.videoEffects?.preset ? 'rgba(236, 72, 153, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.75rem;">🎨</span>
+                                    <span style="color: white; font-size: 0.75rem; font-weight: 600;">Color Grading</span>
+                                </div>
+                                <select onchange="setVideoEffectPreset(this.value)" style="padding: 0.3rem 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(236,72,153,0.3); border-radius: 0.3rem; color: white; font-size: 0.65rem;">
+                                    <option value="" ${!state.storyboard.videoEffects?.preset ? 'selected' : ''}>None</option>
+                                    <option value="cinematic" ${state.storyboard.videoEffects?.preset === 'cinematic' ? 'selected' : ''}>🎬 Cinematic</option>
+                                    <option value="vibrant" ${state.storyboard.videoEffects?.preset === 'vibrant' ? 'selected' : ''}>🌈 Vibrant</option>
+                                    <option value="dramatic" ${state.storyboard.videoEffects?.preset === 'dramatic' ? 'selected' : ''}>🎭 Dramatic</option>
+                                    <option value="warm" ${state.storyboard.videoEffects?.preset === 'warm' ? 'selected' : ''}>🌅 Warm</option>
+                                    <option value="cool" ${state.storyboard.videoEffects?.preset === 'cool' ? 'selected' : ''}>❄️ Cool</option>
+                                    <option value="vintage" ${state.storyboard.videoEffects?.preset === 'vintage' ? 'selected' : ''}>📷 Vintage</option>
+                                    <option value="documentary" ${state.storyboard.videoEffects?.preset === 'documentary' ? 'selected' : ''}>📹 Documentary</option>
+                                    <option value="noir" ${state.storyboard.videoEffects?.preset === 'noir' ? 'selected' : ''}>⬛ Film Noir</option>
+                                </select>
+                            </div>
+                            ${state.storyboard.videoEffects?.preset ? `
+                                <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; font-size: 0.55rem;">
+                                    <span style="background: rgba(236,72,153,0.2); padding: 0.15rem 0.3rem; border-radius: 0.2rem; color: rgba(255,255,255,0.7);">Contrast ${state.storyboard.videoEffects?.filters?.contrast || 1.0}x</span>
+                                    <span style="background: rgba(236,72,153,0.2); padding: 0.15rem 0.3rem; border-radius: 0.2rem; color: rgba(255,255,255,0.7);">Saturation ${state.storyboard.videoEffects?.filters?.saturation || 1.0}x</span>
+                                    ${state.storyboard.videoEffects?.filters?.vignette ? `<span style="background: rgba(236,72,153,0.2); padding: 0.15rem 0.3rem; border-radius: 0.2rem; color: rgba(255,255,255,0.7);">Vignette</span>` : ''}
+                                </div>
+                            ` : `
+                                <div style="color: rgba(255,255,255,0.4); font-size: 0.6rem;">Apply Hollywood-style color grading</div>
+                            `}
+                        </div>
+
+                        <!-- Shot Transitions -->
+                        <div style="background: ${state.storyboard.transitions?.autoMode ? 'rgba(168, 85, 247, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.transitions?.autoMode ? 'rgba(168, 85, 247, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.75rem;">✂️</span>
+                                    <div>
+                                        <div style="color: white; font-size: 0.75rem; font-weight: 600;">Shot Transitions</div>
+                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.55rem;">Cuts, dissolves, fades between shots</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <select onchange="setTransitionMode(this.value)" style="padding: 0.25rem 0.4rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(168,85,247,0.3); border-radius: 0.25rem; color: white; font-size: 0.6rem;">
+                                        <option value="auto" ${state.storyboard.transitions?.mode === 'auto' || !state.storyboard.transitions?.mode ? 'selected' : ''}>Auto</option>
+                                        <option value="cut" ${state.storyboard.transitions?.mode === 'cut' ? 'selected' : ''}>Cut Only</option>
+                                        <option value="dissolve" ${state.storyboard.transitions?.mode === 'dissolve' ? 'selected' : ''}>Dissolve</option>
+                                        <option value="fade" ${state.storyboard.transitions?.mode === 'fade' ? 'selected' : ''}>Fade</option>
+                                        <option value="dynamic" ${state.storyboard.transitions?.mode === 'dynamic' ? 'selected' : ''}>Dynamic Mix</option>
+                                    </select>
+                                    <label style="display: flex; align-items: center; cursor: pointer;">
+                                        <input type="checkbox" ${state.storyboard.transitions?.autoMode !== false ? 'checked' : ''} onchange="toggleAutoTransitions(this.checked)" style="accent-color: #a855f7;">
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Audio Ducking -->
+                        <div style="background: ${state.storyboard.audioDucking?.enabled ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.audioDucking?.enabled ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.5rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.75rem;">🔊</span>
+                                    <div>
+                                        <div style="color: white; font-size: 0.75rem; font-weight: 600;">Audio Ducking</div>
+                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.55rem;">Auto-lower music during voiceover</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <select onchange="setAudioDuckingPreset(this.value)" style="padding: 0.25rem 0.4rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(34,197,94,0.3); border-radius: 0.25rem; color: white; font-size: 0.6rem;">
+                                        <option value="subtle" ${state.storyboard.audioDucking?.preset === 'subtle' ? 'selected' : ''}>Subtle (70%)</option>
+                                        <option value="standard" ${state.storyboard.audioDucking?.preset === 'standard' || !state.storyboard.audioDucking?.preset ? 'selected' : ''}>Standard (40%)</option>
+                                        <option value="aggressive" ${state.storyboard.audioDucking?.preset === 'aggressive' ? 'selected' : ''}>Aggressive (15%)</option>
+                                        <option value="podcast" ${state.storyboard.audioDucking?.preset === 'podcast' ? 'selected' : ''}>Podcast (25%)</option>
+                                    </select>
+                                    <label style="display: flex; align-items: center; cursor: pointer;">
+                                        <input type="checkbox" ${state.storyboard.audioDucking?.enabled ? 'checked' : ''} onchange="toggleAudioDucking(this.checked)" style="accent-color: #22c55e;">
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Title Cards -->
+                        <div style="background: ${state.storyboard.titleCards?.enabled ? 'rgba(251, 191, 36, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.titleCards?.enabled ? 'rgba(251, 191, 36, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.75rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 0.75rem;">📝</span>
+                                    <div>
+                                        <div style="color: white; font-size: 0.75rem; font-weight: 600;">Scene Title Cards</div>
+                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.55rem;">Chapter markers & scene intros</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <select onchange="setTitleCardStyle(this.value)" style="padding: 0.25rem 0.4rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(251,191,36,0.3); border-radius: 0.25rem; color: white; font-size: 0.6rem;">
+                                        <option value="minimal" ${state.storyboard.titleCards?.style === 'minimal' ? 'selected' : ''}>Minimal</option>
+                                        <option value="modern" ${state.storyboard.titleCards?.style === 'modern' || !state.storyboard.titleCards?.style ? 'selected' : ''}>Modern</option>
+                                        <option value="dramatic" ${state.storyboard.titleCards?.style === 'dramatic' ? 'selected' : ''}>Dramatic</option>
+                                        <option value="chapter" ${state.storyboard.titleCards?.style === 'chapter' ? 'selected' : ''}>Chapter</option>
+                                        <option value="lower_third" ${state.storyboard.titleCards?.style === 'lower_third' ? 'selected' : ''}>Lower Third</option>
+                                    </select>
+                                    <label style="display: flex; align-items: center; cursor: pointer;">
+                                        <input type="checkbox" ${state.storyboard.titleCards?.enabled ? 'checked' : ''} onchange="toggleTitleCards(this.checked)" style="accent-color: #fbbf24;">
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
 
@@ -10916,6 +12445,20 @@
                 `;
             }
 
+            // Phase 12: Check for multi-shot mode and decomposed scene
+            const multiShotEnabled = state.storyboard.multiShotMode?.enabled;
+            const decomposed = state.storyboard.multiShotMode?.decomposedScenes?.[scene.id];
+            const hasShots = decomposed && decomposed.shots && decomposed.shots.length > 0;
+
+            // If multi-shot is enabled and scene is decomposed, show selected shot image
+            let displayImageUrl = imageUrl;
+            if (hasShots && decomposed.selectedShot !== undefined) {
+                const selectedShot = decomposed.shots[decomposed.selectedShot];
+                if (selectedShot && selectedShot.imageUrl && selectedShot.status === 'ready') {
+                    displayImageUrl = selectedShot.imageUrl;
+                }
+            }
+
             return `
                 <div class="storyboard-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; overflow: hidden;">
                     <!-- Scene number badge -->
@@ -10930,8 +12473,35 @@
                                 </button>
                             </div>
                         ` : ''}
+                        ${hasShots ? `
+                            <div style="position: absolute; top: 0.5rem; right: ${hasChainData ? '4rem' : '0.5rem'}; z-index: 1;">
+                                <span style="background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: white; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.55rem; font-weight: 600;">
+                                    📽️ ${decomposed.shots.length} shots
+                                </span>
+                            </div>
+                        ` : ''}
                         ${cardContent}
                     </div>
+
+                    <!-- Multi-Shot Controls (if enabled) -->
+                    ${multiShotEnabled ? `
+                        <div style="padding: 0.5rem 0.75rem; border-top: 1px solid rgba(255,255,255,0.05);">
+                            ${decomposed?.status === 'decomposing' ? `
+                                <div style="display: flex; align-items: center; gap: 0.5rem; color: rgba(255,255,255,0.6); font-size: 0.75rem;">
+                                    <div class="animate-spin" style="width: 14px; height: 14px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>
+                                    Decomposing into shots...
+                                </div>
+                            ` : hasShots ? `
+                                ${renderMultiShotTimeline(scene.id)}
+                            ` : `
+                                <button onclick="decomposeSceneToShots(${scene.id})"
+                                        style="width: 100%; padding: 0.5rem; background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(6,182,212,0.2)); border: 1px dashed rgba(139,92,246,0.4); border-radius: 0.4rem; color: rgba(255,255,255,0.8); cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
+                                    <span>📽️</span>
+                                    <span>Decompose to ${state.storyboard.multiShotMode.defaultShotCount || 3} Shots</span>
+                                </button>
+                            `}
+                        </div>
+                    ` : ''}
 
                     <!-- Prompt -->
                     <div style="padding: 0.75rem;">
