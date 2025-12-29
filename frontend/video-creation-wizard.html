@@ -6843,6 +6843,99 @@
             await generateSingleSceneImage(sceneId);
         }
 
+        // Upscale a scene image to HD or 4K
+        async function upscaleSceneImage(sceneId, quality = null) {
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+            if (!storyboardScene || !storyboardScene.imageUrl) {
+                showToast('No image to upscale', 'error');
+                return;
+            }
+
+            // If quality not specified, show quality selection modal
+            if (!quality) {
+                showUpscaleQualityModal(sceneId);
+                return;
+            }
+
+            try {
+                // Mark as processing
+                storyboardScene.upscaleStatus = 'processing';
+                render();
+                showToast(`Upscaling to ${quality.toUpperCase()}...`, 'info');
+
+                const upscaleFn = functions.httpsCallable('upscaleSceneImage');
+                const result = await upscaleFn({
+                    imageUrl: storyboardScene.imageUrl,
+                    aspectRatio: state.aspectRatio || '16:9',
+                    quality: quality,
+                    sceneId: String(sceneId)
+                });
+
+                if (result.data.success) {
+                    // Update scene with upscaled image
+                    storyboardScene.imageUrl = result.data.upscaledUrl;
+                    storyboardScene.upscaleStatus = 'completed';
+                    storyboardScene.upscaleQuality = quality;
+                    storyboardScene.width = result.data.width;
+                    storyboardScene.height = result.data.height;
+
+                    showToast(`Upscaled to ${result.data.width}x${result.data.height}!`, 'success');
+                    render();
+                    scheduleAutoSave();
+                } else {
+                    throw new Error('Upscale failed');
+                }
+            } catch (error) {
+                console.error('Upscale error:', error);
+                storyboardScene.upscaleStatus = 'error';
+                showToast(`Upscale failed: ${error.message}`, 'error');
+                render();
+            }
+        }
+
+        function showUpscaleQualityModal(sceneId) {
+            const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+            if (!storyboardScene) return;
+
+            const modal = document.createElement('div');
+            modal.id = 'upscale-quality-modal';
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+            modal.innerHTML = `
+                <div style="background: #1a1a2e; border: 1px solid rgba(255,255,255,0.1); border-radius: 1rem; padding: 2rem; max-width: 400px; width: 90%;">
+                    <h3 style="margin: 0 0 1rem 0; color: white; font-size: 1.25rem;">⬆️ Upscale Image</h3>
+                    <p style="color: rgba(255,255,255,0.7); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                        Choose your target quality for the upscaled image:
+                    </p>
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <button onclick="closeUpscaleModal(); upscaleSceneImage(${sceneId}, 'hd')"
+                                style="padding: 1rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(6, 182, 212, 0.4)); border: 1px solid rgba(139, 92, 246, 0.5); border-radius: 0.75rem; color: white; cursor: pointer; text-align: left;">
+                            <div style="font-weight: 600; font-size: 1rem;">🎬 HD (1920×1080)</div>
+                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.7); margin-top: 0.25rem;">
+                                Full HD quality • 1 token
+                            </div>
+                        </button>
+                        <button onclick="closeUpscaleModal(); upscaleSceneImage(${sceneId}, '4k')"
+                                style="padding: 1rem; background: linear-gradient(135deg, rgba(251, 191, 36, 0.4), rgba(245, 158, 11, 0.4)); border: 1px solid rgba(251, 191, 36, 0.5); border-radius: 0.75rem; color: white; cursor: pointer; text-align: left;">
+                            <div style="font-weight: 600; font-size: 1rem;">🎥 4K UHD (3840×2160)</div>
+                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.7); margin-top: 0.25rem;">
+                                Cinema quality • 3 tokens
+                            </div>
+                        </button>
+                    </div>
+                    <button onclick="closeUpscaleModal()"
+                            style="margin-top: 1.5rem; width: 100%; padding: 0.75rem; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: rgba(255,255,255,0.7); cursor: pointer;">
+                        Cancel
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function closeUpscaleModal() {
+            const modal = document.getElementById('upscale-quality-modal');
+            if (modal) modal.remove();
+        }
+
         function startImagePolling(sceneId, jobId) {
             // Clear any existing polling for this scene
             if (imagePollingIntervals[sceneId]) {
@@ -10497,6 +10590,9 @@
                             </button>
                             <button onclick="regenerateSingleSceneImage(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(255,255,255,0.3); background: rgba(0,0,0,0.5); color: white; cursor: pointer; font-size: 0.65rem;" title="Regenerate with AI">
                                 🔄
+                            </button>
+                            <button onclick="upscaleSceneImage(${scene.id})" style="padding: 0.35rem 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(251, 191, 36, 0.5); background: rgba(251, 191, 36, 0.2); color: white; cursor: pointer; font-size: 0.65rem;" title="Upscale to HD/4K">
+                                ⬆️
                             </button>
                         </div>
                     </div>
