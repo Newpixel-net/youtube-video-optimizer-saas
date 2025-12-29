@@ -25469,6 +25469,343 @@ exports.creationWizardGenerateScript = functions.https.onCall(async (data, conte
     };
 
     /**
+     * SHOT_COMPOSITION_TEMPLATES - Cinematic framing templates for scene types
+     * These define camera positioning, depth of field, and visual rhythm
+     */
+    const SHOT_COMPOSITION_TEMPLATES = {
+      'hero_entrance': {
+        description: 'Character enters frame with impact',
+        composition: 'Low angle, character silhouette against sky/light, slow push in',
+        dof: 'Deep focus transitioning to shallow on subject',
+        movement: 'Slow dolly forward or crane up',
+        timing: 'Hold wide for 2 beats, then reveal'
+      },
+      'confrontation': {
+        description: 'Two opposing forces face off',
+        composition: 'Over-the-shoulder alternating, tight close-ups, eye-level',
+        dof: 'Shallow on active speaker, rack focus on reaction',
+        movement: 'Static with subtle push on tension moments',
+        timing: 'Quick cuts building pace, then hold on decisive moment'
+      },
+      'emotional_peak': {
+        description: 'Character experiences breakthrough or breakdown',
+        composition: 'Extreme close-up on eyes, then pull back to reveal',
+        dof: 'Ultra-shallow, background completely dissolved',
+        movement: 'Subtle orbit or slow zoom out',
+        timing: 'Extended hold, breathing room'
+      },
+      'action_sequence': {
+        description: 'High energy physical action',
+        composition: 'Wide establishing, then tight coverage, Dutch angles for chaos',
+        dof: 'Deep focus for spatial awareness',
+        movement: 'Handheld energy, whip pans, tracking shots',
+        timing: 'Rapid cuts, 1-2 second average shot length'
+      },
+      'revelation': {
+        description: 'Secret or truth is exposed',
+        composition: 'Start tight on reactor, then reveal the cause',
+        dof: 'Rack focus from face to revealed object/person',
+        movement: 'Slow push or pull depending on emotional valence',
+        timing: 'Build anticipation, then snap reveal'
+      },
+      'intimate_dialogue': {
+        description: 'Two characters share a personal moment',
+        composition: 'Two-shot favoring space between, soft lighting',
+        dof: 'Medium shallow, both subjects in focus',
+        movement: 'Static or gentle float',
+        timing: 'Longer takes, let performances breathe'
+      },
+      'establishing_world': {
+        description: 'Introduce location or setting',
+        composition: 'Epic wide, then guided tour of details',
+        dof: 'Deep focus showcasing environment',
+        movement: 'Crane, drone, or slow pan revealing scope',
+        timing: 'Allow time to absorb visual information'
+      },
+      'montage_beat': {
+        description: 'Single moment in a sequence',
+        composition: 'Centered subject, clean background, iconic framing',
+        dof: 'Medium depth, subject isolated',
+        movement: 'Static or simple push/pull',
+        timing: '2-4 seconds per beat, rhythm driven'
+      },
+      'tension_build': {
+        description: 'Something bad is about to happen',
+        composition: 'Wide with empty space suggesting threat, or claustrophobic tight',
+        dof: 'Deep focus creating paranoia of unseen threat',
+        movement: 'Slow creeping dolly, or locked-off stillness',
+        timing: 'Extended takes, uncomfortable holds'
+      },
+      'resolution': {
+        description: 'Story threads come together',
+        composition: 'Balanced frame, subjects in harmony, natural light',
+        dof: 'Medium depth, world in soft focus behind',
+        movement: 'Gentle pullback or ascending crane',
+        timing: 'Measured pace, satisfying resolution beats'
+      }
+    };
+
+    /**
+     * VISUAL_MOTIFS - Recurring symbols and imagery for thematic consistency
+     */
+    const VISUAL_MOTIFS = {
+      'light_shadow': {
+        meaning: 'Truth vs deception, hope vs despair, revelation',
+        manifestations: [
+          'Character stepping from shadow into light',
+          'Shadows falling across faces during moral conflict',
+          'Light sources representing knowledge or safety',
+          'Darkness encroaching during threat'
+        ]
+      },
+      'reflections': {
+        meaning: 'Self-examination, duality, hidden truth, alternate reality',
+        manifestations: [
+          'Character seeing reflection in mirror/water/glass',
+          'Distorted reflections during identity crisis',
+          'Broken mirrors for shattered self',
+          'Perfect reflections for harmony/acceptance'
+        ]
+      },
+      'doorways_thresholds': {
+        meaning: 'Transition, choice, point of no return, new chapter',
+        manifestations: [
+          'Character pausing at threshold',
+          'Looking back before crossing',
+          'Doors closing behind (finality)',
+          'Multiple doors (choice/destiny)'
+        ]
+      },
+      'water': {
+        meaning: 'Emotion, purification, danger, the subconscious',
+        manifestations: [
+          'Rain during emotional release',
+          'Still water for peace/reflection',
+          'Turbulent water for inner turmoil',
+          'Submersion as transformation/rebirth'
+        ]
+      },
+      'fire': {
+        meaning: 'Passion, destruction, renewal, danger, warmth',
+        manifestations: [
+          'Flames during intense emotion',
+          'Candles for intimacy/hope',
+          'Conflagration as climax/cleansing',
+          'Embers as fading hope or smoldering threat'
+        ]
+      },
+      'clocks_time': {
+        meaning: 'Mortality, urgency, memory, fate',
+        manifestations: [
+          'Clock prominently ticking',
+          'Time-lapse sequences',
+          'Broken/stopped clocks for frozen moment',
+          'Watches as personal time markers'
+        ]
+      },
+      'color_coding': {
+        meaning: 'Character/faction identification, emotional state',
+        manifestations: [
+          'Character associated with specific color palette',
+          'Color bleeding/shifting during transformation',
+          'Complementary colors for opposing forces',
+          'Desaturation for despair, vibrancy for hope'
+        ]
+      },
+      'nature_elements': {
+        meaning: 'Natural order, chaos, connection to primal forces',
+        manifestations: [
+          'Wind stirring at emotional moments',
+          'Trees as life/growth/permanence',
+          'Storms reflecting inner turmoil',
+          'Seasons marking passage of time'
+        ]
+      }
+    };
+
+    /**
+     * PROP_BIBLE_ARCHETYPES - Important recurring objects with significance
+     */
+    const PROP_BIBLE_ARCHETYPES = {
+      'personal_talisman': {
+        description: 'Object of personal significance carried by character',
+        examples: ['Locket with photo', 'Lucky coin', 'Ring', 'Watch from deceased'],
+        visualTreatment: 'Close-up hero shots, warm lighting, careful handling',
+        storyFunction: 'Grounds character, provides emotional anchor'
+      },
+      'weapon_signature': {
+        description: 'Character-defining weapon or tool',
+        examples: ['Katana with unique hilt', 'Custom gun', 'Staff with markings'],
+        visualTreatment: 'Distinctive silhouette, detailed texture, threatening angles',
+        storyFunction: 'Extension of character, visual shorthand for capability'
+      },
+      'macguffin': {
+        description: 'Object that drives plot but has symbolic rather than intrinsic value',
+        examples: ['Briefcase', 'Data drive', 'Ancient artifact', 'Key'],
+        visualTreatment: 'Mysterious lighting, partial reveals, multiple perspectives',
+        storyFunction: 'Motivates action, represents abstract goal'
+      },
+      'transformation_object': {
+        description: 'Object that changes state or appearance as story progresses',
+        examples: ['Photograph aging', 'Plant growing/dying', 'Building changing'],
+        visualTreatment: 'Match framing across scenes to emphasize change',
+        storyFunction: 'Visual metaphor for character/story arc'
+      },
+      'environment_signature': {
+        description: 'Distinctive element that identifies a location',
+        examples: ['Neon sign', 'Statue', 'Tree', 'Building facade'],
+        visualTreatment: 'Consistent angle, establishing shot anchor',
+        storyFunction: 'Instant location recognition, continuity'
+      },
+      'communication_device': {
+        description: 'Object that enables connection between characters',
+        examples: ['Phone', 'Radio', 'Letter', 'Photograph exchange'],
+        visualTreatment: 'Intimate framing during use, POV of screen/page',
+        storyFunction: 'Bridges distance, reveals relationship'
+      }
+    };
+
+    /**
+     * LIGHTING_SETUPS - Named lighting configurations for consistency
+     */
+    const LIGHTING_SETUPS = {
+      'rembrandt': {
+        description: 'Classic dramatic lighting with triangle on shadow side of face',
+        keyPosition: '45 degrees from subject, elevated',
+        fillRatio: 'Key:Fill 4:1 or higher',
+        mood: 'Dramatic, artistic, mysterious',
+        colorTemp: 'Warm key, neutral fill'
+      },
+      'butterfly': {
+        description: 'Glamorous Hollywood lighting with shadow under nose',
+        keyPosition: 'Directly in front, elevated',
+        fillRatio: 'Key:Fill 2:1',
+        mood: 'Glamorous, beautiful, classic Hollywood',
+        colorTemp: 'Warm overall'
+      },
+      'split': {
+        description: 'Half the face lit, half in shadow',
+        keyPosition: '90 degrees from subject',
+        fillRatio: 'Key:Fill 8:1 or no fill',
+        mood: 'Duality, conflict, mystery, danger',
+        colorTemp: 'Cool for menace, warm for complexity'
+      },
+      'silhouette': {
+        description: 'Subject completely backlit, no face detail',
+        keyPosition: 'Behind subject',
+        fillRatio: 'No fill',
+        mood: 'Mystery, power, anonymity, epic',
+        colorTemp: 'Based on background light source'
+      },
+      'practical_naturalism': {
+        description: 'Motivated by in-scene light sources',
+        keyPosition: 'From visible lamps, windows, screens',
+        fillRatio: 'Varies with environment',
+        mood: 'Realistic, grounded, authentic',
+        colorTemp: 'Mixed based on practicals'
+      },
+      'high_key': {
+        description: 'Bright, even lighting with minimal shadows',
+        keyPosition: 'Multiple sources, even coverage',
+        fillRatio: 'Key:Fill 1:1',
+        mood: 'Happy, safe, comedic, dreamlike',
+        colorTemp: 'Bright neutral or slight warmth'
+      },
+      'chiaroscuro': {
+        description: 'Extreme contrast between light and dark',
+        keyPosition: 'Single hard source',
+        fillRatio: 'Key:Fill 16:1 or higher',
+        mood: 'Film noir, danger, psychological depth',
+        colorTemp: 'Cool with isolated warm spots'
+      },
+      'motivated_moonlight': {
+        description: 'Night exterior with moon as implied key',
+        keyPosition: 'High angle, off camera',
+        fillRatio: 'Key:Fill 8:1',
+        mood: 'Romantic, mysterious, nocturnal',
+        colorTemp: 'Blue key, warm practicals'
+      }
+    };
+
+    /**
+     * COLOR_GRADING_PRESETS - Named color grades for visual consistency
+     */
+    const COLOR_GRADING_PRESETS = {
+      'teal_orange': {
+        description: 'Complementary blockbuster look',
+        shadows: 'Teal/cyan push',
+        midtones: 'Slight desaturation except skin',
+        highlights: 'Orange/gold warmth',
+        contrast: 'Crushed blacks, punchy mids',
+        saturation: 'Selective - skin warm, environment cool',
+        use: 'Action, sci-fi, modern blockbuster'
+      },
+      'bleach_bypass': {
+        description: 'Desaturated, high contrast gritty look',
+        shadows: 'Deep true black',
+        midtones: 'Desaturated, silver-gray',
+        highlights: 'Blown, harsh',
+        contrast: 'Extreme',
+        saturation: '40-60% reduction',
+        use: 'War, thriller, gritty drama'
+      },
+      'golden_hour': {
+        description: 'Warm romantic magic hour look',
+        shadows: 'Warm brown-orange',
+        midtones: 'Rich warm tones',
+        highlights: 'Golden bloom',
+        contrast: 'Soft, lifted blacks',
+        saturation: 'Enhanced warm colors',
+        use: 'Romance, coming-of-age, nostalgia'
+      },
+      'noir': {
+        description: 'Classic black and white or near-monochrome',
+        shadows: 'Deep black, detail preserved',
+        midtones: 'Silver gray, sharp',
+        highlights: 'Clean white, occasional bloom',
+        contrast: 'High with smooth falloff',
+        saturation: 'Monochrome or heavily desaturated',
+        use: 'Crime, mystery, psychological thriller'
+      },
+      'vintage_warmth': {
+        description: 'Film emulation with lifted blacks',
+        shadows: 'Lifted, green-brown tint',
+        midtones: 'Faded, warm',
+        highlights: 'Soft rolloff, cream tint',
+        contrast: 'Reduced, gentle',
+        saturation: 'Muted, vintage palette',
+        use: 'Period piece, memory sequence, indie'
+      },
+      'cyberpunk': {
+        description: 'Neon-drenched futuristic look',
+        shadows: 'Deep purple-blue',
+        midtones: 'Magenta-teal split',
+        highlights: 'Hot pink or cyan bloom',
+        contrast: 'High with crushed mids',
+        saturation: 'Hypersaturated neons, desaturated else',
+        use: 'Sci-fi, dystopia, club scenes'
+      },
+      'day_for_night': {
+        description: 'Simulated night shot during day',
+        shadows: 'Crushed to near-black',
+        midtones: 'Heavy blue push',
+        highlights: 'Selectively preserved as "moonlight"',
+        contrast: 'Very high',
+        saturation: 'Heavy desaturation',
+        use: 'Night exterior scenes, dream'
+      },
+      'documentary_natural': {
+        description: 'Neutral, truthful representation',
+        shadows: 'Natural, detail preserved',
+        midtones: 'Neutral, accurate',
+        highlights: 'Natural rolloff',
+        contrast: 'Moderate, realistic',
+        saturation: 'Natural, slight enhancement',
+        use: 'Documentary, interview, realism'
+      }
+    };
+
+    /**
      * LOCATION_BIBLE_GENERATOR - Creates and manages location consistency
      */
     const LOCATION_BIBLE_GENERATOR = {
@@ -37763,6 +38100,218 @@ const IMAGE_PROMPT_GENERATOR = {
     ].filter(Boolean);
 
     return parts.join(', ');
+  },
+
+  /**
+   * Get suggested shot composition based on scene type
+   * Uses SHOT_COMPOSITION_TEMPLATES for Hollywood-quality framing
+   */
+  getShotComposition: (scene) => {
+    const sceneType = scene.sceneType?.toLowerCase() || '';
+    const visualContent = (scene.visual || scene.visualPrompt || '').toLowerCase();
+
+    // Map scene characteristics to shot templates
+    if (sceneType.includes('action') || visualContent.includes('fight') || visualContent.includes('battle')) {
+      return SHOT_COMPOSITION_TEMPLATES['action_sequence'];
+    }
+    if (sceneType.includes('dialogue') || visualContent.includes('conversation') || visualContent.includes('talk')) {
+      return SHOT_COMPOSITION_TEMPLATES['intimate_dialogue'];
+    }
+    if (sceneType.includes('reveal') || visualContent.includes('discover') || visualContent.includes('realize')) {
+      return SHOT_COMPOSITION_TEMPLATES['revelation'];
+    }
+    if (sceneType.includes('emotional') || visualContent.includes('cry') || visualContent.includes('breakthrough')) {
+      return SHOT_COMPOSITION_TEMPLATES['emotional_peak'];
+    }
+    if (sceneType.includes('confrontation') || visualContent.includes('face') || visualContent.includes('showdown')) {
+      return SHOT_COMPOSITION_TEMPLATES['confrontation'];
+    }
+    if (sceneType.includes('establishing') || sceneType.includes('intro') || sceneType === 'opening') {
+      return SHOT_COMPOSITION_TEMPLATES['establishing_world'];
+    }
+    if (sceneType.includes('entrance') || visualContent.includes('arrives') || visualContent.includes('appears')) {
+      return SHOT_COMPOSITION_TEMPLATES['hero_entrance'];
+    }
+    if (sceneType.includes('tension') || visualContent.includes('waiting') || visualContent.includes('suspense')) {
+      return SHOT_COMPOSITION_TEMPLATES['tension_build'];
+    }
+    if (sceneType.includes('montage') || sceneType.includes('sequence')) {
+      return SHOT_COMPOSITION_TEMPLATES['montage_beat'];
+    }
+    if (sceneType.includes('resolution') || sceneType.includes('ending') || sceneType === 'finale') {
+      return SHOT_COMPOSITION_TEMPLATES['resolution'];
+    }
+
+    // Default to establishing if scene 1, otherwise intimate dialogue
+    return scene.id === 1 ? SHOT_COMPOSITION_TEMPLATES['establishing_world'] : null;
+  },
+
+  /**
+   * Get suggested lighting setup based on scene mood and time
+   * Uses LIGHTING_SETUPS for professional cinematography
+   */
+  getLightingSetup: (scene, locationState = {}) => {
+    const timeOfDay = locationState.timeOfDay || scene.location?.timeOfDay || 'day';
+    const mood = scene.mood?.toLowerCase() || '';
+    const sceneType = scene.sceneType?.toLowerCase() || '';
+
+    // Night scenes
+    if (timeOfDay === 'night' || timeOfDay === 'deep_night') {
+      if (mood.includes('romantic') || mood.includes('intimate')) {
+        return LIGHTING_SETUPS['motivated_moonlight'];
+      }
+      return LIGHTING_SETUPS['chiaroscuro'];
+    }
+
+    // Mood-based lighting
+    if (mood.includes('mysterious') || mood.includes('suspense') || mood.includes('danger')) {
+      return LIGHTING_SETUPS['split'];
+    }
+    if (mood.includes('dramatic') || mood.includes('intense')) {
+      return LIGHTING_SETUPS['rembrandt'];
+    }
+    if (mood.includes('happy') || mood.includes('joy') || mood.includes('comedy')) {
+      return LIGHTING_SETUPS['high_key'];
+    }
+    if (mood.includes('glamour') || mood.includes('beauty')) {
+      return LIGHTING_SETUPS['butterfly'];
+    }
+
+    // Scene type based
+    if (sceneType.includes('action') || sceneType.includes('confrontation')) {
+      return LIGHTING_SETUPS['rembrandt'];
+    }
+    if (sceneType.includes('establishing') || sceneType.includes('intro')) {
+      return LIGHTING_SETUPS['practical_naturalism'];
+    }
+
+    // Default to practical naturalism for realism
+    return LIGHTING_SETUPS['practical_naturalism'];
+  },
+
+  /**
+   * Get suggested color grading preset based on genre and mood
+   * Uses COLOR_GRADING_PRESETS for consistent visual style
+   */
+  getColorGrading: (scene, genre = '', styleBible = {}) => {
+    const mood = scene.mood?.toLowerCase() || '';
+    const genreLower = genre.toLowerCase();
+    const colorGrade = styleBible?.colorGrade?.toLowerCase() || '';
+
+    // Check style bible first
+    if (colorGrade) {
+      if (colorGrade.includes('teal') || colorGrade.includes('orange')) {
+        return COLOR_GRADING_PRESETS['teal_orange'];
+      }
+      if (colorGrade.includes('warm') || colorGrade.includes('golden')) {
+        return COLOR_GRADING_PRESETS['golden_hour'];
+      }
+      if (colorGrade.includes('noir') || colorGrade.includes('black and white')) {
+        return COLOR_GRADING_PRESETS['noir'];
+      }
+      if (colorGrade.includes('neon') || colorGrade.includes('cyberpunk')) {
+        return COLOR_GRADING_PRESETS['cyberpunk'];
+      }
+      if (colorGrade.includes('vintage') || colorGrade.includes('film')) {
+        return COLOR_GRADING_PRESETS['vintage_warmth'];
+      }
+    }
+
+    // Genre-based
+    if (genreLower.includes('action') || genreLower.includes('thriller')) {
+      return COLOR_GRADING_PRESETS['teal_orange'];
+    }
+    if (genreLower.includes('romance') || genreLower.includes('drama')) {
+      return COLOR_GRADING_PRESETS['golden_hour'];
+    }
+    if (genreLower.includes('noir') || genreLower.includes('mystery') || genreLower.includes('crime')) {
+      return COLOR_GRADING_PRESETS['noir'];
+    }
+    if (genreLower.includes('sci-fi') || genreLower.includes('cyberpunk') || genreLower.includes('future')) {
+      return COLOR_GRADING_PRESETS['cyberpunk'];
+    }
+    if (genreLower.includes('war') || genreLower.includes('historical')) {
+      return COLOR_GRADING_PRESETS['bleach_bypass'];
+    }
+    if (genreLower.includes('documentary') || genreLower.includes('reality')) {
+      return COLOR_GRADING_PRESETS['documentary_natural'];
+    }
+
+    // Mood-based fallback
+    if (mood.includes('dark') || mood.includes('gritty')) {
+      return COLOR_GRADING_PRESETS['bleach_bypass'];
+    }
+    if (mood.includes('nostalgic') || mood.includes('memory')) {
+      return COLOR_GRADING_PRESETS['vintage_warmth'];
+    }
+
+    return null;
+  },
+
+  /**
+   * Detect and suggest visual motifs for thematic consistency
+   * Uses VISUAL_MOTIFS for symbolic imagery
+   */
+  detectVisualMotifs: (scene) => {
+    const visual = (scene.visual || scene.visualPrompt || '').toLowerCase();
+    const detectedMotifs = [];
+
+    if (visual.includes('light') || visual.includes('shadow') || visual.includes('dark')) {
+      detectedMotifs.push(VISUAL_MOTIFS['light_shadow']);
+    }
+    if (visual.includes('mirror') || visual.includes('reflection') || visual.includes('water')) {
+      detectedMotifs.push(VISUAL_MOTIFS['reflections']);
+    }
+    if (visual.includes('door') || visual.includes('threshold') || visual.includes('gate')) {
+      detectedMotifs.push(VISUAL_MOTIFS['doorways_thresholds']);
+    }
+    if (visual.includes('rain') || visual.includes('ocean') || visual.includes('river') || visual.includes('tears')) {
+      detectedMotifs.push(VISUAL_MOTIFS['water']);
+    }
+    if (visual.includes('fire') || visual.includes('flame') || visual.includes('burn')) {
+      detectedMotifs.push(VISUAL_MOTIFS['fire']);
+    }
+    if (visual.includes('clock') || visual.includes('time') || visual.includes('watch')) {
+      detectedMotifs.push(VISUAL_MOTIFS['clocks_time']);
+    }
+
+    return detectedMotifs;
+  },
+
+  /**
+   * Build complete Production Bible context for a scene
+   * Combines Shot Composition, Lighting, Color Grading, and Motifs
+   */
+  buildProductionContext: (scene, genre = '', styleBible = {}, locationState = {}) => {
+    const context = {
+      shotComposition: IMAGE_PROMPT_GENERATOR.getShotComposition(scene),
+      lightingSetup: IMAGE_PROMPT_GENERATOR.getLightingSetup(scene, locationState),
+      colorGrading: IMAGE_PROMPT_GENERATOR.getColorGrading(scene, genre, styleBible),
+      visualMotifs: IMAGE_PROMPT_GENERATOR.detectVisualMotifs(scene)
+    };
+
+    // Build prompt segments from production context
+    const segments = [];
+
+    if (context.shotComposition) {
+      segments.push(`CAMERA: ${context.shotComposition.composition}`);
+      if (context.shotComposition.dof) {
+        segments.push(`FOCUS: ${context.shotComposition.dof}`);
+      }
+    }
+
+    if (context.lightingSetup) {
+      segments.push(`LIGHTING: ${context.lightingSetup.description}, ${context.lightingSetup.mood}`);
+    }
+
+    if (context.colorGrading) {
+      segments.push(`COLOR: ${context.colorGrading.description} - ${context.colorGrading.shadows} shadows, ${context.colorGrading.highlights} highlights`);
+    }
+
+    return {
+      ...context,
+      promptSegments: segments
+    };
   },
 
   /**
