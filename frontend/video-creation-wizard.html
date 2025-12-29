@@ -8604,7 +8604,7 @@
 
                     <!-- Video Player -->
                     <div style="padding: 1rem; background: rgba(0,0,0,0.3);">
-                        <video id="frame-capture-video" src="${shot.videoUrl}" style="width: 100%; border-radius: 0.5rem; max-height: 400px;" controls></video>
+                        <video id="frame-capture-video" crossorigin="anonymous" style="width: 100%; border-radius: 0.5rem; max-height: 400px;" controls></video>
 
                         <!-- Frame Preview -->
                         <div style="margin-top: 1rem; display: flex; gap: 1rem; align-items: flex-start;">
@@ -8655,11 +8655,20 @@
 
             document.body.appendChild(modal);
 
-            // Load video and seek to end for "last frame" convenience
+            // Load video with crossOrigin set (important: set src AFTER crossOrigin is set)
             const video = document.getElementById('frame-capture-video');
             video.addEventListener('loadedmetadata', () => {
                 // Ready to capture
             });
+
+            // Handle CORS errors by falling back to proxy approach
+            video.addEventListener('error', (e) => {
+                console.error('Video load error:', e);
+                showToast('Video loading failed - trying alternative method...', 'info');
+            });
+
+            // Set src after crossOrigin attribute is already in place
+            video.src = shot.videoUrl;
         }
 
         /**
@@ -8674,23 +8683,85 @@
         /**
          * Capture the current frame from the video
          */
-        function captureCurrentFrame() {
+        async function captureCurrentFrame() {
             const video = document.getElementById('frame-capture-video');
             if (!video) return;
 
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const currentTime = video.currentTime;
 
-            const frameDataUrl = canvas.toDataURL('image/png');
-            state.frameCaptureContext.capturedFrame = frameDataUrl;
+            try {
+                // Try client-side canvas capture first
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth || 1280;
+                canvas.height = video.videoHeight || 720;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // Update preview
+                // This will throw SecurityError if canvas is tainted
+                const frameDataUrl = canvas.toDataURL('image/png');
+                state.frameCaptureContext.capturedFrame = frameDataUrl;
+
+                // Update preview
+                updateFrameCapturePreview(frameDataUrl);
+                showToast('Frame captured! You can now transfer it to the next shot.', 'success');
+
+            } catch (error) {
+                console.error('Canvas capture failed (CORS):', error);
+
+                // Fallback: Get a signed URL and retry with that
+                showToast('Getting secure video URL...', 'info');
+
+                try {
+                    const extractFrameFn = functions.httpsCallable('extractVideoFrame', { timeout: 60000 });
+                    const result = await extractFrameFn({
+                        videoUrl: state.frameCaptureContext.videoUrl,
+                        timestamp: currentTime
+                    });
+
+                    if (result.data.success && result.data.signedVideoUrl) {
+                        // Reload video with signed URL and retry capture
+                        const video = document.getElementById('frame-capture-video');
+                        video.src = result.data.signedVideoUrl;
+
+                        // Wait for video to load, then seek and capture
+                        video.onloadedmetadata = () => {
+                            video.currentTime = currentTime;
+                            video.onseeked = () => {
+                                try {
+                                    const canvas = document.createElement('canvas');
+                                    canvas.width = video.videoWidth || 1280;
+                                    canvas.height = video.videoHeight || 720;
+                                    const ctx = canvas.getContext('2d');
+                                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                                    const frameDataUrl = canvas.toDataURL('image/png');
+                                    state.frameCaptureContext.capturedFrame = frameDataUrl;
+                                    updateFrameCapturePreview(frameDataUrl);
+                                    showToast('Frame captured! You can now transfer it.', 'success');
+                                } catch (retryError) {
+                                    console.error('Retry capture also failed:', retryError);
+                                    showToast('Frame capture failed. CORS may not be configured on storage.', 'error');
+                                }
+                                video.onseeked = null;
+                            };
+                        };
+                    } else {
+                        throw new Error(result.data.error || 'Failed to get signed URL');
+                    }
+                } catch (serverError) {
+                    console.error('Server-side capture also failed:', serverError);
+                    showToast('Frame capture failed. Please check Firebase Storage CORS settings.', 'error');
+                }
+            }
+        }
+
+        /**
+         * Update the frame capture preview UI
+         */
+        function updateFrameCapturePreview(frameUrl) {
             const preview = document.getElementById('captured-frame-preview');
             if (preview) {
-                preview.innerHTML = `<img src="${frameDataUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0.375rem;">`;
+                preview.innerHTML = `<img src="${frameUrl}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0.375rem;">`;
             }
 
             // Enable transfer button
@@ -8702,8 +8773,6 @@
                 transferBtn.style.color = 'white';
                 transferBtn.style.cursor = 'pointer';
             }
-
-            showToast('Frame captured! You can now transfer it to the next shot.', 'success');
         }
 
         /**

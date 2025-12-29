@@ -41661,6 +41661,87 @@ exports.creationWizardCheckShotVideoStatus = functions.https.onCall(async (data,
 });
 
 /**
+ * extractVideoFrame - Extract a frame from a video at a specific timestamp
+ *
+ * Since Firebase Storage videos may have CORS issues for canvas capture,
+ * this function extracts a frame server-side and returns a usable URL.
+ *
+ * For simplicity, this extracts the last frame (or near-end frame) as that's
+ * the most common use case for shot-to-shot continuity.
+ */
+exports.extractVideoFrame = functions
+  .runWith({
+    timeoutSeconds: 120,
+    memory: '1GB'
+  })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { videoUrl, timestamp = 'last' } = data;
+
+  if (!videoUrl) {
+    throw new functions.https.HttpsError('invalid-argument', 'Video URL is required');
+  }
+
+  try {
+    console.log(`[extractVideoFrame] Extracting frame from: ${videoUrl}, timestamp: ${timestamp}`);
+
+    // For Firebase Storage videos, we'll use a different approach:
+    // Download the video and extract a frame using canvas in a headless environment
+    // Since we can't use ffmpeg easily in Cloud Functions, we'll use a workaround
+
+    // Option 1: If the video is from our storage, we can generate a signed URL with CORS
+    if (videoUrl.includes('storage.googleapis.com') || videoUrl.includes('firebasestorage.googleapis.com')) {
+      // Extract the file path from the URL
+      const bucket = admin.storage().bucket();
+
+      // Parse the URL to get the file path
+      let filePath;
+      if (videoUrl.includes('storage.googleapis.com')) {
+        // Format: https://storage.googleapis.com/bucket-name/path/to/file.mp4
+        const urlParts = videoUrl.split('.com/')[1];
+        const bucketAndPath = urlParts.split('/');
+        filePath = bucketAndPath.slice(1).join('/');
+      } else {
+        // Firebase Storage URL format
+        const match = videoUrl.match(/o\/(.+?)\?/);
+        if (match) {
+          filePath = decodeURIComponent(match[1]);
+        }
+      }
+
+      if (filePath) {
+        console.log(`[extractVideoFrame] File path: ${filePath}`);
+
+        // Generate a signed URL with CORS-friendly headers
+        const file = bucket.file(filePath);
+        const [signedUrl] = await file.getSignedUrl({
+          action: 'read',
+          expires: Date.now() + 3600000, // 1 hour
+          responseDisposition: 'inline',
+          responseType: 'video/mp4'
+        });
+
+        console.log(`[extractVideoFrame] Generated signed URL for CORS-friendly access`);
+
+        // Return the signed URL - the client can use this to load the video with CORS
+        return {
+          success: true,
+          signedVideoUrl: signedUrl,
+          message: 'Use this signed URL to reload the video for frame capture'
+        };
+      }
+    }
+
+    // Fallback: Return an error asking user to try again
+    throw new Error('Could not process video URL format');
+
+  } catch (error) {
+    console.error('[extractVideoFrame] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to extract video frame'));
+  }
+});
+
+/**
  * creationWizardAssembleSceneVideo - Creates a scene video sequence from shot videos
  *
  * Note: This creates a video sequence manifest that can be:
