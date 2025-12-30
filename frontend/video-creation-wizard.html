@@ -7471,8 +7471,8 @@
             try {
                 const decomposeFn = functions.httpsCallable('creationWizardDecomposeSceneToShots', { timeout: 120000 });
 
-                // Get clip duration from script timing or default to 6s (Minimax constraint)
-                const clipDuration = state.script.timing?.clipDuration || 6;
+                // Get clip duration from script timing or default to 10s (allows more complex actions)
+                const clipDuration = state.script.timing?.clipDuration || 10;
 
                 const result = await decomposeFn({
                     scene: {
@@ -7751,7 +7751,7 @@
 
                             ${modalStatus === 'idle' ? (() => {
                                 // Hollywood Math: Calculate recommended shots based on scene duration
-                                const clipDur = state.script.timing?.clipDuration || 6;
+                                const clipDur = state.script.timing?.clipDuration || 10;
                                 const sceneDur = scene.duration || 35;
                                 const recommendedShots = Math.ceil(sceneDur / clipDur);
                                 const shotDur = Math.round((sceneDur / shotCount) * 10) / 10;
@@ -9552,8 +9552,8 @@
 
                 const batchDecomposeFn = functions.httpsCallable('creationWizardBatchDecomposeScenes', { timeout: 540000 });
 
-                // Get clip duration from script timing (Minimax only supports 6 or 10 seconds)
-                const clipDuration = state.script.timing?.clipDuration || 6;
+                // Get clip duration from script timing (Minimax only supports 6 or 10 seconds) - Default to 10s
+                const clipDuration = state.script.timing?.clipDuration || 10;
 
                 const result = await batchDecomposeFn({
                     projectId: state.projectId,
