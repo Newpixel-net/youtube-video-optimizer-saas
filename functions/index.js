@@ -44689,7 +44689,8 @@ exports.creationWizardBatchGenerateShotImages = functions
     decomposedScenes,   // Array of { sceneId, shots: [...] }
     model,              // Image model
     aspectRatio,
-    characterReference, // Optional character reference
+    characterReference, // Optional character reference image (base64) for face consistency
+    characterBible,     // Optional character bible with names/descriptions for prompt building
     globalVisualProfile // From batch decomposition
   } = data;
 
@@ -44705,6 +44706,10 @@ exports.creationWizardBatchGenerateShotImages = functions
   const ai = new GoogleGenAI({ apiKey: geminiApiKey });
   const storage = admin.storage().bucket();
   const timestamp = Date.now();
+
+  // Log character consistency parameters
+  console.log(`[creationWizardBatchGenerateShotImages] Character Reference: ${characterReference?.base64 ? 'YES (base64 present)' : 'NO'}`);
+  console.log(`[creationWizardBatchGenerateShotImages] Character Bible: ${characterBible?.enabled ? `${characterBible.characters?.length || 0} characters` : 'disabled'}`);
 
   // Flatten all shots
   const allShots = [];
@@ -44751,6 +44756,8 @@ exports.creationWizardBatchGenerateShotImages = functions
       } : null;
 
       // Build the enhanced narrative prompt using NANOBANANA_PROMPT_BUILDER
+      // Pass characterBible for character descriptions in prompts (names, attire, physical features)
+      // Character reference image (base64) is passed separately to Gemini for face consistency
       let enhancedPrompt = NANOBANANA_PROMPT_BUILDER.buildShotPrompt(
         {
           shotType: shot.shotType || 'medium',
@@ -44759,7 +44766,7 @@ exports.creationWizardBatchGenerateShotImages = functions
           mood: promptContext.mood
         },
         promptContext,
-        null, // Character bible handled via reference image
+        characterBible, // Pass character bible for descriptions in prompt
         batchStyleBible
       );
 
@@ -44770,10 +44777,11 @@ exports.creationWizardBatchGenerateShotImages = functions
 
       console.log(`[creationWizardBatchGenerateShotImages] Shot ${i + 1}/${allShots.length} prompt (first 200 chars): ${enhancedPrompt.substring(0, 200)}...`);
 
-      // Build content parts
+      // Build content parts for Gemini API
       const contentParts = [];
 
-      // Add character reference if available
+      // Add character reference image FIRST if available (for face/appearance consistency)
+      // Gemini will use this as a visual reference when generating the new image
       if (characterReference?.base64) {
         contentParts.push({
           inlineData: {
@@ -44781,13 +44789,23 @@ exports.creationWizardBatchGenerateShotImages = functions
             data: characterReference.base64
           }
         });
+        // Add instruction to use the reference
+        contentParts.push({
+          text: `REFERENCE IMAGE ABOVE: Use this character's face, features, and appearance as reference for the main character in the generated image. Maintain facial consistency.\n\n`
+        });
+        console.log(`[creationWizardBatchGenerateShotImages] Added character reference image for face consistency`);
       }
+
+      // Add the main prompt text
+      contentParts.push({
+        text: enhancedPrompt
+      });
 
       // Generate image - Use correct NanoBanana models
       const geminiModelId = model === 'nanobanana' ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
 
       console.log(`[creationWizardBatchGenerateShotImages] Generating shot ${i + 1}/${allShots.length} (Scene ${shot.sceneId}, Shot ${shot.shotIndex})`);
-      console.log(`[creationWizardBatchGenerateShotImages] Using model: ${geminiModelId}, aspect ratio: 16:9`);
+      console.log(`[creationWizardBatchGenerateShotImages] Using model: ${geminiModelId}, aspect ratio: 16:9, parts: ${contentParts.length}`);
 
       const result = await ai.models.generateContent({
         model: geminiModelId,

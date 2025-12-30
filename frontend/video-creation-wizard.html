@@ -9675,36 +9675,70 @@
             showToast(`Generating ${totalShots} shot images across ${sceneIds.length} scenes...`, 'info');
 
             try {
-                // Prepare shots data
-                const allShots = [];
+                // Prepare decomposed scenes data in the format backend expects
+                // Backend expects: Array of { sceneId, shots: [...] }
+                const decomposedScenesArray = [];
                 sceneIds.forEach(sceneId => {
                     const scene = decomposedScenes[sceneId];
                     if (scene?.shots) {
+                        const shotsToGenerate = [];
                         scene.shots.forEach((shot, idx) => {
                             if (shot.status !== 'ready') {
-                                allShots.push({
-                                    sceneId: sceneId,
+                                shotsToGenerate.push({
                                     shotIndex: idx,
                                     shotType: shot.shotType,
                                     prompt: shot.prompt,
+                                    imagePrompt: shot.imagePrompt || shot.prompt,
                                     cameraMovement: shot.cameraMovement,
-                                    duration: shot.duration
+                                    duration: shot.duration,
+                                    narrativeBeat: shot.narrativeBeat || null,
+                                    subject: shot.subject || '',
+                                    action: shot.action || '',
+                                    environment: shot.environment || '',
+                                    mood: shot.mood || ''
                                 });
                                 // Mark as generating
                                 shot.status = 'generating';
                             }
                         });
+                        if (shotsToGenerate.length > 0) {
+                            decomposedScenesArray.push({
+                                sceneId: sceneId,
+                                shots: shotsToGenerate
+                            });
+                        }
                     }
                 });
                 render();
 
+                // Get character reference for face consistency (first character with portrait)
+                const characterReference = getCharacterReferenceForScene(sceneIds[0]);
+
+                // Get full character bible for character descriptions in prompts
+                const characterBible = state.storyboard.characterBible?.enabled ? {
+                    enabled: true,
+                    characters: (state.storyboard.characterBible.characters || []).map(c => ({
+                        name: c.name,
+                        description: c.description,
+                        physicalDescription: c.description,
+                        attire: c.attire || '',
+                        appliedToScenes: c.appliedToScenes || []
+                    }))
+                } : null;
+
+                console.log('[Batch Image Gen] Character reference:', characterReference ? 'YES (base64 ready)' : 'NO');
+                console.log('[Batch Image Gen] Character bible:', characterBible ? `${characterBible.characters.length} characters` : 'disabled');
+
                 const batchGenerateFn = functions.httpsCallable('creationWizardBatchGenerateShotImages', { timeout: 540000 });
                 const result = await batchGenerateFn({
                     projectId: state.projectId,
-                    shots: allShots,
+                    decomposedScenes: decomposedScenesArray,
                     globalVisualProfile: state.storyboard.multiShotMode.globalVisualProfile || {},
-                    imageModel: state.storyboard.imageModel || 'nanobanana-pro',
-                    aspectRatio: state.platform.aspectRatio || '16:9'
+                    model: state.storyboard.imageModel || 'nanobanana-pro',
+                    aspectRatio: state.platform.aspectRatio || '16:9',
+                    // NEW: Character consistency parameters
+                    characterReference: characterReference,
+                    characterBible: characterBible
                 });
 
                 if (result.data.success) {
