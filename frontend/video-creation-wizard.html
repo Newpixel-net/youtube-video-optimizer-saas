@@ -5683,13 +5683,25 @@
 
         // Get character reference data for scene generation
         function getCharacterReferenceForScene(sceneId) {
-            if (!state.storyboard.characterBible?.enabled) return null;
+            if (!state.storyboard.characterBible?.enabled) {
+                console.log('[getCharacterReferenceForScene] Character Bible disabled');
+                return null;
+            }
 
+            const allChars = state.storyboard.characterBible.characters || [];
             const chars = getCharactersForScene(sceneId);
+
+            // Debug logging
+            console.log(`[getCharacterReferenceForScene] Scene "${sceneId}": ${chars.length}/${allChars.length} characters apply to this scene`);
+            chars.forEach(c => {
+                console.log(`  - "${c.name}": URL=${c.referenceImageUrl ? 'YES' : 'NO'}, Base64=${c.referenceImageBase64 ? 'YES (' + c.referenceImageBase64.substring(0, 20) + '...)' : 'NO'}, Status=${c.referenceImageStatus}`);
+            });
+
             // Find the first character with a reference image
             const charWithRef = chars.find(c => c.referenceImageBase64 && c.referenceImageStatus === 'ready');
 
             if (charWithRef) {
+                console.log(`[getCharacterReferenceForScene] Using "${charWithRef.name}" as reference (base64 length: ${charWithRef.referenceImageBase64.length})`);
                 return {
                     base64: charWithRef.referenceImageBase64,
                     mimeType: charWithRef.referenceImageMimeType || 'image/png', // Use stored or default to PNG
@@ -5697,6 +5709,7 @@
                 };
             }
 
+            console.warn('[getCharacterReferenceForScene] No character with base64 portrait found!');
             return null;
         }
 
@@ -9710,6 +9723,31 @@
                     }
                 });
                 render();
+
+                // CRITICAL FIX: Ensure character portrait base64 is ready before generation
+                // This fixes race condition where base64 refresh runs in background after project load
+                if (state.storyboard.characterBible?.enabled) {
+                    const charsNeedingBase64 = (state.storyboard.characterBible.characters || []).filter(
+                        c => c.referenceImageUrl && c.referenceImageStatus === 'ready' && !c.referenceImageBase64
+                    );
+
+                    if (charsNeedingBase64.length > 0) {
+                        console.log(`[Batch Image Gen] Fetching base64 for ${charsNeedingBase64.length} character portrait(s)...`);
+                        showToast(`Preparing ${charsNeedingBase64.length} character portrait(s)...`, 'info');
+
+                        for (const char of charsNeedingBase64) {
+                            try {
+                                const base64 = await fetchImageAsBase64(char.referenceImageUrl);
+                                if (base64) {
+                                    char.referenceImageBase64 = base64;
+                                    console.log(`[Batch Image Gen] Base64 ready for "${char.name}"`);
+                                }
+                            } catch (err) {
+                                console.warn(`[Batch Image Gen] Failed to fetch base64 for "${char.name}":`, err);
+                            }
+                        }
+                    }
+                }
 
                 // Get character reference for face consistency (first character with portrait)
                 const characterReference = getCharacterReferenceForScene(sceneIds[0]);
