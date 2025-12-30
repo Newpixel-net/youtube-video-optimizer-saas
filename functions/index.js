@@ -7452,6 +7452,108 @@ exports.upscaleSceneImage = functions
     }
   });
 
+/**
+ * upscaleImageInternal - Internal helper for upscaling images (Fix 3)
+ * Used by shot generation functions - no auth/token checks
+ * Uses fal.ai AuraSR (FREE) for 4x upscaling
+ *
+ * @param {string} imageUrl - URL of image to upscale
+ * @param {string} aspectRatio - Target aspect ratio (default '16:9')
+ * @param {string} quality - 'hd' (1920x1080) or '4k' (3840x2160)
+ * @returns {Promise<object>} { success, url, width, height }
+ */
+async function upscaleImageInternal(imageUrl, aspectRatio = '16:9', quality = 'hd') {
+  if (!imageUrl) {
+    console.warn('[upscaleImageInternal] No image URL provided, skipping upscale');
+    return { success: false, url: imageUrl, skipped: true };
+  }
+
+  try {
+    // Configure fal.ai client
+    const falKey = process.env.FAL_KEY || functions.config().fal?.key;
+    if (!falKey) {
+      console.warn('[upscaleImageInternal] FAL API key not configured, skipping upscale');
+      return { success: false, url: imageUrl, skipped: true, reason: 'No FAL API key' };
+    }
+
+    fal.config({ credentials: falKey });
+
+    console.log(`[upscaleImageInternal] Starting ${quality} upscale: ${imageUrl.substring(0, 80)}...`);
+
+    // Call AuraSR for 4x upscale (FREE!)
+    const result = await fal.subscribe('fal-ai/aura-sr', {
+      input: {
+        image_url: imageUrl,
+        upscaling_factor: 4,
+        overlapping_tiles: true
+      }
+    });
+
+    if (!result.data?.image?.url) {
+      console.error('[upscaleImageInternal] No image returned from AuraSR');
+      return { success: false, url: imageUrl, error: 'No image returned' };
+    }
+
+    const upscaledUrl = result.data.image.url;
+    console.log(`[upscaleImageInternal] AuraSR complete, resizing to target dimensions`);
+
+    // Get target dimensions
+    const targetDimensions = getTargetDimensions(aspectRatio, quality);
+    const { width: targetWidth, height: targetHeight } = targetDimensions;
+
+    // Download and resize to exact target dimensions
+    const upscaledResponse = await axios.get(upscaledUrl, {
+      responseType: 'arraybuffer',
+      timeout: 60000
+    });
+
+    const resizedBuffer = await sharp(upscaledResponse.data)
+      .resize(targetWidth, targetHeight, {
+        fit: 'cover',
+        position: 'center'
+      })
+      .png({ quality: 95, compressionLevel: 6 })
+      .toBuffer();
+
+    // Upload to Firebase Storage
+    const storage = admin.storage().bucket();
+    const timestamp = Date.now();
+    const storagePath = `shot-upscales/${timestamp}_${quality}.png`;
+    const file = storage.file(storagePath);
+
+    await file.save(resizedBuffer, {
+      metadata: {
+        contentType: 'image/png',
+        metadata: {
+          originalUrl: imageUrl,
+          upscaleModel: 'aura-sr',
+          quality: quality,
+          dimensions: `${targetWidth}x${targetHeight}`
+        }
+      }
+    });
+
+    await file.makePublic();
+    const finalUrl = `https://storage.googleapis.com/${storage.name}/${storagePath}`;
+
+    console.log(`[upscaleImageInternal] Upscale complete: ${targetWidth}x${targetHeight}`);
+
+    return {
+      success: true,
+      url: finalUrl,
+      originalUrl: imageUrl,
+      width: targetWidth,
+      height: targetHeight,
+      quality: quality
+    };
+
+  } catch (error) {
+    console.error('[upscaleImageInternal] Error:', error.message);
+    // Return original URL on failure - don't break the flow
+    return { success: false, url: imageUrl, error: error.message };
+  }
+}
+
 // =============================================
 // THUMBNAIL EDITING - AI Inpainting/Generative Fill
 // Uses Gemini for targeted modifications with mask
@@ -42857,7 +42959,20 @@ ${consistencyAnchors.characterAppearance ? `- Character: ${consistencyAnchors.ch
         const imageResult = await generateCreativeImageInternal(uid, requestData);
 
         if (imageResult.success && imageResult.images && imageResult.images.length > 0) {
-          const imageUrl = imageResult.images[0].url;
+          let imageUrl = imageResult.images[0].url;
+
+          // UPSCALE: Enhance image quality using FAL AuraSR (Fix 3)
+          try {
+            const upscaleResult = await upscaleImageInternal(imageUrl, aspectRatio || '16:9', 'hd');
+            if (upscaleResult.success) {
+              console.log(`[creationWizardGenerateAllShotsForScene] Shot ${i + 1} upscaled to HD`);
+              imageUrl = upscaleResult.url;
+            } else if (upscaleResult.skipped) {
+              console.log(`[creationWizardGenerateAllShotsForScene] Shot ${i + 1} upscale skipped: ${upscaleResult.reason || 'not configured'}`);
+            }
+          } catch (upscaleError) {
+            console.warn(`[creationWizardGenerateAllShotsForScene] Shot ${i + 1} upscale failed, using original:`, upscaleError.message);
+          }
 
           // Store anchor image from first shot
           if (i === 0) {
@@ -44270,7 +44385,20 @@ ${shot.prompt || ''}`;
             });
 
             await file.makePublic();
-            const publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+            let publicUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+
+            // UPSCALE: Enhance image quality using FAL AuraSR (Fix 3)
+            try {
+              const upscaleResult = await upscaleImageInternal(publicUrl, aspectRatio || '16:9', 'hd');
+              if (upscaleResult.success) {
+                console.log(`[creationWizardBatchGenerateShotImages] Shot ${i + 1} upscaled to HD`);
+                publicUrl = upscaleResult.url;
+              } else if (upscaleResult.skipped) {
+                console.log(`[creationWizardBatchGenerateShotImages] Shot ${i + 1} upscale skipped`);
+              }
+            } catch (upscaleError) {
+              console.warn(`[creationWizardBatchGenerateShotImages] Shot ${i + 1} upscale failed:`, upscaleError.message);
+            }
 
             results.push({
               sceneId: shot.sceneId,
