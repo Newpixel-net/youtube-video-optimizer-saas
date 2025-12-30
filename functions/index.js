@@ -40431,16 +40431,30 @@ const STORY_BEAT_DECOMPOSER = {
    * @param {string} sceneAction - Rich action sequence for the scene
    * @param {number} shotCount - Number of shots to create
    * @param {number} clipDuration - Duration per shot (6 or 10 seconds)
-   * @param {object} sceneContext - { visualPrompt, narration, characters, sceneId }
+   * @param {object} sceneContext - { visualPrompt, narration, characters, sceneId, sceneIndex, totalScenes }
    * @param {object} openai - OpenAI client instance
+   * @param {object} crossSceneContext - { previousSceneEndState, previousSceneId, nextSceneHint } for continuity
    * @returns {Promise<Array>} Array of shot beats with start/action/end
    */
-  async decomposeWithAI(sceneAction, shotCount, clipDuration, sceneContext, openai) {
+  async decomposeWithAI(sceneAction, shotCount, clipDuration, sceneContext, openai, crossSceneContext = null) {
     // Validate sceneAction is rich enough for AI decomposition
     if (!sceneAction || sceneAction.trim().length < 50) {
       console.log('[STORY_BEAT_DECOMPOSER] sceneAction too brief, using rule-based fallback');
       return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
     }
+
+    // Build cross-scene continuity section if available
+    const crossSceneSection = crossSceneContext?.previousSceneEndState ? `
+CROSS-SCENE CONTINUITY (Upgrade 3):
+This is Scene ${sceneContext.sceneIndex || '?'} of ${sceneContext.totalScenes || '?'}.
+PREVIOUS SCENE ended with: "${crossSceneContext.previousSceneEndState}"
+
+The FIRST SHOT of this scene should:
+1. Acknowledge the transition from the previous scene
+2. Start in a way that flows naturally from the previous scene's end
+3. Consider if a match cut, dissolve, or continuation works best
+${crossSceneContext.transitionType ? `Intended transition type: ${crossSceneContext.transitionType}` : ''}
+` : '';
 
     const prompt = `You are a professional film editor decomposing a scene into shots for AI video generation.
 
@@ -40449,6 +40463,7 @@ SCENE ACTION (what happens in this ~${shotCount * clipDuration} second scene):
 
 VISUAL CONTEXT:
 ${sceneContext.visualPrompt ? sceneContext.visualPrompt.substring(0, 500) : 'No visual context provided'}
+${crossSceneSection}
 
 REQUIREMENTS:
 - Divide this action into exactly ${shotCount} shots
@@ -40480,10 +40495,13 @@ Return ONLY valid JSON:
       "captureDescription": "What the freeze frame shows",
       "suggestedCaptureTime": "${clipDuration - 1}-${clipDuration} seconds",
       "captureReason": "Character in stable pose after turning, clear silhouette against city lights",
-      "captureStability": "high"
+      "captureStability": "high",
+      "crossSceneTransition": "Only for first shot if previous scene exists - how this shot connects from previous scene"
     }
   ],
-  "chainLogic": "Brief explanation of how shots connect"
+  "chainLogic": "Brief explanation of how shots connect",
+  "sceneEndState": "The final state of the LAST shot - this will be passed to the NEXT scene for continuity",
+  "suggestedNextSceneTransition": "Recommended transition type to next scene (cut/dissolve/match_cut/fade)"
 }`;
 
     try {
@@ -40556,21 +40574,33 @@ Return ONLY valid JSON:
           videoPrompt,
           motionDescription: `Shot ${idx + 1}: ${this.extractKeyVerbs(shot.shotAction)}`,
           aiGenerated: true,
-          // NEW: Capture point suggestions (Upgrade 2)
+          // Capture point suggestions (Upgrade 2)
           captureSuggestion: {
             timing: shot.suggestedCaptureTime || `${clipDuration - 1}-${clipDuration} seconds`,
             reason: shot.captureReason || 'End of shot action sequence',
             stability: shot.captureStability || 'medium',
-            // Computed helpers for UI
             timingSeconds: this.parseCaptureTiming(shot.suggestedCaptureTime, clipDuration),
             stabilityColor: shot.captureStability === 'high' ? '#10b981' :
                            shot.captureStability === 'low' ? '#f59e0b' : '#3b82f6'
-          }
+          },
+          // Cross-scene transition (Upgrade 3) - only for first shot
+          crossSceneTransition: isFirst && crossSceneContext?.previousSceneEndState ? {
+            fromPreviousScene: true,
+            previousSceneEndState: crossSceneContext.previousSceneEndState,
+            transitionDescription: shot.crossSceneTransition || 'Continues from previous scene',
+            transitionType: crossSceneContext.transitionType || 'cut'
+          } : null
         };
       });
 
+      // Extract scene-level continuity data for passing to next scene
+      const lastShot = parsed.shots[parsed.shots.length - 1];
+      const sceneEndState = parsed.sceneEndState || lastShot?.endState || lastShot?.captureDescription;
+      const suggestedNextSceneTransition = parsed.suggestedNextSceneTransition || 'cut';
+
       console.log(`[STORY_BEAT_DECOMPOSER] AI decomposition successful: ${shots.length} shots`);
       console.log(`[STORY_BEAT_DECOMPOSER] Chain logic: ${parsed.chainLogic || 'Not provided'}`);
+      console.log(`[STORY_BEAT_DECOMPOSER] Scene end state for next scene: ${sceneEndState?.substring(0, 50)}...`);
 
       // Log capture suggestions
       shots.forEach((shot, idx) => {
@@ -40579,7 +40609,13 @@ Return ONLY valid JSON:
         }
       });
 
-      return shots;
+      // Return shots with scene-level continuity metadata
+      return {
+        shots,
+        sceneEndState,
+        suggestedNextSceneTransition,
+        chainLogic: parsed.chainLogic
+      };
 
     } catch (error) {
       console.error('[STORY_BEAT_DECOMPOSER] AI decomposition failed:', error.message);
@@ -42069,7 +42105,11 @@ exports.creationWizardDecomposeSceneToShots = functions
     genre,
     productionMode,
     styleBible,      // For visual consistency
-    characterBible   // For character consistency
+    characterBible,  // For character consistency
+    // NEW: Cross-scene continuity (Upgrade 3)
+    previousSceneContext, // { endState, sceneId, transitionType } from previous scene
+    sceneIndex,      // Current scene index (0-based)
+    totalScenes      // Total number of scenes in video
   } = data;
 
   if (!scene || !scene.visualPrompt) {
@@ -42129,10 +42169,25 @@ exports.creationWizardDecomposeSceneToShots = functions
     let storyBeats = null;
     let decompositionMethod = 'rule-based';
 
+    // Track scene-level continuity data for return
+    let sceneEndState = null;
+    let suggestedNextSceneTransition = 'cut';
+
     if (useAI) {
       console.log(`[creationWizardDecomposeSceneToShots] Using AI decomposition for rich sceneAction (${sceneAction.length} chars)`);
       try {
-        storyBeats = await STORY_BEAT_DECOMPOSER.decomposeWithAI(
+        // Build cross-scene context for AI (Upgrade 3)
+        const crossSceneContext = previousSceneContext?.endState ? {
+          previousSceneEndState: previousSceneContext.endState,
+          previousSceneId: previousSceneContext.sceneId,
+          transitionType: previousSceneContext.transitionType || scene.transition?.type || 'cut'
+        } : null;
+
+        if (crossSceneContext) {
+          console.log(`[creationWizardDecomposeSceneToShots] Cross-scene context: transitioning from scene ${crossSceneContext.previousSceneId}`);
+        }
+
+        const aiResult = await STORY_BEAT_DECOMPOSER.decomposeWithAI(
           sceneAction,
           shotCount,
           clipDuration,
@@ -42140,12 +42195,27 @@ exports.creationWizardDecomposeSceneToShots = functions
             visualPrompt: sceneDescription,
             narration: narration,
             characters: characterBible,
-            sceneId: scene.id
+            sceneId: scene.id,
+            sceneIndex: sceneIndex,
+            totalScenes: totalScenes
           },
-          openai  // Pass the global OpenAI client
+          openai,
+          crossSceneContext  // Pass cross-scene context (Upgrade 3)
         );
-        decompositionMethod = storyBeats[0]?.aiGenerated ? 'ai-powered' : 'rule-based-fallback';
-        console.log(`[creationWizardDecomposeSceneToShots] AI decomposition result: ${storyBeats.length} shots (method: ${decompositionMethod})`);
+
+        // Handle new return format (object with shots array)
+        if (aiResult && aiResult.shots) {
+          storyBeats = aiResult.shots;
+          sceneEndState = aiResult.sceneEndState;
+          suggestedNextSceneTransition = aiResult.suggestedNextSceneTransition || 'cut';
+          decompositionMethod = storyBeats[0]?.aiGenerated ? 'ai-powered' : 'rule-based-fallback';
+        } else if (Array.isArray(aiResult)) {
+          // Backward compatibility: if it returns just an array
+          storyBeats = aiResult;
+          decompositionMethod = storyBeats[0]?.aiGenerated ? 'ai-powered' : 'rule-based-fallback';
+        }
+
+        console.log(`[creationWizardDecomposeSceneToShots] AI decomposition result: ${storyBeats?.length || 0} shots (method: ${decompositionMethod})`);
       } catch (aiError) {
         console.error(`[creationWizardDecomposeSceneToShots] AI decomposition failed:`, aiError.message);
         storyBeats = null; // Will trigger fallback below
@@ -42243,6 +42313,14 @@ exports.creationWizardDecomposeSceneToShots = functions
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    // Compute scene end state from last shot if not from AI
+    if (!sceneEndState && normalizedShots.length > 0) {
+      const lastShot = normalizedShots[normalizedShots.length - 1];
+      sceneEndState = lastShot.narrativeBeat?.endState ||
+                      lastShot.captureSuggestion?.captureDescription ||
+                      'Scene concluded';
+    }
+
     return {
       success: true,
       sceneId: scene.id,
@@ -42251,8 +42329,18 @@ exports.creationWizardDecomposeSceneToShots = functions
       shotCount: normalizedShots.length,
       shots: normalizedShots,
       consistencyAnchors: consistencyAnchors,
-      // NEW: Expose decomposition method to frontend
       decompositionMethod: decompositionMethod,
+      // Cross-scene continuity data (Upgrade 3)
+      crossSceneContinuity: {
+        sceneEndState: sceneEndState,
+        suggestedNextSceneTransition: suggestedNextSceneTransition,
+        // This data should be passed as previousSceneContext to the next scene
+        forNextScene: {
+          endState: sceneEndState,
+          sceneId: scene.id,
+          transitionType: suggestedNextSceneTransition
+        }
+      },
       usage: {
         promptTokens: decompositionMethod === 'ai-powered' ? 500 : 0,
         completionTokens: decompositionMethod === 'ai-powered' ? 1000 : 0,
@@ -43382,6 +43470,11 @@ Return JSON:
     const results = [];
     const defaultShots = targetShotCount || 3;
 
+    // Cross-scene continuity tracking (Upgrade 3)
+    let previousSceneEndState = null;
+    let previousSceneId = null;
+    let previousSceneTransition = null;
+
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
       const sceneDescription = scene.visualPrompt || scene.visual || '';
@@ -43390,6 +43483,17 @@ Return JSON:
       try {
         // Analyze scene type
         const sceneType = SHOT_DECOMPOSITION_ENGINE.analyzeSceneType(sceneDescription);
+
+        // Build cross-scene context from previous scene (Upgrade 3)
+        const crossSceneContext = previousSceneEndState ? {
+          previousSceneEndState,
+          previousSceneId,
+          transitionType: previousSceneTransition || scene.transition?.type || 'cut'
+        } : null;
+
+        if (crossSceneContext) {
+          console.log(`[creationWizardBatchDecomposeScenes] Scene ${i + 1} cross-scene: continuing from "${previousSceneEndState?.substring(0, 50)}..."`);
+        }
 
         // Calculate shot count using Hollywood formula: ceil(sceneDuration / clipDuration)
         const hollywoodShotCount = Math.ceil(sceneDuration / clipDuration);
@@ -43419,6 +43523,18 @@ Output JSON with shots array containing detailed prompts that EXPLICITLY include
 
 Each shot prompt must be 150+ words and include these visual DNA elements.`;
 
+        // Build cross-scene section for prompt (Upgrade 3)
+        const crossScenePromptSection = crossSceneContext ? `
+CROSS-SCENE CONTINUITY (IMPORTANT):
+Previous scene (Scene ${i}) ended with: "${crossSceneContext.previousSceneEndState}"
+Transition type to this scene: ${crossSceneContext.transitionType}
+
+The FIRST SHOT of this scene should:
+- Flow naturally from the previous scene's end state
+- Create visual continuity (match cut, dissolve, or continuation as appropriate)
+- The first shot's opening should acknowledge where we came from
+` : '';
+
         const userPrompt = `Decompose Scene ${i + 1} into ${actualShotCount} shots:
 
 SCENE DESCRIPTION:
@@ -43426,11 +43542,12 @@ ${sceneDescription}
 
 DURATION: ${sceneDuration}s
 SCENE TYPE: ${sceneType}
-
+${crossScenePromptSection}
 SHOT SEQUENCE TEMPLATE:
 ${JSON.stringify(baseSequence, null, 2)}
 
 ${scene.narration ? `NARRATION: "${scene.narration}"` : ''}
+${scene.sceneAction ? `SCENE ACTION: "${scene.sceneAction}"` : ''}
 
 Return JSON:
 {
@@ -43440,10 +43557,12 @@ Return JSON:
       "shotType": "wide|medium|closeup|etc",
       "cameraMovement": "movement type",
       "prompt": "DETAILED prompt (150+ words) including global visual DNA...",
-      "purpose": "narrative purpose"
+      "purpose": "narrative purpose",
+      "endState": "How this shot ends (position/pose) - for frame-chain capture"
     }
   ],
-  "sceneConsistencyNotes": "How this scene connects to others visually"
+  "sceneConsistencyNotes": "How this scene connects to others visually",
+  "sceneEndState": "How the FINAL shot of this scene ends - will be passed to next scene for continuity"
 }
 
 IMPORTANT: Do NOT include duration in your response - durations are fixed at ${clipDuration || 10} seconds per shot.`;
@@ -43465,6 +43584,7 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
         const validClipDuration = clipDuration === 6 ? 6 : 10;
 
         // Normalize shots - FORCE duration to be exactly clipDuration
+        // Include endState for frame-chain capture (Upgrade 3)
         const normalizedShots = (shotData.shots || []).map((shot, idx) => ({
           id: `${scene.id}_shot_${idx + 1}`,
           sceneId: scene.id,
@@ -43474,10 +43594,15 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
           cameraMovement: shot.cameraMovement || baseSequence[idx]?.cameraMovement || 'static',
           prompt: shot.prompt,
           purpose: shot.purpose || 'scene coverage',
+          endState: shot.endState || null, // For frame-chain capture
           status: 'pending',
           imageUrl: null,
           videoUrl: null
         }));
+
+        // Extract scene end state for cross-scene continuity (Upgrade 3)
+        const sceneEndState = shotData.sceneEndState ||
+          (normalizedShots.length > 0 ? normalizedShots[normalizedShots.length - 1].endState : null);
 
         results.push({
           sceneId: scene.id,
@@ -43487,10 +43612,25 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
           totalDuration: sceneDuration,
           shotCount: normalizedShots.length,
           shots: normalizedShots,
-          consistencyNotes: shotData.sceneConsistencyNotes || null
+          consistencyNotes: shotData.sceneConsistencyNotes || null,
+          // Cross-scene continuity data (Upgrade 3)
+          crossSceneContinuity: {
+            previousSceneId: crossSceneContext?.previousSceneId || null,
+            transitionFromPrevious: crossSceneContext?.transitionType || null,
+            sceneEndState: sceneEndState,
+            suggestedNextTransition: shotData.suggestedNextTransition || 'cut'
+          }
         });
 
+        // Update cross-scene tracking for next iteration (Upgrade 3)
+        previousSceneEndState = sceneEndState;
+        previousSceneId = scene.id;
+        previousSceneTransition = shotData.suggestedNextTransition || scene.transition?.type || 'cut';
+
         console.log(`[creationWizardBatchDecomposeScenes] Scene ${i + 1}/${scenes.length} decomposed: ${normalizedShots.length} shots`);
+        if (sceneEndState) {
+          console.log(`[creationWizardBatchDecomposeScenes] Scene ${i + 1} ends with: "${sceneEndState.substring(0, 60)}..."`);
+        }
 
         // Small delay between scenes
         if (i < scenes.length - 1) {
@@ -43522,6 +43662,16 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    // Build cross-scene continuity chain summary (Upgrade 3)
+    const continuityChain = results
+      .filter(r => r.status === 'ready' && r.crossSceneContinuity?.sceneEndState)
+      .map(r => ({
+        sceneId: r.sceneId,
+        sceneIndex: r.sceneIndex,
+        endState: r.crossSceneContinuity.sceneEndState,
+        nextTransition: r.crossSceneContinuity.suggestedNextTransition
+      }));
+
     return {
       success: successCount > 0,
       totalScenes: scenes.length,
@@ -43529,7 +43679,14 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
       failedCount: scenes.length - successCount,
       totalShots,
       globalVisualProfile,
-      scenes: results
+      scenes: results,
+      // Cross-scene continuity summary (Upgrade 3)
+      crossSceneContinuity: {
+        enabled: true,
+        chainComplete: continuityChain.length === successCount,
+        chain: continuityChain,
+        description: 'Each scene ends in a capturable state that flows into the next scene'
+      }
     };
 
   } catch (error) {
