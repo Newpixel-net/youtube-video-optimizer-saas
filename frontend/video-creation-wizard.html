@@ -9026,12 +9026,19 @@
                         <button onclick="captureLastFrame()" style="flex: 1; min-width: 150px; padding: 0.75rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.5); border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             ⏭️ Capture Last Frame
                         </button>
+                        <!-- Fix Character Faces button (hidden until frame is captured) -->
+                        <button id="fix-faces-btn" onclick="showFaceCorrectionPanel()" style="display: none; flex: 1; min-width: 180px; padding: 0.75rem; background: rgba(249, 115, 22, 0.2); border: 1px solid rgba(249, 115, 22, 0.5); border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer; align-items: center; justify-content: center; gap: 0.5rem;">
+                            🎭 Fix Character Faces
+                        </button>
                         ${hasNextShot ? `
                         <button id="transfer-frame-btn" onclick="transferFrameToNextShot()" disabled style="flex: 1; min-width: 200px; padding: 0.75rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; color: rgba(255,255,255,0.5); font-weight: 600; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                             ➡️ Send to Shot ${nextShotIndex + 1}
                         </button>
                         ` : ''}
                     </div>
+
+                    <!-- Face Correction Panel (hidden by default, shown when Fix Character Faces is clicked) -->
+                    <div id="face-correction-panel" style="display: none; padding: 0 1.25rem 1.25rem 1.25rem;"></div>
                 </div>
             `;
 
@@ -9155,6 +9162,291 @@
                 transferBtn.style.color = 'white';
                 transferBtn.style.cursor = 'pointer';
             }
+
+            // Show Fix Character Faces button if Character Bible is enabled
+            const fixFacesBtn = document.getElementById('fix-faces-btn');
+            if (fixFacesBtn && state.storyboard.characterBible?.enabled) {
+                fixFacesBtn.style.display = 'flex';
+            }
+        }
+
+        // ==========================================
+        // FIX CHARACTER FACES - Face Correction Feature
+        // Uses NanoBananaPro with Character Bible references to fix AI-generated faces
+        // ==========================================
+
+        /**
+         * Show the face correction panel
+         */
+        function showFaceCorrectionPanel() {
+            if (!state.frameCaptureContext?.capturedFrame) {
+                showToast('Capture a frame first', 'error');
+                return;
+            }
+
+            if (!state.storyboard.characterBible?.enabled) {
+                showToast('Character Bible is required for face correction', 'error');
+                return;
+            }
+
+            const characters = state.storyboard.characterBible.characters || [];
+            const charsWithPortraits = characters.filter(c => c.referenceImageUrl && c.referenceImageStatus === 'ready');
+
+            if (charsWithPortraits.length === 0) {
+                showToast('No character portraits available. Generate portraits in Character Bible first.', 'error');
+                return;
+            }
+
+            // Store face correction context
+            state.faceCorrectionContext = {
+                originalFrame: state.frameCaptureContext.capturedFrame,
+                correctedFrame: null,
+                selectedCharacters: charsWithPortraits.map(c => c.id), // Select all by default
+                status: 'idle' // idle, processing, done, error
+            };
+
+            // Build the face correction panel
+            const panel = document.getElementById('face-correction-panel');
+            if (panel) {
+                panel.innerHTML = buildFaceCorrectionPanelHTML(charsWithPortraits);
+                panel.style.display = 'block';
+            }
+        }
+
+        /**
+         * Build the HTML for the face correction panel
+         */
+        function buildFaceCorrectionPanelHTML(characters) {
+            return `
+                <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; margin-top: 1rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <div style="font-size: 0.9rem; font-weight: 600; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 1.2rem;">🎭</span> Fix Character Faces
+                        </div>
+                        <button onclick="closeFaceCorrectionPanel()" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 1rem;">✕</button>
+                    </div>
+
+                    <div style="color: rgba(255,255,255,0.6); font-size: 0.75rem; margin-bottom: 1rem;">
+                        Select characters whose faces need correction. Their Character Bible portraits will be used as reference.
+                    </div>
+
+                    <!-- Character Selection -->
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                        ${characters.map(char => `
+                            <div onclick="toggleFaceCorrectionCharacter('${char.id}')"
+                                 id="face-char-${char.id}"
+                                 style="cursor: pointer; padding: 0.5rem; background: rgba(139, 92, 246, 0.2); border: 2px solid rgba(139, 92, 246, 0.5); border-radius: 0.5rem; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s;">
+                                <img src="${char.referenceImageUrl}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 0.25rem;">
+                                <div>
+                                    <div style="font-size: 0.75rem; font-weight: 600; color: white;">${char.name}</div>
+                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">✓ Selected</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- Before/After Preview -->
+                    <div id="face-correction-preview" style="display: none; margin-bottom: 1rem;">
+                        <div style="display: flex; gap: 1rem;">
+                            <div style="flex: 1;">
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">BEFORE</div>
+                                <div style="border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; overflow: hidden; aspect-ratio: 16/9;">
+                                    <img id="face-before-img" src="${state.frameCaptureContext?.capturedFrame || ''}" style="width: 100%; height: 100%; object-fit: cover;">
+                                </div>
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">AFTER</div>
+                                <div id="face-after-container" style="border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 0.5rem; overflow: hidden; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3);">
+                                    <span style="color: rgba(255,255,255,0.3); font-size: 0.75rem;">Click "Apply Correction"</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress indicator -->
+                    <div id="face-correction-progress" style="display: none; margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 1rem; background: rgba(139, 92, 246, 0.1); border-radius: 0.5rem; border: 1px solid rgba(139, 92, 246, 0.3);">
+                            <div class="spinner" style="width: 20px; height: 20px; border: 2px solid rgba(139, 92, 246, 0.3); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                            <div style="color: white; font-size: 0.85rem;">Correcting faces with AI...</div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div style="display: flex; gap: 0.75rem;">
+                        <button id="apply-face-correction-btn" onclick="applyFaceCorrection()" style="flex: 1; padding: 0.75rem; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border: none; border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            🎨 Apply Correction
+                        </button>
+                        <button id="save-corrected-frame-btn" onclick="saveCorrectedFrame()" disabled style="flex: 1; padding: 0.75rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; color: rgba(255,255,255,0.5); font-weight: 600; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            ✓ Save Corrected Frame
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Toggle character selection for face correction
+         */
+        function toggleFaceCorrectionCharacter(charId) {
+            if (!state.faceCorrectionContext) return;
+
+            const idx = state.faceCorrectionContext.selectedCharacters.indexOf(charId);
+            const charEl = document.getElementById(`face-char-${charId}`);
+
+            if (idx >= 0) {
+                // Deselect
+                state.faceCorrectionContext.selectedCharacters.splice(idx, 1);
+                if (charEl) {
+                    charEl.style.background = 'rgba(255,255,255,0.05)';
+                    charEl.style.borderColor = 'rgba(255,255,255,0.2)';
+                    charEl.querySelector('div > div:last-child').textContent = 'Click to select';
+                    charEl.querySelector('div > div:last-child').style.color = 'rgba(255,255,255,0.3)';
+                }
+            } else {
+                // Select
+                state.faceCorrectionContext.selectedCharacters.push(charId);
+                if (charEl) {
+                    charEl.style.background = 'rgba(139, 92, 246, 0.2)';
+                    charEl.style.borderColor = 'rgba(139, 92, 246, 0.5)';
+                    charEl.querySelector('div > div:last-child').textContent = '✓ Selected';
+                    charEl.querySelector('div > div:last-child').style.color = 'rgba(255,255,255,0.5)';
+                }
+            }
+        }
+
+        /**
+         * Close the face correction panel
+         */
+        function closeFaceCorrectionPanel() {
+            const panel = document.getElementById('face-correction-panel');
+            if (panel) {
+                panel.style.display = 'none';
+                panel.innerHTML = '';
+            }
+            state.faceCorrectionContext = null;
+        }
+
+        /**
+         * Apply face correction using NanoBananaPro with character references
+         */
+        async function applyFaceCorrection() {
+            if (!state.faceCorrectionContext?.originalFrame) {
+                showToast('No frame captured', 'error');
+                return;
+            }
+
+            const selectedIds = state.faceCorrectionContext.selectedCharacters;
+            if (selectedIds.length === 0) {
+                showToast('Select at least one character', 'error');
+                return;
+            }
+
+            // Get selected character portraits
+            const characters = state.storyboard.characterBible.characters || [];
+            const selectedChars = characters.filter(c => selectedIds.includes(c.id));
+
+            // Ensure all selected characters have base64
+            for (const char of selectedChars) {
+                if (!char.referenceImageBase64 && char.referenceImageUrl) {
+                    try {
+                        char.referenceImageBase64 = await fetchImageAsBase64(char.referenceImageUrl);
+                    } catch (err) {
+                        console.warn(`Failed to fetch base64 for ${char.name}:`, err);
+                    }
+                }
+            }
+
+            const charsWithBase64 = selectedChars.filter(c => c.referenceImageBase64);
+            if (charsWithBase64.length === 0) {
+                showToast('Could not load character portraits', 'error');
+                return;
+            }
+
+            // Show progress
+            state.faceCorrectionContext.status = 'processing';
+            document.getElementById('face-correction-progress').style.display = 'block';
+            document.getElementById('face-correction-preview').style.display = 'flex';
+            document.getElementById('apply-face-correction-btn').disabled = true;
+            document.getElementById('apply-face-correction-btn').style.opacity = '0.5';
+
+            try {
+                // Extract base64 from data URL
+                const frameBase64 = state.faceCorrectionContext.originalFrame.split(',')[1];
+
+                // Build character references for the API
+                const characterReferences = charsWithBase64.map(c => ({
+                    name: c.name,
+                    description: c.description,
+                    base64: c.referenceImageBase64,
+                    mimeType: c.referenceImageMimeType || 'image/png'
+                }));
+
+                console.log(`[Face Correction] Sending ${characterReferences.length} character reference(s) for correction`);
+
+                // Call the backend function
+                const fixFacesFn = functions.httpsCallable('creationWizardFixCharacterFaces', { timeout: 120000 });
+                const result = await fixFacesFn({
+                    frameBase64: frameBase64,
+                    frameMimeType: 'image/png',
+                    characterReferences: characterReferences,
+                    aspectRatio: state.platform.aspectRatio || '16:9'
+                });
+
+                if (result.data.success && result.data.correctedImageUrl) {
+                    // Show the corrected frame
+                    state.faceCorrectionContext.correctedFrame = result.data.correctedImageUrl;
+                    state.faceCorrectionContext.status = 'done';
+
+                    const afterContainer = document.getElementById('face-after-container');
+                    if (afterContainer) {
+                        afterContainer.innerHTML = `<img src="${result.data.correctedImageUrl}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                    }
+
+                    // Enable save button
+                    const saveBtn = document.getElementById('save-corrected-frame-btn');
+                    if (saveBtn) {
+                        saveBtn.disabled = false;
+                        saveBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                        saveBtn.style.border = 'none';
+                        saveBtn.style.color = 'white';
+                        saveBtn.style.cursor = 'pointer';
+                    }
+
+                    showToast('Face correction complete! Review and save.', 'success');
+                } else {
+                    throw new Error(result.data.error || 'Face correction failed');
+                }
+
+            } catch (error) {
+                console.error('Face correction error:', error);
+                state.faceCorrectionContext.status = 'error';
+                showToast(`Face correction failed: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('face-correction-progress').style.display = 'none';
+                document.getElementById('apply-face-correction-btn').disabled = false;
+                document.getElementById('apply-face-correction-btn').style.opacity = '1';
+            }
+        }
+
+        /**
+         * Save the corrected frame - updates the captured frame and can be used for transfer
+         */
+        function saveCorrectedFrame() {
+            if (!state.faceCorrectionContext?.correctedFrame) {
+                showToast('No corrected frame available', 'error');
+                return;
+            }
+
+            // Update the captured frame with the corrected version
+            state.frameCaptureContext.capturedFrame = state.faceCorrectionContext.correctedFrame;
+
+            // Update the preview
+            updateFrameCapturePreview(state.faceCorrectionContext.correctedFrame);
+
+            // Close the face correction panel
+            closeFaceCorrectionPanel();
+
+            showToast('Corrected frame saved! You can now transfer it to the next shot.', 'success');
         }
 
         /**
