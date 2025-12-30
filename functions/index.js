@@ -43038,6 +43038,524 @@ const SCENE_CLOSURE_ENGINE = {
 };
 
 // =============================================================================
+// CROSS_SHOT_INTELLIGENCE - Shot-to-Shot Narrative Continuity
+// =============================================================================
+/**
+ * CROSS_SHOT_INTELLIGENCE
+ *
+ * Ensures shots within a scene connect narratively, emotionally, and visually.
+ * Creates progressive storytelling where each shot builds on the previous.
+ *
+ * Key principles:
+ * 1. STATE PROPAGATION - Previous shot's end informs next shot's start
+ * 2. EMOTIONAL MOMENTUM - Intensity builds progressively across shots
+ * 3. ACTION CONTINUITY - Physical actions flow naturally between shots
+ * 4. VISUAL RHYTHM - Pacing varies to create dynamic viewing experience
+ * 5. NARRATIVE HOOKS - Each shot creates anticipation for the next
+ */
+const CROSS_SHOT_INTELLIGENCE = {
+
+  // =========================================================================
+  // EMOTIONAL INTENSITY CURVES - How emotion builds across shots
+  // =========================================================================
+  intensityCurves: {
+    // Standard dramatic arc
+    dramatic: {
+      name: 'Dramatic Arc',
+      description: 'Classic rising action to climax',
+      getIntensity: (shotIndex, totalShots) => {
+        const progress = shotIndex / (totalShots - 1);
+        // Sigmoid-like curve peaking before the end
+        if (progress < 0.7) {
+          return 0.2 + (progress / 0.7) * 0.7; // 0.2 → 0.9
+        } else {
+          return 0.9 - ((progress - 0.7) / 0.3) * 0.2; // 0.9 → 0.7 (slight resolution)
+        }
+      }
+    },
+    // Building tension
+    tension: {
+      name: 'Rising Tension',
+      description: 'Continuous escalation',
+      getIntensity: (shotIndex, totalShots) => {
+        const progress = shotIndex / (totalShots - 1);
+        return 0.3 + progress * 0.7; // 0.3 → 1.0
+      }
+    },
+    // Contemplative, even pacing
+    contemplative: {
+      name: 'Contemplative',
+      description: 'Even, meditative pacing',
+      getIntensity: (shotIndex, totalShots) => {
+        return 0.4 + Math.sin(shotIndex * 0.5) * 0.15; // Gentle wave around 0.4
+      }
+    },
+    // Action sequence with peaks
+    action: {
+      name: 'Action Peaks',
+      description: 'Multiple intensity peaks',
+      getIntensity: (shotIndex, totalShots) => {
+        const progress = shotIndex / (totalShots - 1);
+        // Multiple peaks
+        const wave = Math.sin(progress * Math.PI * 2) * 0.3;
+        return 0.5 + wave + progress * 0.2;
+      }
+    },
+    // Emotional release pattern
+    emotional: {
+      name: 'Emotional Journey',
+      description: 'Build to emotional release',
+      getIntensity: (shotIndex, totalShots) => {
+        const progress = shotIndex / (totalShots - 1);
+        if (progress < 0.6) {
+          return 0.3 + (progress / 0.6) * 0.6; // Build
+        } else {
+          return 0.9 + Math.sin((progress - 0.6) * Math.PI * 2.5) * 0.1; // Emotional plateau with variation
+        }
+      }
+    }
+  },
+
+  // =========================================================================
+  // TRANSITION PHRASES - How shots connect linguistically
+  // =========================================================================
+  transitionPhrases: {
+    // When previous shot ends with action
+    action_to_action: [
+      'The motion continues as',
+      'Following through from the previous movement,',
+      'The action flows forward as',
+      'Building on the momentum,'
+    ],
+    // When previous shot ends statically
+    static_to_action: [
+      'Breaking from stillness,',
+      'The moment of quiet ends as',
+      'Energy returns as',
+      'From the pause,'
+    ],
+    // When transitioning to slower moment
+    action_to_static: [
+      'The movement settles into',
+      'Motion gives way to stillness as',
+      'The energy calms into',
+      'Settling from the action,'
+    ],
+    // When intensity increases
+    build_intensity: [
+      'Intensity heightens as',
+      'The tension rises further as',
+      'Energy amplifies as',
+      'Building toward the peak,'
+    ],
+    // When intensity decreases
+    release_intensity: [
+      'The intensity begins to release as',
+      'Tension eases slightly as',
+      'The peak passes, giving way to',
+      'Energy softens as'
+    ],
+    // Emotional transitions
+    emotional_shift: [
+      'The emotional landscape shifts as',
+      'Feeling deepens as',
+      'The inner state transforms as',
+      'Emotion evolves as'
+    ]
+  },
+
+  // =========================================================================
+  // MOMENTUM MODIFIERS - Add progressive energy to prompts
+  // =========================================================================
+  momentumModifiers: {
+    building: {
+      low: ['subtle energy emerging', 'first hints of momentum', 'gentle stirring begins'],
+      medium: ['growing intensity', 'building momentum', 'energy accumulating'],
+      high: ['powerful forward motion', 'unstoppable momentum', 'peak energy driving forward']
+    },
+    sustaining: {
+      low: ['maintaining gentle pace', 'steady quiet energy', 'even flow continues'],
+      medium: ['consistent momentum held', 'stable energy maintained', 'rhythm sustained'],
+      high: ['peak intensity sustained', 'maximum energy held', 'climactic power maintained']
+    },
+    releasing: {
+      low: ['energy gently fading', 'soft release beginning', 'quiet settling starts'],
+      medium: ['momentum easing', 'energy finding rest', 'gradual deceleration'],
+      high: ['dramatic release', 'powerful resolution', 'cathartic settling']
+    }
+  },
+
+  // =========================================================================
+  // SHOT STATE TRACKING - Track what connects shots
+  // =========================================================================
+
+  /**
+   * Analyze a shot's end state for continuity
+   * @param {Object} shot - Shot data
+   * @returns {Object} End state analysis
+   */
+  analyzeEndState(shot) {
+    const endState = shot.endState || shot.narrativeBeat?.endState || '';
+    const videoPrompt = shot.videoPrompt || '';
+    const combined = `${endState} ${videoPrompt}`.toLowerCase();
+
+    // Detect motion state
+    const isInMotion = /moving|walking|running|reaching|turning|approaching|stepping/.test(combined);
+    const isStatic = /still|frozen|paused|holding|resting|waiting|standing|sitting/.test(combined);
+
+    // Detect emotional state
+    const emotionalState = this.detectEmotionalState(combined);
+
+    // Detect physical position
+    const position = this.detectPosition(combined);
+
+    // Detect attention/focus
+    const focus = this.detectFocus(combined);
+
+    return {
+      motionState: isInMotion ? 'in_motion' : isStatic ? 'static' : 'transitional',
+      emotionalState,
+      position,
+      focus,
+      rawEndState: endState
+    };
+  },
+
+  /**
+   * Detect emotional state from text
+   */
+  detectEmotionalState(text) {
+    if (/tense|anxious|worried|nervous|stressed/.test(text)) return 'tense';
+    if (/calm|peaceful|serene|relaxed|at ease/.test(text)) return 'calm';
+    if (/happy|joyful|excited|elated|thrilled/.test(text)) return 'joyful';
+    if (/sad|sorrowful|melancholy|grieving|tearful/.test(text)) return 'sad';
+    if (/angry|furious|enraged|frustrated/.test(text)) return 'angry';
+    if (/determined|resolute|focused|driven/.test(text)) return 'determined';
+    if (/curious|intrigued|wondering|questioning/.test(text)) return 'curious';
+    if (/loving|tender|affectionate|warm/.test(text)) return 'loving';
+    return 'neutral';
+  },
+
+  /**
+   * Detect physical position from text
+   */
+  detectPosition(text) {
+    if (/sitting|seated|cross-legged/.test(text)) return 'seated';
+    if (/standing|upright|on feet/.test(text)) return 'standing';
+    if (/lying|prone|supine|horizontal/.test(text)) return 'lying';
+    if (/kneeling|crouching|bent/.test(text)) return 'kneeling';
+    if (/leaning|tilted|angled/.test(text)) return 'leaning';
+    return 'undefined';
+  },
+
+  /**
+   * Detect attention/focus from text
+   */
+  detectFocus(text) {
+    if (/looking at|staring at|watching|gazing at|focused on/.test(text)) {
+      const match = text.match(/(?:looking at|staring at|watching|gazing at|focused on)\s+(\w+)/);
+      return match ? match[1] : 'something';
+    }
+    if (/eyes closed|looking inward|internal/.test(text)) return 'internal';
+    if (/looking away|averting|turned away/.test(text)) return 'away';
+    return 'forward';
+  },
+
+  // =========================================================================
+  // MAIN INTELLIGENCE METHODS
+  // =========================================================================
+
+  /**
+   * Generate continuity context for a shot based on previous shot
+   * @param {Object} currentShot - Current shot data
+   * @param {Object} previousShot - Previous shot data (null for first shot)
+   * @param {number} shotIndex - Current shot index
+   * @param {number} totalShots - Total shots in scene
+   * @param {Object} sceneContext - Overall scene context
+   * @returns {Object} Continuity enhancement data
+   */
+  generateContinuityContext(currentShot, previousShot, shotIndex, totalShots, sceneContext) {
+    const isFirst = shotIndex === 0;
+    const isLast = shotIndex === totalShots - 1;
+
+    // Determine intensity curve based on scene mood
+    const curve = this.selectIntensityCurve(sceneContext);
+    const currentIntensity = curve.getIntensity(shotIndex, totalShots);
+    const previousIntensity = isFirst ? 0.2 : curve.getIntensity(shotIndex - 1, totalShots);
+
+    // Analyze previous shot's end state
+    const previousEndState = previousShot ? this.analyzeEndState(previousShot) : null;
+
+    // Determine momentum direction
+    const momentumDirection = currentIntensity > previousIntensity ? 'building' :
+                              currentIntensity < previousIntensity ? 'releasing' : 'sustaining';
+
+    // Get intensity level (low/medium/high)
+    const intensityLevel = currentIntensity < 0.4 ? 'low' :
+                          currentIntensity < 0.7 ? 'medium' : 'high';
+
+    // Generate transition phrase
+    const transitionPhrase = this.generateTransitionPhrase(
+      previousEndState,
+      momentumDirection,
+      isFirst
+    );
+
+    // Generate momentum modifier
+    const momentumModifier = this.momentumModifiers[momentumDirection][intensityLevel]
+      [Math.floor(Math.random() * 3)];
+
+    // Generate "from previous" context
+    const fromPreviousContext = previousShot ? this.generateFromPreviousContext(previousEndState) : null;
+
+    // Generate anticipation for next shot (if not last)
+    const anticipationHook = !isLast ? this.generateAnticipationHook(currentShot, shotIndex, totalShots) : null;
+
+    return {
+      shotIndex,
+      isFirst,
+      isLast,
+      intensity: currentIntensity,
+      intensityLevel,
+      momentumDirection,
+      transitionPhrase,
+      momentumModifier,
+      fromPreviousContext,
+      anticipationHook,
+      previousEndState: previousEndState?.rawEndState || null,
+      narrativePosition: this.getNarrativePosition(shotIndex, totalShots)
+    };
+  },
+
+  /**
+   * Select appropriate intensity curve based on scene context
+   */
+  selectIntensityCurve(sceneContext) {
+    const combined = `${sceneContext?.visualPrompt || ''} ${sceneContext?.narration || ''} ${sceneContext?.sceneAction || ''}`.toLowerCase();
+
+    if (/fight|battle|chase|action|explosive/.test(combined)) {
+      return this.intensityCurves.action;
+    }
+    if (/meditat|contemplat|reflect|peace|calm|quiet/.test(combined)) {
+      return this.intensityCurves.contemplative;
+    }
+    if (/emotion|tear|love|grief|joy|sorrow/.test(combined)) {
+      return this.intensityCurves.emotional;
+    }
+    if (/tense|suspens|thriller|danger|threat/.test(combined)) {
+      return this.intensityCurves.tension;
+    }
+    return this.intensityCurves.dramatic;
+  },
+
+  /**
+   * Generate transition phrase based on previous state
+   */
+  generateTransitionPhrase(previousEndState, momentumDirection, isFirst) {
+    if (isFirst) {
+      return 'Opening the scene,';
+    }
+
+    const prevMotion = previousEndState?.motionState || 'transitional';
+
+    // Select phrase category
+    let category;
+    if (momentumDirection === 'building') {
+      category = 'build_intensity';
+    } else if (momentumDirection === 'releasing') {
+      category = 'release_intensity';
+    } else if (prevMotion === 'in_motion') {
+      category = 'action_to_action';
+    } else if (prevMotion === 'static') {
+      category = 'static_to_action';
+    } else {
+      category = 'emotional_shift';
+    }
+
+    const phrases = this.transitionPhrases[category];
+    return phrases[Math.floor(Math.random() * phrases.length)];
+  },
+
+  /**
+   * Generate context from previous shot's end state
+   */
+  generateFromPreviousContext(previousEndState) {
+    if (!previousEndState) return null;
+
+    const parts = [];
+
+    // Position continuity
+    if (previousEndState.position !== 'undefined') {
+      parts.push(`continuing from ${previousEndState.position} position`);
+    }
+
+    // Emotional continuity
+    if (previousEndState.emotionalState !== 'neutral') {
+      parts.push(`carrying the ${previousEndState.emotionalState} energy`);
+    }
+
+    // Motion continuity
+    if (previousEndState.motionState === 'in_motion') {
+      parts.push('momentum carrying forward');
+    }
+
+    // Focus continuity
+    if (previousEndState.focus && previousEndState.focus !== 'forward') {
+      parts.push(`attention still ${previousEndState.focus}`);
+    }
+
+    return parts.length > 0 ? parts.join(', ') : null;
+  },
+
+  /**
+   * Generate anticipation hook for next shot
+   */
+  generateAnticipationHook(currentShot, shotIndex, totalShots) {
+    const progress = shotIndex / (totalShots - 1);
+
+    if (progress < 0.3) {
+      return 'building toward what comes next';
+    } else if (progress < 0.6) {
+      return 'setting up the approaching climax';
+    } else if (progress < 0.85) {
+      return 'tension peaks, preparing for resolution';
+    } else {
+      return 'final moments before closure';
+    }
+  },
+
+  /**
+   * Get narrative position description
+   */
+  getNarrativePosition(shotIndex, totalShots) {
+    const progress = shotIndex / (totalShots - 1);
+
+    if (progress === 0) return 'opening';
+    if (progress < 0.25) return 'early_development';
+    if (progress < 0.5) return 'rising_action';
+    if (progress < 0.75) return 'approaching_peak';
+    if (progress < 0.95) return 'peak_to_resolution';
+    return 'closing';
+  },
+
+  // =========================================================================
+  // PROMPT ENHANCEMENT - Apply intelligence to video prompts
+  // =========================================================================
+
+  /**
+   * Enhance a shot's video prompt with cross-shot intelligence
+   * @param {Object} shot - Shot to enhance
+   * @param {Object} continuityContext - Context from generateContinuityContext
+   * @returns {string} Enhanced video prompt
+   */
+  enhancePromptWithContinuity(shot, continuityContext) {
+    const existingPrompt = shot.videoPrompt || '';
+    const parts = [];
+
+    // 1. Add transition phrase (if not first)
+    if (!continuityContext.isFirst) {
+      parts.push(continuityContext.transitionPhrase);
+    }
+
+    // 2. Add "from previous" context if available
+    if (continuityContext.fromPreviousContext) {
+      parts.push(`[From previous: ${continuityContext.fromPreviousContext}]`);
+    }
+
+    // 3. Add the existing prompt content
+    parts.push(existingPrompt);
+
+    // 4. Add momentum modifier
+    parts.push(`[Momentum: ${continuityContext.momentumModifier}]`);
+
+    // 5. Add intensity marker
+    const intensityPercent = Math.round(continuityContext.intensity * 100);
+    parts.push(`[Intensity: ${intensityPercent}%]`);
+
+    // 6. Add narrative position context
+    parts.push(`[Position: ${continuityContext.narrativePosition.replace(/_/g, ' ')}]`);
+
+    // 7. Add anticipation hook if not last
+    if (continuityContext.anticipationHook) {
+      parts.push(`[Narrative: ${continuityContext.anticipationHook}]`);
+    }
+
+    return parts.join(' ');
+  },
+
+  // =========================================================================
+  // BATCH PROCESSING - Process all shots in a scene
+  // =========================================================================
+
+  /**
+   * Process all shots in a scene with cross-shot intelligence
+   * @param {Array} shots - Array of shots
+   * @param {Object} sceneContext - Scene context
+   * @returns {Array} Enhanced shots with continuity
+   */
+  processSceneShots(shots, sceneContext) {
+    if (!shots || shots.length === 0) return shots;
+
+    const totalShots = shots.length;
+    const enhancedShots = [];
+
+    for (let i = 0; i < totalShots; i++) {
+      const currentShot = { ...shots[i] };
+      const previousShot = i > 0 ? enhancedShots[i - 1] : null;
+
+      // Generate continuity context
+      const continuityContext = this.generateContinuityContext(
+        currentShot,
+        previousShot,
+        i,
+        totalShots,
+        sceneContext
+      );
+
+      // Enhance the prompt
+      currentShot.videoPrompt = this.enhancePromptWithContinuity(currentShot, continuityContext);
+
+      // Add continuity metadata to shot
+      currentShot.crossShotIntelligence = {
+        intensity: continuityContext.intensity,
+        intensityLevel: continuityContext.intensityLevel,
+        momentumDirection: continuityContext.momentumDirection,
+        narrativePosition: continuityContext.narrativePosition,
+        fromPrevious: continuityContext.fromPreviousContext,
+        toNext: continuityContext.anticipationHook
+      };
+
+      enhancedShots.push(currentShot);
+    }
+
+    console.log(`[CROSS_SHOT_INTELLIGENCE] Processed ${totalShots} shots with narrative continuity`);
+
+    return enhancedShots;
+  },
+
+  /**
+   * Get a human-readable summary of the narrative flow
+   */
+  getNarrativeFlowSummary(shots) {
+    if (!shots || shots.length === 0) return 'No shots to analyze';
+
+    const positions = shots.map(s => s.crossShotIntelligence?.narrativePosition || 'unknown');
+    const momentums = shots.map(s => s.crossShotIntelligence?.momentumDirection || 'sustaining');
+
+    const buildingCount = momentums.filter(m => m === 'building').length;
+    const sustainingCount = momentums.filter(m => m === 'sustaining').length;
+    const releasingCount = momentums.filter(m => m === 'releasing').length;
+
+    let arcType = 'balanced';
+    if (buildingCount > releasingCount * 1.5) arcType = 'rising action dominant';
+    else if (releasingCount > buildingCount * 1.5) arcType = 'resolution dominant';
+    else if (sustainingCount > buildingCount + releasingCount) arcType = 'sustained intensity';
+
+    return `Narrative arc: ${arcType}. Flow: ${positions.join(' → ')}`;
+  }
+};
+
+// =============================================================================
 // NARRATIVE_BEAT_GENERATOR - Legacy compatibility wrapper
 // =============================================================================
 /**
@@ -44311,10 +44829,27 @@ exports.creationWizardDecomposeSceneToShots = functions
       console.log(`[creationWizardDecomposeSceneToShots] Applied ${finalShot.closureType || 'default'} closure to final shot`);
     }
 
+    // STEP 5.7: CROSS-SHOT INTELLIGENCE - Connect shots narratively
+    // Use CROSS_SHOT_INTELLIGENCE to ensure shots build progressively
+    const crossShotSceneContext = {
+      visualPrompt: sceneDescription,
+      narration: narration,
+      sceneAction: sceneActionData.sceneAction || ''
+    };
+
+    const intelligentShots = CROSS_SHOT_INTELLIGENCE.processSceneShots(
+      shotsWithPrompts,
+      crossShotSceneContext
+    );
+
+    // Get narrative flow summary for logging
+    const narrativeFlow = CROSS_SHOT_INTELLIGENCE.getNarrativeFlowSummary(intelligentShots);
+    console.log(`[creationWizardDecomposeSceneToShots] ${narrativeFlow}`);
+
     // STEP 6: Normalize shots with all required fields
-    // Includes imagePrompt, videoPrompt, narrativeBeat, and captureSuggestion
-    const normalizedShots = shotsWithPrompts.map((shot, idx) => {
-      const isLast = idx === shotsWithPrompts.length - 1;
+    // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, and crossShotIntelligence
+    const normalizedShots = intelligentShots.map((shot, idx) => {
+      const isLast = idx === intelligentShots.length - 1;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
       return {
@@ -44347,6 +44882,11 @@ exports.creationWizardDecomposeSceneToShots = functions
         hasHollywoodClosure: isLast ? (shot.hasHollywoodClosure || false) : false,
         closureSummary: isLast && shot.closureType ?
           SCENE_CLOSURE_ENGINE.getClosureSummary(shot.closureType) : null,
+        // NEW: Cross-shot narrative intelligence (Phase 4)
+        crossShotIntelligence: shot.crossShotIntelligence || null,
+        intensity: shot.crossShotIntelligence?.intensity || null,
+        momentumDirection: shot.crossShotIntelligence?.momentumDirection || null,
+        narrativePosition: shot.crossShotIntelligence?.narrativePosition || null,
         // Generation status
         imageUrl: null,
         videoUrl: null,
