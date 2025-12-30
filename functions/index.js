@@ -33653,6 +33653,11 @@ exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data,
       payload.fast_pretreatment = true;
     }
 
+    // CRITICAL: Add duration to payload (was missing, causing 5s default)
+    payload.duration = durationSeconds;
+
+    console.log(`[creationWizardGenerateMinimaxVideo] Payload with duration=${durationSeconds}:`, JSON.stringify(payload, null, 2));
+
     // Call Minimax API
     const minimaxResponse = await axios.post(apiEndpoint, payload, {
       headers: {
@@ -43358,11 +43363,15 @@ exports.creationWizardGenerateShotVideo = functions
     // ==========================================
     // BUILD API PAYLOAD
     // ==========================================
+    // Convert duration string ('6s' or '10s') to integer for Minimax API
+    const durationSeconds = duration === '6s' ? 6 : 10;
+
     const payload = {
       model: selectedModel,
       prompt: videoPrompt,
       first_frame_image: imageUrl,
-      prompt_optimizer: true // Enable prompt optimization for video-01
+      prompt_optimizer: true, // Enable prompt optimization for video-01
+      duration: durationSeconds // CRITICAL: Must include duration or API defaults to 5s
     };
 
     // NOTE: S2V-01 subject_reference is disabled until properly tested
@@ -43370,7 +43379,7 @@ exports.creationWizardGenerateShotVideo = functions
     //   payload.subject_reference = [characterReference];
     // }
 
-    console.log(`[creationWizardGenerateShotVideo] Sending to Minimax API with model: ${selectedModel}...`);
+    console.log(`[creationWizardGenerateShotVideo] Sending to Minimax API with model: ${selectedModel}, duration: ${durationSeconds}s...`);
     console.log(`[creationWizardGenerateShotVideo] Payload keys:`, Object.keys(payload));
 
     const minimaxResponse = await axios.post(
@@ -43503,13 +43512,19 @@ exports.creationWizardGenerateAllShotVideos = functions
         const movement = cameraMovementMap[shot.cameraMovement] || 'Subtle movement';
         videoPrompt = `[${movement}] ${videoPrompt}`;
 
+        // Convert duration string ('6s' or '10s') to integer for Minimax API
+        const durationSeconds = duration === '6s' ? 6 : 10;
+
         // Call Minimax API
         const payload = {
           model: 'video-01',
           prompt: videoPrompt,
           first_frame_image: shot.imageUrl,
-          prompt_optimizer: true
+          prompt_optimizer: true,
+          duration: durationSeconds // CRITICAL: Must include duration or API defaults to 5s
         };
+
+        console.log(`[creationWizardGenerateAllShotVideos] Shot ${i + 1} payload with duration=${durationSeconds}`);
 
         const minimaxResponse = await axios.post(
           'https://api.minimax.io/v1/video_generation',
