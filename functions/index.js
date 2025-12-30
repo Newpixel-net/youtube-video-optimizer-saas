@@ -48032,6 +48032,280 @@ exports.creationWizardGenerateTitleCards = functions
     }
   });
 
+// ==========================================
+// FIX CHARACTER FACES - NanoBananaPro Face Correction
+// ==========================================
+/**
+ * creationWizardFixCharacterFaces
+ *
+ * Uses Gemini image generation to correct character faces in a captured frame
+ * by using Character Bible portraits as reference images.
+ *
+ * Supports multi-character face correction in a single edit operation.
+ *
+ * @param {Object} data
+ * @param {string} data.frameBase64 - The captured frame as base64 string (without data URL prefix)
+ * @param {string} data.frameMimeType - MIME type of the frame (e.g., 'image/png')
+ * @param {Array} data.characterReferences - Array of character reference objects:
+ *   - name: Character name
+ *   - description: Character description from Character Bible
+ *   - base64: Reference portrait as base64 (without data URL prefix)
+ *   - mimeType: MIME type of reference image
+ * @param {string} data.aspectRatio - Target aspect ratio (e.g., '16:9')
+ * @param {string} data.projectId - Project ID for storage path
+ *
+ * @returns {Object} { success: true, correctedImageUrl, correctedImageBase64 }
+ */
+exports.creationWizardFixCharacterFaces = functions
+  .runWith({
+    timeoutSeconds: 120, // Gemini image generation can take time
+    memory: '1GB'
+  })
+  .https.onCall(async (data, context) => {
+    console.log('[creationWizardFixCharacterFaces] Starting face correction...');
+
+    // Authentication check
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    const uid = context.auth.uid;
+
+    // Rate limit check
+    checkRateLimit(uid, 'fixCharacterFaces', 10);
+
+    // Extract parameters
+    const {
+      frameBase64,
+      frameMimeType = 'image/png',
+      characterReferences = [],
+      aspectRatio = '16:9',
+      projectId
+    } = data;
+
+    // Validate required parameters
+    if (!frameBase64) {
+      throw new functions.https.HttpsError('invalid-argument', 'frameBase64 is required');
+    }
+    if (!characterReferences || characterReferences.length === 0) {
+      throw new functions.https.HttpsError('invalid-argument', 'At least one character reference is required');
+    }
+
+    // Validate character references have required fields
+    for (let i = 0; i < characterReferences.length; i++) {
+      const charRef = characterReferences[i];
+      if (!charRef.name) {
+        throw new functions.https.HttpsError('invalid-argument', `Character reference ${i + 1} missing name`);
+      }
+      if (!charRef.base64) {
+        throw new functions.https.HttpsError('invalid-argument', `Character reference ${i + 1} (${charRef.name}) missing base64 image data`);
+      }
+    }
+
+    console.log(`[creationWizardFixCharacterFaces] Processing ${characterReferences.length} character reference(s)`);
+    characterReferences.forEach((c, idx) => {
+      console.log(`  Character ${idx + 1}: ${c.name} - base64 length: ${c.base64?.length || 0}`);
+    });
+
+    try {
+      // Initialize Gemini AI
+      const geminiApiKey = functions.config().gemini?.key;
+      if (!geminiApiKey) {
+        throw new functions.https.HttpsError('failed-precondition',
+          'Gemini API key not configured. Please contact support.');
+      }
+
+      const { GoogleGenAI } = require('@google/genai');
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+      // Use the same model as Creative Studio where face preservation works
+      const geminiModelId = 'gemini-3-pro-image-preview';
+
+      // ==========================================
+      // BUILD CONTENT PARTS FOR GEMINI
+      // ==========================================
+      const contentParts = [];
+
+      // 1. Add the original frame as the first image (scene to preserve)
+      contentParts.push({
+        inlineData: {
+          mimeType: frameMimeType,
+          data: frameBase64
+        }
+      });
+      console.log('[creationWizardFixCharacterFaces] Added original frame as input');
+
+      // 2. Add each character reference portrait
+      characterReferences.forEach((charRef, idx) => {
+        contentParts.push({
+          inlineData: {
+            mimeType: charRef.mimeType || 'image/png',
+            data: charRef.base64
+          }
+        });
+        console.log(`[creationWizardFixCharacterFaces] Added character reference ${idx + 1}: ${charRef.name}`);
+      });
+
+      // 3. Build detailed face correction prompt
+      const characterDescriptions = characterReferences.map((c, idx) => {
+        const charNum = idx + 2; // +2 because image 1 is the scene
+        return `- Image ${charNum}: ${c.name}${c.description ? ` (${c.description})` : ''}`;
+      }).join('\n');
+
+      const faceFixPrompt = `
+FACE CORRECTION TASK:
+
+You have been given ${characterReferences.length + 1} images:
+- Image 1: The SCENE to preserve (composition, lighting, poses, background, clothing, everything EXCEPT faces)
+${characterDescriptions}
+
+YOUR TASK:
+1. KEEP the exact scene from Image 1 - same composition, poses, camera angle, lighting, background, clothing, body positions
+2. REPLACE the faces in Image 1 with the correct faces from the character reference images
+3. Match each character in the scene to their reference portrait based on position/role
+4. Ensure the faces blend naturally with the lighting and style of the scene
+5. Maintain the exact aspect ratio: ${aspectRatio}
+
+CRITICAL REQUIREMENTS:
+- Do NOT change the scene composition, poses, or background
+- Do NOT change clothing, hair style/color (unless to match reference), or body positions
+- ONLY replace the facial features (eyes, nose, mouth, face shape, skin tone) with those from the reference portraits
+- Ensure faces look natural and match the scene's lighting conditions
+- Preserve any expressions that fit the scene's narrative context
+
+Output a single corrected image with the fixed character faces.
+`.trim();
+
+      contentParts.push({ text: faceFixPrompt });
+      console.log('[creationWizardFixCharacterFaces] Built face correction prompt');
+
+      // ==========================================
+      // GENERATE CORRECTED IMAGE
+      // ==========================================
+      const MAX_RETRIES = 2;
+      let correctedImageUrl = null;
+      let correctedImageBase64 = null;
+      let lastError = null;
+
+      for (let retry = 0; retry <= MAX_RETRIES; retry++) {
+        try {
+          if (retry > 0) {
+            console.log(`[creationWizardFixCharacterFaces] Retry ${retry}/${MAX_RETRIES}`);
+            await new Promise(resolve => setTimeout(resolve, retry * 2000));
+          }
+
+          // Add aspect ratio hint to prompt
+          const aspectInstruction = `[Generate in ${aspectRatio} aspect ratio. High quality, cinematic, detailed faces.]\n\n`;
+          const enhancedParts = contentParts.map((part, idx) => {
+            if (part.text) {
+              return { text: aspectInstruction + part.text };
+            }
+            return part;
+          });
+
+          console.log(`[creationWizardFixCharacterFaces] Calling Gemini model: ${geminiModelId}`);
+          const startTime = Date.now();
+
+          const result = await ai.models.generateContent({
+            model: geminiModelId,
+            contents: [{ role: 'user', parts: enhancedParts }],
+            config: {
+              responseModalities: ['image', 'text']
+            }
+          });
+
+          console.log(`[creationWizardFixCharacterFaces] Gemini response in ${Date.now() - startTime}ms`);
+
+          // Extract image from response
+          const candidates = result.candidates || (result.response && result.response.candidates);
+          if (candidates && candidates.length > 0) {
+            const candidate = candidates[0];
+            const parts = candidate.content?.parts || candidate.parts || [];
+
+            for (const part of parts) {
+              const inlineData = part.inlineData || part.inline_data;
+              if (inlineData && (inlineData.data || inlineData.bytesBase64Encoded)) {
+                // Found the corrected image
+                const imageBytes = inlineData.data || inlineData.bytesBase64Encoded;
+                const rawBuffer = Buffer.from(imageBytes, 'base64');
+
+                console.log(`[creationWizardFixCharacterFaces] Raw corrected image: ${rawBuffer.length} bytes`);
+
+                // Enforce exact dimensions based on aspect ratio
+                const { buffer: processedBuffer, width: targetWidth, height: targetHeight, mimeType: processedMimeType } =
+                  await enforceImageDimensions(rawBuffer, aspectRatio, 'hd');
+
+                console.log(`[creationWizardFixCharacterFaces] Processed: ${processedBuffer.length} bytes, ${targetWidth}x${targetHeight}`);
+
+                // Save to Cloud Storage
+                const timestamp = Date.now();
+                const fileName = projectId
+                  ? `projects/${projectId}/face-corrections/${uid}/${timestamp}-fixed.png`
+                  : `face-corrections/${uid}/${timestamp}-fixed.png`;
+
+                const storage = admin.storage().bucket();
+                const file = storage.file(fileName);
+
+                await file.save(processedBuffer, {
+                  metadata: {
+                    contentType: processedMimeType,
+                    metadata: {
+                      characterCount: String(characterReferences.length),
+                      characters: characterReferences.map(c => c.name).join(', '),
+                      model: geminiModelId,
+                      aspectRatio: aspectRatio,
+                      width: String(targetWidth),
+                      height: String(targetHeight),
+                      generatedAt: new Date().toISOString()
+                    }
+                  }
+                });
+
+                // Make file publicly accessible
+                await file.makePublic();
+                correctedImageUrl = `https://storage.googleapis.com/${storage.name}/${fileName}`;
+                correctedImageBase64 = processedBuffer.toString('base64');
+
+                console.log(`[creationWizardFixCharacterFaces] Saved corrected image: ${fileName}`);
+                break; // Got our image
+              }
+            }
+          }
+
+          if (correctedImageUrl) {
+            break; // Success, exit retry loop
+          }
+
+          console.warn('[creationWizardFixCharacterFaces] No image in Gemini response, retrying...');
+
+        } catch (genError) {
+          lastError = genError.message || 'Unknown error';
+          console.error(`[creationWizardFixCharacterFaces] Error on attempt ${retry + 1}:`, lastError);
+        }
+      }
+
+      if (!correctedImageUrl) {
+        const errorMsg = lastError
+          ? `Face correction failed: ${lastError}`
+          : 'Face correction failed: Gemini did not return an image. The content may have been filtered.';
+        throw new functions.https.HttpsError('internal', errorMsg);
+      }
+
+      console.log('[creationWizardFixCharacterFaces] Face correction complete!');
+
+      return {
+        success: true,
+        correctedImageUrl,
+        correctedImageBase64,
+        charactersCorrected: characterReferences.map(c => c.name)
+      };
+
+    } catch (error) {
+      console.error('[creationWizardFixCharacterFaces] Error:', error);
+      throw new functions.https.HttpsError('internal',
+        sanitizeErrorMessage(error, 'Failed to fix character faces'));
+    }
+  });
+
 /**
  * creationWizardGetPhase4Config
  *
