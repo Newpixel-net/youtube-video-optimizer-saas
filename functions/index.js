@@ -40424,6 +40424,281 @@ exports.PROMPT_CHAIN_ARCHITECTURE = {
  * - Shot 2: START: Kai facing companions → ACTION: They respond, gather, prepare → END: Three at rooftop edge
  * - Shot 3: START: Three at edge → ACTION: Run, leap, descend → END: Mid-air with city below
  */
+
+/**
+ * ACTION_LIBRARY (Upgrade 4)
+ * Pre-built action templates for common scene types
+ * Used by AI decomposition as reference examples for rich, cinematic action sequences
+ */
+const ACTION_LIBRARY = {
+  // Scene type templates with example action sequences
+  templates: {
+    action: {
+      name: 'Action Sequence',
+      description: 'High-energy physical action, fights, chases, stunts',
+      examples: [
+        {
+          scenario: 'Combat Confrontation',
+          shots: [
+            { action: 'Character takes defensive stance, eyes locked on opponent, muscles tensing as they circle', endState: 'Crouched in fighting stance, fists raised' },
+            { action: 'Explosive first strike - lunge forward, punch/kick delivered with full body rotation', endState: 'Follow-through pose, extended limb, weight shifted forward' },
+            { action: 'Counter-attack sequence - block, dodge, return strike with increasing intensity', endState: 'Both fighters locked in close combat, gripping each other' }
+          ],
+          captureNotes: 'Capture at peak extension moments or brief pauses between exchanges'
+        },
+        {
+          scenario: 'Chase/Pursuit',
+          shots: [
+            { action: 'Character bursts into sprint, environment blurring past, dodging obstacles', endState: 'Mid-stride, leaning forward into run' },
+            { action: 'Vaulting over obstacle, sliding under barrier, sharp direction change', endState: 'Landing from jump or emerging from slide' },
+            { action: 'Close call - near miss, last-second dodge, desperate final push', endState: 'Reaching safety or catching target' }
+          ],
+          captureNotes: 'Capture at landing moments, direction changes, or obstacle clearance'
+        },
+        {
+          scenario: 'Heroic Leap/Stunt',
+          shots: [
+            { action: 'Character surveys the gap, backs up for running start, determined expression', endState: 'At edge, coiled to jump, arms back' },
+            { action: 'Explosive leap into the air, body extended, defying gravity', endState: 'Peak of jump, silhouetted against sky/background' },
+            { action: 'Descent and landing - controlled fall, impact, recovery roll', endState: 'Landed in heroic pose, dust settling' }
+          ],
+          captureNotes: 'Capture at peak height or stable landing pose'
+        }
+      ]
+    },
+    dialogue: {
+      name: 'Dialogue Scene',
+      description: 'Conversation, negotiation, verbal confrontation',
+      examples: [
+        {
+          scenario: 'Important Conversation',
+          shots: [
+            { action: 'Speaker approaches, settles into position, makes eye contact, begins speaking with hand gestures', endState: 'Mid-gesture, leaning in, engaged expression' },
+            { action: 'Listener reacts - nodding, frowning, shifting weight, responding with body language', endState: 'Contemplative pose, hand on chin or crossed arms' },
+            { action: 'Speaker concludes point with emphatic gesture, steps back, awaits response', endState: 'Arms open in question or statement pose' }
+          ],
+          captureNotes: 'Capture during pauses between dialogue beats, at gesture completion'
+        },
+        {
+          scenario: 'Confrontation/Argument',
+          shots: [
+            { action: 'Characters face off, tension building, one steps forward with accusatory gesture', endState: 'Pointing finger, body leaning forward aggressively' },
+            { action: 'Defensive response - stepping back, raising hands, shaking head in denial', endState: 'Defensive posture, palms out or arms crossed' },
+            { action: 'Emotional peak - voice raised, dramatic gesture, turning away in frustration', endState: 'Turned away, shoulders tense, or storming off' }
+          ],
+          captureNotes: 'Capture at emotional peaks or moment before/after turn'
+        }
+      ]
+    },
+    emotional: {
+      name: 'Emotional Moment',
+      description: 'Deep feelings, grief, joy, love, revelation of emotion',
+      examples: [
+        {
+          scenario: 'Grief/Loss',
+          shots: [
+            { action: 'Character receives news, face falls, body begins to crumble, hand reaches for support', endState: 'Collapsed against wall or into chair, head bowed' },
+            { action: 'Tears flow, shoulders shake, hand covers face or reaches out to lost memory', endState: 'Head in hands, or reaching toward photograph/memento' },
+            { action: 'Slow composure gathering, wiping eyes, taking deep breath, steeling themselves', endState: 'Looking up with wet eyes but determined expression' }
+          ],
+          captureNotes: 'Capture during stillness of grief or moment of composure'
+        },
+        {
+          scenario: 'Joy/Celebration',
+          shots: [
+            { action: 'Realization dawns, smile spreads, eyes widen, body straightens with excitement', endState: 'Beaming smile, hands coming together or raising' },
+            { action: 'Celebratory action - jumping, embracing others, pumping fist, spinning', endState: 'Arms raised in victory or mid-embrace' },
+            { action: 'Sharing the moment - looking to loved ones, inclusive gesture, group celebration', endState: 'Connected with others, shared joy visible' }
+          ],
+          captureNotes: 'Capture at peak of joy or in embrace/connection moment'
+        },
+        {
+          scenario: 'Tender/Romantic',
+          shots: [
+            { action: 'Characters draw closer, tentative touches, eyes meeting with meaning', endState: 'Faces close, hand on cheek or holding hands' },
+            { action: 'The moment builds, breath held, leaning in, world fading away', endState: 'Foreheads touching or on verge of kiss' },
+            { action: 'Connection made - embrace, kiss, or holding each other close', endState: 'Embracing, peaceful expressions, intimate closeness' }
+          ],
+          captureNotes: 'Capture in tender held moments, not during movement'
+        }
+      ]
+    },
+    establishing: {
+      name: 'Establishing Scene',
+      description: 'Setting the scene, arrival, location reveal, time of day',
+      examples: [
+        {
+          scenario: 'Location Reveal',
+          shots: [
+            { action: 'Wide view of location, camera slowly revealing scope, ambient movement (birds, vehicles, people)', endState: 'Full location visible, establishing geography' },
+            { action: 'Moving closer, picking out details, signs of life or atmosphere', endState: 'Medium view showing key location feature' }
+          ],
+          captureNotes: 'Capture when camera has settled on clean composition'
+        },
+        {
+          scenario: 'Character Arrival',
+          shots: [
+            { action: 'Character approaches in distance, environment framing them, purpose in stride', endState: 'Character centered in frame, destination visible' },
+            { action: 'Reaching destination, pausing to take in surroundings, orienting themselves', endState: 'Standing at threshold, looking at destination' },
+            { action: 'First step into new space, crossing threshold, environment reacting to presence', endState: 'Just inside, surveying new space' }
+          ],
+          captureNotes: 'Capture at threshold moments or survey pauses'
+        }
+      ]
+    },
+    revelation: {
+      name: 'Revelation/Discovery',
+      description: 'Finding something, realizing truth, dramatic discovery',
+      examples: [
+        {
+          scenario: 'Object Discovery',
+          shots: [
+            { action: 'Searching, scanning environment, attention caught by something, moving toward it', endState: 'Reaching toward or crouching near discovery' },
+            { action: 'Picking up/examining object, turning it over, recognition dawning', endState: 'Holding object at eye level, studying it' },
+            { action: 'Reaction to discovery - shock, understanding, determination to act', endState: 'Standing with purpose, object clutched, decision made' }
+          ],
+          captureNotes: 'Capture at moment of recognition or decision'
+        },
+        {
+          scenario: 'Truth Revealed',
+          shots: [
+            { action: 'Evidence presented or witnessed, character processing information', endState: 'Frozen in realization, eyes fixed on proof' },
+            { action: 'Mind racing - flashbacks implied, puzzle pieces connecting, understanding growing', endState: 'Eyes widening, mouth opening, body stiffening' },
+            { action: 'Full realization hits - emotional response, decision forming, action initiated', endState: 'Transformed by truth, new resolve visible' }
+          ],
+          captureNotes: 'Capture at peak of realization or moment of transformation'
+        }
+      ]
+    },
+    contemplative: {
+      name: 'Contemplative/Reflective',
+      description: 'Quiet reflection, decision-making, solitary moments',
+      examples: [
+        {
+          scenario: 'Solitary Reflection',
+          shots: [
+            { action: 'Character in thoughtful pose, gazing at vista/object, slight movements showing internal processing', endState: 'Still, gazing into distance, weight of thoughts visible' },
+            { action: 'Small action reveals thought - touching memento, adjusting clothing, deep breath', endState: 'Settled after small action, more contemplative' }
+          ],
+          captureNotes: 'Capture in stillness, when character is most composed'
+        },
+        {
+          scenario: 'Decision Making',
+          shots: [
+            { action: 'Weighing options - looking between choices, internal debate visible in expression', endState: 'Focused on one direction, consideration evident' },
+            { action: 'Resolution forming - jaw sets, shoulders square, small nod of self-agreement', endState: 'Decided, body language committed' },
+            { action: 'First move toward decision - turning, reaching, stepping with purpose', endState: 'In motion toward chosen path' }
+          ],
+          captureNotes: 'Capture at moment of decision or just before movement'
+        }
+      ]
+    },
+    montage: {
+      name: 'Montage Sequence',
+      description: 'Rapid progression, training, preparation, time passing',
+      examples: [
+        {
+          scenario: 'Training/Preparation',
+          shots: [
+            { action: 'First attempt - struggling, imperfect form, determination despite difficulty', endState: 'Catching breath, minor failure visible' },
+            { action: 'Improvement showing - faster, stronger, more precise movements', endState: 'Better pose, confidence growing' },
+            { action: 'Mastery moment - perfect execution, power and grace combined', endState: 'Peak form, triumphant expression' }
+          ],
+          captureNotes: 'Capture at completion of each training beat'
+        },
+        {
+          scenario: 'Assembly/Creation',
+          shots: [
+            { action: 'Gathering materials, laying out components, preparation visible', endState: 'Components arranged, ready to begin' },
+            { action: 'Building/creating - hands working, focus intense, progress visible', endState: 'Mid-creation, work taking shape' },
+            { action: 'Completion - final touch, stepping back, admiring work', endState: 'Creation complete, creator satisfied' }
+          ],
+          captureNotes: 'Capture at completion of each assembly stage'
+        }
+      ]
+    }
+  },
+
+  /**
+   * Get relevant examples for a scene type
+   * @param {string} sceneType - The type of scene
+   * @param {string} sceneAction - The actual scene action (for scenario matching)
+   * @returns {object} Matching template with examples
+   */
+  getTemplateForType(sceneType, sceneAction = '') {
+    const template = this.templates[sceneType] || this.templates.dialogue;
+
+    // Try to find most relevant example based on sceneAction keywords
+    if (sceneAction) {
+      const actionLower = sceneAction.toLowerCase();
+      const scoredExamples = template.examples.map(example => {
+        const scenarioLower = example.scenario.toLowerCase();
+        let score = 0;
+        // Simple keyword matching
+        if (actionLower.includes('fight') || actionLower.includes('combat')) score += scenarioLower.includes('combat') ? 10 : 0;
+        if (actionLower.includes('chase') || actionLower.includes('run')) score += scenarioLower.includes('chase') ? 10 : 0;
+        if (actionLower.includes('talk') || actionLower.includes('speak')) score += scenarioLower.includes('conversation') ? 10 : 0;
+        if (actionLower.includes('argue') || actionLower.includes('confront')) score += scenarioLower.includes('confrontation') ? 10 : 0;
+        if (actionLower.includes('cry') || actionLower.includes('grief')) score += scenarioLower.includes('grief') ? 10 : 0;
+        if (actionLower.includes('joy') || actionLower.includes('celebrate')) score += scenarioLower.includes('joy') ? 10 : 0;
+        if (actionLower.includes('love') || actionLower.includes('kiss')) score += scenarioLower.includes('romantic') ? 10 : 0;
+        if (actionLower.includes('discover') || actionLower.includes('find')) score += scenarioLower.includes('discovery') ? 10 : 0;
+        if (actionLower.includes('think') || actionLower.includes('decide')) score += scenarioLower.includes('decision') ? 10 : 0;
+        if (actionLower.includes('train') || actionLower.includes('practice')) score += scenarioLower.includes('training') ? 10 : 0;
+        if (actionLower.includes('arrive') || actionLower.includes('enter')) score += scenarioLower.includes('arrival') ? 10 : 0;
+        if (actionLower.includes('leap') || actionLower.includes('jump')) score += scenarioLower.includes('leap') ? 10 : 0;
+        return { example, score };
+      });
+
+      const bestMatch = scoredExamples.sort((a, b) => b.score - a.score)[0];
+      if (bestMatch.score > 0) {
+        return {
+          ...template,
+          bestExample: bestMatch.example,
+          allExamples: template.examples
+        };
+      }
+    }
+
+    return {
+      ...template,
+      bestExample: template.examples[0],
+      allExamples: template.examples
+    };
+  },
+
+  /**
+   * Format examples for AI prompt inclusion
+   * @param {string} sceneType - The scene type
+   * @param {string} sceneAction - The scene action for matching
+   * @param {number} shotCount - Target number of shots
+   * @returns {string} Formatted examples for prompt
+   */
+  formatForPrompt(sceneType, sceneAction, shotCount) {
+    const template = this.getTemplateForType(sceneType, sceneAction);
+    const example = template.bestExample;
+
+    let formatted = `
+ACTION LIBRARY REFERENCE (${template.name}):
+Scenario: "${example.scenario}"
+${example.captureNotes}
+
+Example shot structure:`;
+
+    example.shots.forEach((shot, idx) => {
+      formatted += `
+Shot ${idx + 1}: ${shot.action}
+  → ENDS WITH: ${shot.endState}`;
+    });
+
+    formatted += `
+
+Adapt this structure to your scene's specific action. Match the energy and pacing of "${template.name}" scenes.`;
+
+    return formatted;
+  }
+};
+
 const STORY_BEAT_DECOMPOSER = {
   /**
    * AI-Powered Action Decomposition using GPT
@@ -40442,6 +40717,11 @@ const STORY_BEAT_DECOMPOSER = {
       console.log('[STORY_BEAT_DECOMPOSER] sceneAction too brief, using rule-based fallback');
       return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
     }
+
+    // Determine scene type for action library (Upgrade 4)
+    const sceneType = this.detectSceneType(sceneAction);
+    const actionLibraryReference = ACTION_LIBRARY.formatForPrompt(sceneType, sceneAction, shotCount);
+    console.log(`[STORY_BEAT_DECOMPOSER] Scene type detected: ${sceneType}, using action library template`);
 
     // Build cross-scene continuity section if available
     const crossSceneSection = crossSceneContext?.previousSceneEndState ? `
@@ -40463,6 +40743,7 @@ SCENE ACTION (what happens in this ~${shotCount * clipDuration} second scene):
 
 VISUAL CONTEXT:
 ${sceneContext.visualPrompt ? sceneContext.visualPrompt.substring(0, 500) : 'No visual context provided'}
+${actionLibraryReference}
 ${crossSceneSection}
 
 REQUIREMENTS:
@@ -40696,6 +40977,49 @@ Return ONLY valid JSON:
       return uniqueVerbs.slice(0, 3).join(', ');
     }
     return 'progressive action';
+  },
+
+  /**
+   * Detect scene type from sceneAction text (Upgrade 4)
+   * Used to select appropriate action library templates
+   * @param {string} sceneAction - The scene action text
+   * @returns {string} Scene type: action, dialogue, emotional, establishing, revelation, contemplative, montage
+   */
+  detectSceneType(sceneAction) {
+    if (!sceneAction) return 'dialogue';
+    const text = sceneAction.toLowerCase();
+
+    // Action keywords - fights, chases, physical action
+    if (text.match(/fight|combat|battle|chase|run|sprint|dodge|attack|defend|punch|kick|strike|leap|jump|vault/)) {
+      return 'action';
+    }
+    // Emotional keywords - feelings, reactions
+    if (text.match(/cry|tear|grief|mourn|sob|embrace|hug|kiss|love|joy|celebrate|laugh|smile|heartbreak|tender/)) {
+      return 'emotional';
+    }
+    // Revelation keywords - discovery, realization
+    if (text.match(/discover|find|realize|reveal|uncover|truth|secret|evidence|understand|recognize|piece together/)) {
+      return 'revelation';
+    }
+    // Establishing keywords - locations, arrivals
+    if (text.match(/arrive|enter|approach|survey|vista|landscape|morning|sunset|establishing|location|city|building/)) {
+      return 'establishing';
+    }
+    // Contemplative keywords - thinking, reflecting
+    if (text.match(/think|ponder|contemplate|reflect|gaze|stare|decide|consider|weight|alone|silent|quiet/)) {
+      return 'contemplative';
+    }
+    // Montage keywords - training, preparation, progression
+    if (text.match(/train|practice|prepare|assemble|build|create|improve|progress|montage|sequence of/)) {
+      return 'montage';
+    }
+    // Dialogue keywords (default) - conversation, speaking
+    if (text.match(/speak|talk|say|tell|explain|discuss|argue|negotiate|convince|respond|reply/)) {
+      return 'dialogue';
+    }
+
+    // Default to dialogue for unknown
+    return 'dialogue';
   },
 
   /**
