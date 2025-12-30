@@ -24281,7 +24281,7 @@ exports.creationWizardGenerateScript = functions
     genre = null, // Genre key from GENRE_REFERENCE_LIBRARY (e.g., 'documentary-nature', 'educational-explainer')
     contentFormat = 'medium-form', // 'short-form' | 'medium-form' | 'long-form' | 'episodic'
     // Video Model Configuration (for scene duration optimization)
-    videoModel = { duration: '6s', resolution: '1080p' },
+    videoModel = { duration: '10s', resolution: '768p' },  // 10s default for richer action, 768p (1080p only for 6s)
     // Phase 5: AI Concept Enhancement - Deep Story Architecture
     conceptEnrichment = null
   } = config;
@@ -33351,6 +33351,86 @@ const MINIMAX_CAMERA_MOVEMENTS = [
 ];
 
 /**
+ * MINIMAX_PROMPT_OPTIMIZER (Fix 4)
+ * Optimizes video prompts for Minimax's AI video generation capabilities
+ * Adds motion quality keywords and cinematic descriptors that Minimax responds well to
+ */
+const MINIMAX_PROMPT_OPTIMIZER = {
+  // Quality keywords that improve Minimax output
+  qualityKeywords: [
+    'cinematic', 'photorealistic', 'high production value',
+    'professional cinematography', 'smooth fluid motion'
+  ],
+
+  // Motion descriptors for realistic animation
+  motionKeywords: [
+    'natural movement', 'realistic physics', 'lifelike motion',
+    'seamless continuous action', 'organic flow'
+  ],
+
+  /**
+   * Enhance a video prompt for Minimax
+   * @param {string} prompt - Original video prompt
+   * @param {string} cameraMovement - Camera movement type
+   * @param {boolean} isImageToVideo - Whether this is I2V (more subtle motion needed)
+   * @returns {string} Enhanced prompt
+   */
+  enhance(prompt, cameraMovement = null, isImageToVideo = false) {
+    if (!prompt || prompt.trim().length === 0) {
+      return prompt;
+    }
+
+    let enhanced = prompt.trim();
+
+    // For I2V, emphasize subtle, continuous motion from the starting frame
+    if (isImageToVideo) {
+      // Check if prompt already has quality keywords
+      const hasQuality = /cinematic|photorealistic|realistic|smooth|fluid/i.test(enhanced);
+
+      if (!hasQuality) {
+        // Add quality prefix for I2V - emphasize continuity from first frame
+        enhanced = `Cinematic, photorealistic video with smooth fluid motion. ${enhanced}`;
+      }
+
+      // Add motion continuity suffix if not present
+      if (!/continuous|seamless|natural.*motion/i.test(enhanced)) {
+        enhanced += '. Natural lifelike movement, seamless animation, professional cinematography quality.';
+      }
+    } else {
+      // Text-to-video: can be more dynamic
+      const hasQuality = /cinematic|photorealistic|realistic/i.test(enhanced);
+
+      if (!hasQuality) {
+        enhanced = `Cinematic, high production value, photorealistic. ${enhanced}`;
+      }
+
+      if (!/smooth|fluid|natural.*motion/i.test(enhanced)) {
+        enhanced += '. Smooth fluid motion, realistic physics, professional quality animation.';
+      }
+    }
+
+    return enhanced;
+  },
+
+  /**
+   * Format camera movement for Minimax
+   * @param {Array|string} movements - Camera movements
+   * @returns {string} Formatted movement string for prompt prefix
+   */
+  formatCameraMovements(movements) {
+    if (!movements) return '';
+
+    const movementArray = Array.isArray(movements) ? movements : [movements];
+    const valid = movementArray.filter(m => MINIMAX_CAMERA_MOVEMENTS.includes(m));
+
+    if (valid.length === 0) return '';
+
+    // Minimax uses bracket notation for camera movements
+    return `[${valid.slice(0, 3).join(', ')}]`;
+  }
+};
+
+/**
  * creationWizardGenerateMinimaxVideo - Generate video using Minimax API
  *
  * Supports both text-to-video and image-to-video generation
@@ -33363,7 +33443,7 @@ exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data,
     prompt,
     imageUrl = null,
     model = 'hailuo-2.3',
-    duration = '6s',
+    duration = '10s',  // Default to 10s for richer action sequences
     resolution = '768p',
     cameraMovements = [],
     promptOptimizer = true
@@ -33395,23 +33475,22 @@ exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data,
   }
 
   try {
-    // Build prompt with camera movements
-    let enhancedPrompt = prompt.trim();
-    if (cameraMovements.length > 0) {
-      // Validate camera movements
-      const validMovements = cameraMovements.filter(m => MINIMAX_CAMERA_MOVEMENTS.includes(m));
-      if (validMovements.length > 0) {
-        // Add up to 3 camera movements
-        const movementString = validMovements.slice(0, 3).join(', ');
-        enhancedPrompt = `[${movementString}] ${enhancedPrompt}`;
-      }
+    // Determine if this is image-to-video
+    const isImageToVideo = imageUrl && modelConfig.inputTypes.includes('image');
+
+    // ENHANCED: Use MINIMAX_PROMPT_OPTIMIZER for better video quality (Fix 4)
+    let enhancedPrompt = MINIMAX_PROMPT_OPTIMIZER.enhance(prompt, cameraMovements[0], isImageToVideo);
+
+    // Add camera movements using optimizer's formatter
+    const cameraPrefix = MINIMAX_PROMPT_OPTIMIZER.formatCameraMovements(cameraMovements);
+    if (cameraPrefix) {
+      enhancedPrompt = `${cameraPrefix} ${enhancedPrompt}`;
     }
 
-    // Determine API endpoint and payload
-    const isImageToVideo = imageUrl && modelConfig.inputTypes.includes('image');
-    const apiEndpoint = isImageToVideo
-      ? 'https://api.minimax.io/v1/video_generation'
-      : 'https://api.minimax.io/v1/video_generation';
+    console.log(`[creationWizardGenerateMinimaxVideo] Enhanced prompt (${isImageToVideo ? 'I2V' : 'T2V'}): ${enhancedPrompt.substring(0, 100)}...`);
+
+    // Determine API endpoint
+    const apiEndpoint = 'https://api.minimax.io/v1/video_generation';
 
     // Build request payload
     const payload = {
@@ -42713,8 +42792,30 @@ exports.creationWizardGenerateAllShotsForScene = functions
       const shot = shots[i];
 
       try {
-        // Build enhanced prompt with consistency requirements
-        let enhancedPrompt = shot.prompt;
+        // FRAMING INSTRUCTIONS based on shot type (Fix 2: Composition)
+        const shotType = (shot.shotType || 'medium').toLowerCase();
+        let framingGuide = '';
+
+        if (shotType.includes('wide') || shotType.includes('establishing')) {
+          framingGuide = 'FRAMING: Wide shot - full bodies visible with environment context, generous margins on all sides, characters occupy 30-40% of frame height';
+        } else if (shotType.includes('closeup') || shotType.includes('close-up')) {
+          framingGuide = 'FRAMING: Close-up shot - face/upper body fills frame, maintain headroom (10% margin above head), eyes in upper third of frame';
+        } else if (shotType.includes('extreme')) {
+          framingGuide = 'FRAMING: Extreme close-up - face detail only, eyes prominent, dramatic framing with intentional tight crop';
+        } else {
+          // Medium shot default
+          framingGuide = 'FRAMING: Medium shot - waist-up or full body visible, character centered with proper headroom, never crop heads or hands';
+        }
+
+        // Build enhanced prompt with FRAMING FIRST, then content
+        let enhancedPrompt = `CRITICAL COMPOSITION RULES:
+${framingGuide}
+- Ensure all character heads are FULLY VISIBLE with space above
+- Never crop limbs at joints (wrists, ankles, knees)
+- Clear focal point with professional cinematography
+- Safe margins on all edges of frame
+
+${shot.prompt}`;
 
         // Add consistency anchors to prompt
         if (consistencyAnchors) {
@@ -42944,7 +43045,7 @@ exports.creationWizardGenerateShotVideo = functions
     shotIndex,
     imageUrl,           // First frame image (from shot generation)
     prompt,             // Video motion prompt
-    duration = '6s',    // Shot duration
+    duration = '10s',   // Shot duration - 10s default for richer action
     cameraMovement,     // Camera movement for this shot
     model = 'hailuo-2.3',
     // NEW: Character consistency parameters
@@ -43004,6 +43105,10 @@ exports.creationWizardGenerateShotVideo = functions
         console.log(`[creationWizardGenerateShotVideo] Style Enforcement: ${styleSettings.style}`);
       }
     }
+
+    // ENHANCED: Apply MINIMAX_PROMPT_OPTIMIZER for better video quality (Fix 4)
+    // This is I2V (image-to-video) since we have imageUrl
+    videoPrompt = MINIMAX_PROMPT_OPTIMIZER.enhance(videoPrompt, cameraMovement, true);
 
     // Map shot camera movement to Minimax format
     const cameraMovementMap = {
@@ -43124,7 +43229,7 @@ exports.creationWizardGenerateAllShotVideos = functions
     sceneId,
     shots,              // Array of shot objects with imageUrl, prompt, etc.
     model = 'hailuo-2.3',
-    duration = '6s'
+    duration = '10s'    // 10s default for richer action sequences
   } = data;
 
   if (!shots || !Array.isArray(shots) || shots.length === 0) {
@@ -44073,8 +44178,29 @@ exports.creationWizardBatchGenerateShotImages = functions
     const shot = allShots[i];
 
     try {
-      // Build enhanced prompt with global visual profile
-      let enhancedPrompt = shot.prompt || '';
+      // FRAMING INSTRUCTIONS based on shot type (Fix 2: Composition)
+      const shotType = (shot.shotType || 'medium').toLowerCase();
+      let framingGuide = '';
+
+      if (shotType.includes('wide') || shotType.includes('establishing')) {
+        framingGuide = 'FRAMING: Wide shot - full bodies visible with environment context, generous margins on all sides, characters occupy 30-40% of frame height';
+      } else if (shotType.includes('closeup') || shotType.includes('close-up')) {
+        framingGuide = 'FRAMING: Close-up shot - face/upper body fills frame, maintain headroom (10% margin above head), eyes in upper third of frame';
+      } else if (shotType.includes('extreme')) {
+        framingGuide = 'FRAMING: Extreme close-up - face detail only, eyes prominent, dramatic framing with intentional tight crop';
+      } else {
+        framingGuide = 'FRAMING: Medium shot - waist-up or full body visible, character centered with proper headroom, never crop heads or hands';
+      }
+
+      // Build enhanced prompt with FRAMING FIRST
+      let enhancedPrompt = `CRITICAL COMPOSITION RULES:
+${framingGuide}
+- Ensure all character heads are FULLY VISIBLE with space above
+- Never crop limbs at joints (wrists, ankles, knees)
+- Clear focal point with professional cinematography
+- Safe margins on all edges of frame
+
+${shot.prompt || ''}`;
 
       if (globalVisualProfile?.visualDNA) {
         const dna = globalVisualProfile.visualDNA;

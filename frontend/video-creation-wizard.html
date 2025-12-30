@@ -3690,8 +3690,8 @@
                 videoModel: {
                     provider: 'minimax',                    // 'minimax' | 'runpod' (future providers)
                     model: 'hailuo-2.3',                    // 'hailuo-2.3' | 'hailuo-2.3-fast' | 'hailuo-02'
-                    duration: '6s',                         // '6s' | '10s'
-                    resolution: '1080p',                    // '768p' | '1080p' (1080p only for 6s)
+                    duration: '10s',                        // '6s' | '10s' - 10s for richer action
+                    resolution: '768p',                     // '768p' | '1080p' (1080p only for 6s)
                     mode: 'quality'                         // 'quality' | 'fast' | 'continuity'
                 }
             },
@@ -4715,13 +4715,15 @@
 
             // Auto-configure video model duration based on pacing
             if (!state.content.videoModel) {
-                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '10s', resolution: '768p', mode: 'quality' };
             }
 
-            // Fast pacing = 6s clips, Contemplative = 10s clips (768p only)
+            // Fast pacing = 6s clips (1080p available), others = 10s clips (768p only)
             if (pacing === 'fast') {
                 state.content.videoModel.duration = '6s';
-            } else if (pacing === 'contemplative') {
+                // 6s allows 1080p
+            } else {
+                // Default to 10s for balanced/contemplative for richer action
                 state.content.videoModel.duration = '10s';
                 // 10s clips only support 768p
                 if (state.content.videoModel.resolution === '1080p') {
@@ -4736,7 +4738,7 @@
         // Video Model Configuration Functions
         function setVideoModelMode(mode) {
             if (!state.content.videoModel) {
-                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '10s', resolution: '768p', mode: 'quality' };
             }
 
             state.content.videoModel.mode = mode;
@@ -4755,7 +4757,7 @@
 
         function setVideoModelDuration(duration) {
             if (!state.content.videoModel) {
-                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '10s', resolution: '768p', mode: 'quality' };
             }
 
             state.content.videoModel.duration = duration;
@@ -4778,7 +4780,7 @@
 
         function setVideoModelResolution(resolution) {
             if (!state.content.videoModel) {
-                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+                state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '10s', resolution: '768p', mode: 'quality' };
             }
 
             // 1080p only available for 6s clips
@@ -6639,7 +6641,7 @@
                     genre: state.content.genre || null,
                     contentFormat: state.content.contentFormat || 'medium-form',
                     // Video Model Configuration (for scene timing optimization)
-                    videoModel: state.content.videoModel || { duration: '6s', resolution: '1080p' },
+                    videoModel: state.content.videoModel || { duration: '10s', resolution: '768p' },
                     additionalInstructions,
                     // Phase 5: AI Concept Enhancement Data - Deep Story Architecture
                     // Includes: improvedData + selectedConcept + characterIntelligence
@@ -12639,7 +12641,7 @@
             `;
 
             // AI Video Model Selection Card
-            const videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p', mode: 'quality' };
+            const videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '10s', resolution: '768p', mode: 'quality' };
             const canUse1080p = videoModel.duration === '6s'; // 1080p only available for 6s
             html += `
                 <div class="content-card">
@@ -15454,7 +15456,7 @@
             html += '</div>';
 
             // Camera Movement Selection (for Minimax AI Video)
-            var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p' };
+            var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '10s', resolution: '768p' };
             var manualCameraMovements = (state.animation.cameraMovements && state.animation.cameraMovements[sceneId]) || [];
             // Get script-generated camera movements if no manual selection
             var scriptSceneForCamera = state.script.scenes.find(function(s) { return s.id === sceneId; });
@@ -15564,7 +15566,7 @@
 
         // Animate scene with Minimax AI
         async function animateSceneWithMinimax(sceneId) {
-            var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '6s', resolution: '1080p' };
+            var videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '10s', resolution: '768p' };
 
             // Get scene data
             var storyboardScene = state.storyboard.scenes.find(function(s) { return s.sceneId === sceneId; });
