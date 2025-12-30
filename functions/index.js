@@ -41956,6 +41956,1606 @@ Create ${shotCount} shots now:`;
 };
 
 // =============================================================================
+// ENHANCED_VIDEO_PROMPT_BUILDER - Hollywood-Quality 10-Second Video Prompts
+// =============================================================================
+/**
+ * ENHANCED_VIDEO_PROMPT_BUILDER
+ *
+ * Generates temporally-progressive, motion-dense video prompts optimized for
+ * 10-second AI video generation. Based on professional cinematography principles
+ * and Minimax Hailuo best practices.
+ *
+ * Key principles:
+ * 1. TEMPORAL SEGMENTATION - Break 10s into 3-4 phases with distinct actions
+ * 2. MULTI-LAYER MOTION - Primary, secondary, and background action layers
+ * 3. PROFESSIONAL CAMERA LANGUAGE - Dolly, crane, steadicam, rack focus
+ * 4. MICRO-MOTION DETAILS - Breathing, blinking, weight shifts, hand movements
+ * 5. ENVIRONMENT ANIMATION - Continuous background motion throughout
+ */
+const ENHANCED_VIDEO_PROMPT_BUILDER = {
+
+  // =========================================================================
+  // PROFESSIONAL CAMERA MOVEMENT LIBRARY
+  // =========================================================================
+  cameraMovements: {
+    establishing: [
+      'Camera slowly dollies forward, gradually revealing',
+      'Crane shot descends smoothly to establish',
+      'Wide establishing shot with gentle push-in toward',
+      'Steadicam glides in from wide to medium on',
+      'Slow zoom through atmospheric depth toward'
+    ],
+    developing: [
+      'Camera tracks laterally, following the action as',
+      'Smooth dolly circles around to capture',
+      'Steadicam follows movement, maintaining focus on',
+      'Subtle push-in intensifies focus as',
+      'Camera arcs gracefully to reveal'
+    ],
+    building: [
+      'Dynamic tracking shot accelerates alongside',
+      'Camera pushes in with purpose toward',
+      'Handheld energy follows the increasing tension as',
+      'Quick dolly-in emphasizes the moment when',
+      'Camera cranes up to capture the scale of'
+    ],
+    peak: [
+      'Camera holds steady on the crucial moment as',
+      'Dramatic push to close-up captures',
+      'Camera circles to capture all angles of',
+      'Slow-motion emphasis on the peak action where',
+      'Tight tracking maintains intensity as'
+    ],
+    resolve: [
+      'Camera slowly pulls back, settling into stillness as',
+      'Gentle crane up provides closure while',
+      'Steadicam retreats to wide, framing the resolution where',
+      'Slow pull-out reveals the full aftermath as',
+      'Camera settles into final composition as'
+    ]
+  },
+
+  // =========================================================================
+  // MICRO-ACTION LIBRARY - Human details that fill time naturally
+  // =========================================================================
+  microActions: {
+    breathing: {
+      calm: 'chest rises and falls with slow, measured breaths',
+      tense: 'breathing quickens, shoulders tight with held tension',
+      emotional: 'breath catches, then releases with visible emotion',
+      relaxing: 'deep breath releases built-up tension, shoulders dropping',
+      focused: 'controlled breathing, stillness of concentration'
+    },
+    eyeMovement: {
+      scanning: 'eyes scan the surroundings, taking in details',
+      focused: 'gaze locked intently on a single point',
+      shifting: 'eyes dart between focal points with uncertainty',
+      emotional: 'eyes glisten with emotion, blinking slowly',
+      realization: 'eyes widen slightly with dawning understanding',
+      softening: 'gaze softens, warmth entering the expression'
+    },
+    weight: {
+      shifting: 'weight shifts subtly from foot to foot',
+      settling: 'weight settles firmly, grounding into stance',
+      leaning: 'body leans slightly toward point of interest',
+      bracing: 'weight centers, body bracing for what comes',
+      relaxing: 'weight releases, posture becoming more open'
+    },
+    hands: {
+      idle: 'fingers move with subtle nervous energy',
+      purposeful: 'hands move with deliberate intention',
+      emotional: 'hands clench and release with feeling',
+      reaching: 'hand extends slowly, almost tentatively',
+      resting: 'hands settle into stillness, finding rest',
+      gesturing: 'hands gesture naturally while communicating'
+    },
+    facial: {
+      neutral: 'subtle muscle movements animate the expression',
+      thinking: 'brow furrows slightly in concentration',
+      emotional: 'expression shifts through complex emotions',
+      reacting: 'face responds naturally to the moment',
+      resolving: 'expression settles into peaceful resolution'
+    }
+  },
+
+  // =========================================================================
+  // ENVIRONMENT ANIMATION PATTERNS - Continuous background motion
+  // =========================================================================
+  environmentAnimations: {
+    urban: {
+      continuous: [
+        'city lights pulse and flicker in the background',
+        'traffic flows in soft bokeh behind the subject',
+        'neon signs cast shifting colored reflections',
+        'pedestrians move as blurred silhouettes in distance'
+      ],
+      atmospheric: [
+        'heat haze ripples above warm pavement',
+        'steam rises from vents in the street',
+        'rain streaks catch and scatter city lights',
+        'wind stirs litter and leaves along the street'
+      ]
+    },
+    nature: {
+      continuous: [
+        'leaves rustle and sway in gentle breeze',
+        'grass ripples in waves across the field',
+        'branches bob and shift with air currents',
+        'flowers nod gently in the moving air'
+      ],
+      atmospheric: [
+        'light filters through moving canopy above',
+        'shadows dance across the ground',
+        'dust motes drift through shafts of light',
+        'clouds drift slowly, changing the light quality'
+      ]
+    },
+    interior: {
+      continuous: [
+        'curtains sway gently from unseen air movement',
+        'light shifts as clouds pass outside windows',
+        'dust particles drift through ambient light',
+        'shadows lengthen almost imperceptibly'
+      ],
+      atmospheric: [
+        'candle flames flicker and dance',
+        'firelight casts moving shadows on walls',
+        'soft ambient light pulses subtly',
+        'reflections shimmer on glass surfaces'
+      ]
+    },
+    scifi: {
+      continuous: [
+        'holographic displays pulse with data streams',
+        'ambient lighting cycles through subtle color shifts',
+        'screens flicker with scrolling information',
+        'indicators and lights blink in rhythmic patterns'
+      ],
+      atmospheric: [
+        'energy fields ripple with contained power',
+        'particle effects drift through the air',
+        'digital interfaces respond to nearby movement',
+        'atmospheric processors hum with visible output'
+      ]
+    },
+    dojo: {
+      continuous: [
+        'incense smoke curls and drifts upward',
+        'candle flames flicker, casting dancing shadows',
+        'light plays across polished wooden floors',
+        'fabric banners sway in the still air'
+      ],
+      atmospheric: [
+        'dust motes drift through shafts of light',
+        'shadows shift with the moving flames',
+        'ambient light transitions with passing time',
+        'gentle air currents stir loose fabric'
+      ]
+    }
+  },
+
+  // =========================================================================
+  // TEMPORAL PHASE STRUCTURES for 10-second videos
+  // =========================================================================
+  temporalStructures: {
+    // Single subject with emotional journey
+    emotionalArc: {
+      phases: [
+        { start: 0, end: 3, name: 'opening', intensity: 0.3 },
+        { start: 3, end: 6, name: 'development', intensity: 0.6 },
+        { start: 6, end: 10, name: 'culmination', intensity: 1.0 }
+      ],
+      description: 'Emotional journey from introduction to resolution'
+    },
+    // Action or movement focused
+    actionSequence: {
+      phases: [
+        { start: 0, end: 2, name: 'setup', intensity: 0.2 },
+        { start: 2, end: 5, name: 'action', intensity: 0.7 },
+        { start: 5, end: 8, name: 'peak', intensity: 1.0 },
+        { start: 8, end: 10, name: 'settle', intensity: 0.4 }
+      ],
+      description: 'Physical action with clear beginning and end'
+    },
+    // Dialogue or interaction focused
+    dialogueInteraction: {
+      phases: [
+        { start: 0, end: 3, name: 'engage', intensity: 0.4 },
+        { start: 3, end: 7, name: 'exchange', intensity: 0.7 },
+        { start: 7, end: 10, name: 'respond', intensity: 0.8 }
+      ],
+      description: 'Conversation or non-verbal exchange between subjects'
+    },
+    // Reveal or discovery
+    revealMoment: {
+      phases: [
+        { start: 0, end: 4, name: 'anticipation', intensity: 0.3 },
+        { start: 4, end: 6, name: 'reveal', intensity: 1.0 },
+        { start: 6, end: 10, name: 'reaction', intensity: 0.7 }
+      ],
+      description: 'Building to a moment of revelation or discovery'
+    },
+    // Contemplative or atmospheric
+    contemplative: {
+      phases: [
+        { start: 0, end: 4, name: 'stillness', intensity: 0.2 },
+        { start: 4, end: 7, name: 'shift', intensity: 0.4 },
+        { start: 7, end: 10, name: 'settle', intensity: 0.3 }
+      ],
+      description: 'Meditative, slow-paced scene with subtle changes'
+    }
+  },
+
+  // =========================================================================
+  // MAIN PROMPT GENERATION METHODS
+  // =========================================================================
+
+  /**
+   * Generate an enhanced 10-second video prompt
+   * @param {Object} shotData - Shot information from decomposition
+   * @param {Object} sceneContext - Scene visual/narrative context
+   * @param {number} videoDuration - Video duration in seconds (6 or 10)
+   * @returns {string} Enhanced video prompt
+   */
+  generateEnhancedPrompt(shotData, sceneContext, videoDuration = 10) {
+    const is10Second = videoDuration >= 10;
+
+    // Extract narrative elements
+    const narrative = this.extractNarrativeContext(sceneContext);
+
+    // Determine temporal structure based on shot type
+    const structure = this.selectTemporalStructure(shotData, narrative);
+
+    // Build the layered prompt
+    const promptLayers = [];
+
+    // 1. CAMERA LAYER - Professional movement
+    const cameraLayer = this.buildCameraLayer(shotData, structure, is10Second);
+    promptLayers.push(cameraLayer);
+
+    // 2. PRIMARY ACTION LAYER - Main subject motion
+    const primaryLayer = this.buildPrimaryActionLayer(shotData, narrative, structure, is10Second);
+    promptLayers.push(primaryLayer);
+
+    // 3. SECONDARY ACTION LAYER - Supporting details (for 10s only)
+    if (is10Second) {
+      const secondaryLayer = this.buildSecondaryActionLayer(shotData, narrative, structure);
+      if (secondaryLayer) promptLayers.push(secondaryLayer);
+    }
+
+    // 4. MICRO-MOTION LAYER - Human details
+    const microLayer = this.buildMicroMotionLayer(narrative, structure, is10Second);
+    if (microLayer) promptLayers.push(microLayer);
+
+    // 5. ENVIRONMENT LAYER - Background animation
+    const envLayer = this.buildEnvironmentLayer(narrative, structure, is10Second);
+    if (envLayer) promptLayers.push(envLayer);
+
+    // 6. CONTINUITY LAYER - Frame chaining
+    if (!shotData.isFirst) {
+      promptLayers.push('Continuing seamlessly from previous frame, maintaining visual consistency.');
+    }
+
+    // 7. QUALITY LAYER - Technical keywords
+    const qualityLayer = this.buildQualityLayer(narrative.mood);
+    promptLayers.push(qualityLayer);
+
+    return promptLayers.join(' ');
+  },
+
+  /**
+   * Extract narrative context from scene data
+   */
+  extractNarrativeContext(sceneContext) {
+    const visualPrompt = sceneContext?.visualPrompt || '';
+    const promptLower = visualPrompt.toLowerCase();
+
+    // Detect characters
+    const characters = [];
+    const charPatterns = [
+      /([A-Z][a-z]+)\s+(?:sits?|stands?|walks?|looks?|gazes?|holds?|moves?|reaches?|turns?)/gi
+    ];
+    const seenNames = new Set();
+    for (const pattern of charPatterns) {
+      let match;
+      while ((match = pattern.exec(visualPrompt)) !== null) {
+        const name = match[1];
+        if (!seenNames.has(name.toLowerCase()) && name.length > 2) {
+          seenNames.add(name.toLowerCase());
+          characters.push(name);
+        }
+      }
+    }
+
+    // Detect environment type
+    const envType = /dojo|temple|shrine|meditation/.test(promptLower) ? 'dojo' :
+                    /city|urban|street|building|neon/.test(promptLower) ? 'urban' :
+                    /forest|nature|outdoor|garden|tree|field/.test(promptLower) ? 'nature' :
+                    /space|ship|station|futuristic|tech|cyber/.test(promptLower) ? 'scifi' :
+                    /room|interior|inside|office|home/.test(promptLower) ? 'interior' : 'interior';
+
+    // Detect mood
+    const mood = /troubled|tense|worried|anxious|conflict|struggle/.test(promptLower) ? 'tense' :
+                 /peaceful|calm|serene|gentle|quiet/.test(promptLower) ? 'peaceful' :
+                 /hopeful|warm|tender|love|comfort/.test(promptLower) ? 'warm' :
+                 /mysterious|eerie|dark|ominous|unknown/.test(promptLower) ? 'mysterious' :
+                 /energetic|action|fast|intense|dynamic/.test(promptLower) ? 'dynamic' : 'neutral';
+
+    // Detect action type
+    const actionType = /walk|run|move|approach|step|enter|exit/.test(promptLower) ? 'movement' :
+                       /sit|stand|wait|contemplate|think|meditate/.test(promptLower) ? 'contemplative' :
+                       /talk|speak|discuss|converse|explain/.test(promptLower) ? 'dialogue' :
+                       /reveal|discover|realize|understand|see/.test(promptLower) ? 'revelation' :
+                       /fight|struggle|conflict|battle|clash/.test(promptLower) ? 'action' : 'general';
+
+    return {
+      characters,
+      envType,
+      mood,
+      actionType,
+      visualPrompt
+    };
+  },
+
+  /**
+   * Select appropriate temporal structure based on context
+   */
+  selectTemporalStructure(shotData, narrative) {
+    // Map action types to structures
+    const structureMap = {
+      'contemplative': this.temporalStructures.contemplative,
+      'dialogue': this.temporalStructures.dialogueInteraction,
+      'revelation': this.temporalStructures.revealMoment,
+      'action': this.temporalStructures.actionSequence,
+      'movement': this.temporalStructures.actionSequence,
+      'general': this.temporalStructures.emotionalArc
+    };
+
+    let structure = structureMap[narrative.actionType] || this.temporalStructures.emotionalArc;
+
+    // Adjust for shot position
+    if (shotData.isFirst) {
+      // First shots should emphasize establishment
+      structure = { ...structure };
+    } else if (shotData.isLast) {
+      // Last shots should emphasize resolution
+      structure = { ...structure };
+    }
+
+    return structure;
+  },
+
+  /**
+   * Build camera movement layer with temporal awareness
+   */
+  buildCameraLayer(shotData, structure, is10Second) {
+    const phase = shotData.isFirst ? 'establishing' :
+                  shotData.isLast ? 'resolve' :
+                  shotData.arcPosition === 'peak' ? 'peak' :
+                  shotData.arcPosition === 'build' ? 'building' : 'developing';
+
+    const movements = this.cameraMovements[phase] || this.cameraMovements.developing;
+    const baseMovement = movements[Math.floor(Math.random() * movements.length)];
+
+    if (is10Second) {
+      // For 10-second videos, describe camera evolution over time
+      if (shotData.isFirst) {
+        return `${baseMovement} the scene, then settling into stable framing for the action.`;
+      } else if (shotData.isLast) {
+        return `${baseMovement} the scene reaches its conclusion, widening to capture the final moment.`;
+      } else {
+        return `${baseMovement} the unfolding action, maintaining focus throughout the continuous movement.`;
+      }
+    }
+
+    return baseMovement;
+  },
+
+  /**
+   * Build primary action layer with temporal segments
+   */
+  buildPrimaryActionLayer(shotData, narrative, structure, is10Second) {
+    const actionText = shotData.actionText || shotData.segments?.join('. ') || '';
+    const character = narrative.characters[0] || 'The subject';
+
+    if (!is10Second) {
+      // For 6-second videos, simpler action description
+      return actionText || `${character} moves through the moment with natural motion.`;
+    }
+
+    // For 10-second videos, create temporal segments
+    const phases = structure.phases;
+    const segmentDescriptions = [];
+
+    for (let i = 0; i < phases.length; i++) {
+      const phase = phases[i];
+      const timeRange = `[${phase.start}s-${phase.end}s]`;
+
+      let segmentAction;
+      if (actionText && i === 0) {
+        // Use provided action for first segment
+        segmentAction = actionText;
+      } else {
+        // Generate continuation for subsequent segments
+        segmentAction = this.generatePhaseAction(phase.name, character, narrative.mood, phase.intensity);
+      }
+
+      segmentDescriptions.push(`${timeRange} ${segmentAction}`);
+    }
+
+    return segmentDescriptions.join(' ');
+  },
+
+  /**
+   * Generate action description for a specific phase
+   */
+  generatePhaseAction(phaseName, character, mood, intensity) {
+    const phaseActions = {
+      opening: {
+        tense: `${character} enters with visible tension, movements measured and alert`,
+        peaceful: `${character} appears in calm stillness, serene presence establishing`,
+        warm: `${character} is revealed with gentle warmth, soft energy radiating`,
+        mysterious: `${character} emerges from shadow, presence gradually manifesting`,
+        dynamic: `${character} enters with energy, immediate sense of motion`,
+        neutral: `${character} comes into view, presence naturally establishing`
+      },
+      development: {
+        tense: `tension builds in ${character}'s posture, movements becoming more deliberate`,
+        peaceful: `${character} continues in flowing calm, gentle progression of motion`,
+        warm: `connection deepens as ${character} moves with emotional warmth`,
+        mysterious: `${character}'s intention becomes clearer, mystery developing`,
+        dynamic: `${character}'s energy increases, motion accelerating purposefully`,
+        neutral: `${character} progresses through the moment, natural development`
+      },
+      culmination: {
+        tense: `${character} reaches peak tension, decisive moment arriving`,
+        peaceful: `${character} settles into deep tranquility, peace fully realized`,
+        warm: `emotional peak as ${character}'s warmth reaches its fullest expression`,
+        mysterious: `revelation moment as ${character}'s purpose becomes clear`,
+        dynamic: `${character}'s motion reaches maximum intensity, peak action`,
+        neutral: `${character} arrives at the natural conclusion of the moment`
+      },
+      setup: {
+        tense: `${character} prepares, tension coiling for what comes`,
+        neutral: `${character} positions for the action ahead`
+      },
+      action: {
+        dynamic: `${character} executes the primary action with full commitment`,
+        neutral: `${character} moves through the main action sequence`
+      },
+      peak: {
+        dynamic: `${character} at maximum intensity, the crucial moment`,
+        neutral: `${character} reaches the height of the action`
+      },
+      settle: {
+        peaceful: `${character} comes to rest, motion settling`,
+        neutral: `${character}'s movement concludes, finding stillness`
+      },
+      engage: {
+        warm: `${character} engages with warmth, connection initiating`,
+        neutral: `${character} begins the interaction`
+      },
+      exchange: {
+        warm: `the exchange deepens between ${character} and the other`,
+        neutral: `${character} continues through the interaction`
+      },
+      respond: {
+        warm: `${character} responds with emotional depth`,
+        neutral: `${character} reacts to complete the exchange`
+      },
+      anticipation: {
+        mysterious: `${character} waits with building anticipation`,
+        neutral: `${character} moves toward the coming moment`
+      },
+      reveal: {
+        mysterious: `the revelation strikes ${character}, moment of impact`,
+        neutral: `${character} experiences the key moment`
+      },
+      reaction: {
+        emotional: `${character}'s response unfolds with visible impact`,
+        neutral: `${character} processes and responds to what occurred`
+      },
+      stillness: {
+        peaceful: `${character} exists in meditative stillness, barely moving`,
+        neutral: `${character} remains in quiet contemplation`
+      },
+      shift: {
+        peaceful: `subtle internal shift occurs within ${character}`,
+        neutral: `${character} experiences gentle transition`
+      }
+    };
+
+    const moodActions = phaseActions[phaseName];
+    if (!moodActions) return `${character} continues through this moment`;
+
+    return moodActions[mood] || moodActions.neutral || `${character} progresses naturally`;
+  },
+
+  /**
+   * Build secondary action layer for supporting details
+   */
+  buildSecondaryActionLayer(shotData, narrative, structure) {
+    if (narrative.characters.length < 2) {
+      // No secondary character, add environmental interaction
+      return null;
+    }
+
+    const secondaryChar = narrative.characters[1];
+    const mood = narrative.mood;
+
+    const secondaryActions = {
+      tense: `Meanwhile, ${secondaryChar} responds with matching tension, body language reflecting the mood.`,
+      peaceful: `${secondaryChar} mirrors the calm energy, movements harmoniously aligned.`,
+      warm: `${secondaryChar} responds with equal warmth, connection visible in subtle gestures.`,
+      dynamic: `${secondaryChar} matches the energy, complementary motion adding to the scene.`,
+      neutral: `${secondaryChar} responds naturally, supporting the primary action.`
+    };
+
+    return secondaryActions[mood] || secondaryActions.neutral;
+  },
+
+  /**
+   * Build micro-motion layer for human details
+   */
+  buildMicroMotionLayer(narrative, structure, is10Second) {
+    const mood = narrative.mood;
+    const character = narrative.characters[0] || 'The subject';
+
+    // Select appropriate micro-actions based on mood
+    const breathingType = mood === 'tense' ? 'tense' :
+                          mood === 'peaceful' ? 'calm' :
+                          mood === 'warm' ? 'emotional' : 'calm';
+
+    const eyeType = mood === 'mysterious' ? 'scanning' :
+                    mood === 'tense' ? 'shifting' :
+                    mood === 'warm' ? 'softening' : 'focused';
+
+    const breathing = this.microActions.breathing[breathingType];
+    const eyes = this.microActions.eyeMovement[eyeType];
+
+    if (is10Second) {
+      // For 10s, include multiple micro-action types
+      const weight = this.microActions.weight[mood === 'tense' ? 'bracing' : 'settling'];
+      const hands = this.microActions.hands[mood === 'tense' ? 'emotional' : 'idle'];
+
+      return `Throughout, ${character}'s ${breathing}, ${eyes}. ${character}'s ${weight}, while ${hands}.`;
+    }
+
+    return `${character}'s ${breathing}, ${eyes}.`;
+  },
+
+  /**
+   * Build environment animation layer
+   */
+  buildEnvironmentLayer(narrative, structure, is10Second) {
+    const envType = narrative.envType;
+    const envAnimations = this.environmentAnimations[envType] || this.environmentAnimations.interior;
+
+    // Select continuous and atmospheric animations
+    const continuous = envAnimations.continuous[Math.floor(Math.random() * envAnimations.continuous.length)];
+
+    if (is10Second) {
+      // For 10s, add atmospheric details too
+      const atmospheric = envAnimations.atmospheric[Math.floor(Math.random() * envAnimations.atmospheric.length)];
+      return `In the background, ${continuous}. ${atmospheric}.`;
+    }
+
+    return `Background: ${continuous}.`;
+  },
+
+  /**
+   * Build quality/technical layer
+   */
+  buildQualityLayer(mood) {
+    const moodQualities = {
+      tense: 'Cinematic tension, dramatic lighting, photorealistic detail, fluid natural motion.',
+      peaceful: 'Serene cinematography, soft natural lighting, smooth dreamlike motion, photorealistic.',
+      warm: 'Warm cinematic tones, intimate framing, gentle fluid motion, photorealistic emotion.',
+      mysterious: 'Atmospheric cinematography, chiaroscuro lighting, subtle ethereal motion, photorealistic.',
+      dynamic: 'Dynamic cinematography, energetic framing, powerful fluid motion, photorealistic action.',
+      neutral: 'Professional cinematography, balanced lighting, smooth natural motion, photorealistic quality.'
+    };
+
+    return moodQualities[mood] || moodQualities.neutral;
+  },
+
+  // =========================================================================
+  // INTEGRATION METHODS - Connect to existing systems
+  // =========================================================================
+
+  /**
+   * Replace the basic video prompt from SHOT_DECOMPOSITION_ENGINE
+   * Called during shot processing
+   */
+  enhanceExistingPrompt(basicPrompt, shotData, sceneContext, videoDuration = 10) {
+    // If we have good scene context, generate fully enhanced prompt
+    if (sceneContext && sceneContext.visualPrompt) {
+      return this.generateEnhancedPrompt(shotData, sceneContext, videoDuration);
+    }
+
+    // Otherwise enhance the basic prompt with temporal structure
+    return this.expandBasicPrompt(basicPrompt, shotData, videoDuration);
+  },
+
+  /**
+   * Expand a basic prompt into motion-dense format
+   */
+  expandBasicPrompt(basicPrompt, shotData, videoDuration) {
+    const is10Second = videoDuration >= 10;
+    const parts = [];
+
+    // Parse basic elements from prompt
+    const hasCameraMove = /push|pull|track|pan|crane|dolly/i.test(basicPrompt);
+    const hasCharacter = /\b[A-Z][a-z]+\b/.test(basicPrompt);
+
+    // 1. Enhance camera if not present
+    if (!hasCameraMove) {
+      const phase = shotData.isFirst ? 'establishing' :
+                    shotData.isLast ? 'resolve' : 'developing';
+      const movements = this.cameraMovements[phase];
+      parts.push(movements[0]);
+    }
+
+    // 2. Add the basic prompt content
+    parts.push(basicPrompt);
+
+    // 3. For 10s, add temporal expansion
+    if (is10Second) {
+      parts.push('The action continues to develop over the full duration with natural progression.');
+      parts.push('Subtle breathing, weight shifts, and micro-expressions maintain constant motion.');
+    }
+
+    // 4. Add environment motion
+    parts.push('Background elements animate subtly throughout.');
+
+    // 5. Quality keywords
+    parts.push('Cinematic, photorealistic, smooth fluid motion throughout the entire shot.');
+
+    return parts.join(' ');
+  }
+};
+
+// =============================================================================
+// SCENE_CLOSURE_ENGINE - Hollywood-Quality Scene Endings
+// =============================================================================
+/**
+ * SCENE_CLOSURE_ENGINE
+ *
+ * Ensures every scene ends with meaningful narrative resolution, not abrupt cuts.
+ * Based on Hollywood principles of scene closure:
+ *
+ * 1. EMOTIONAL RESOLUTION - Character reaches a moment of clarity/change
+ * 2. VISUAL FINALITY - Camera and framing signal conclusion
+ * 3. TEMPORAL DECELERATION - Motion slows to a satisfying end
+ * 4. NARRATIVE COMPLETION - The scene's "question" is answered
+ *
+ * Closure Types:
+ * - RESOLUTION: Conflict resolved, peace found (most common)
+ * - CLIFFHANGER: Tension held for next scene (dramatic beats)
+ * - TRANSITION: Smooth handoff to next scene
+ * - FINALITY: Chapter/act conclusion with full closure
+ */
+const SCENE_CLOSURE_ENGINE = {
+
+  // =========================================================================
+  // CLOSURE TYPE PATTERNS - Hollywood scene ending archetypes
+  // =========================================================================
+  closureTypes: {
+    resolution: {
+      name: 'Resolution',
+      description: 'Conflict or tension resolves, character finds peace/understanding',
+      cameraMovements: [
+        'Camera slowly pulls back, widening to capture the moment of resolution',
+        'Gentle crane up provides closure, rising to show the completed tableau',
+        'Slow dolly out, settling into a wide shot that frames the resolution',
+        'Camera holds steady as the moment breathes, then subtly pulls back'
+      ],
+      emotionalBeats: [
+        'tension releases from the body, posture softening',
+        'expression transforms from conflict to acceptance',
+        'breathing deepens, shoulders drop with release',
+        'eyes close briefly in acknowledgment, then open with clarity',
+        'a small but meaningful smile emerges'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Movement gradually slows, finding stillness',
+        '[Final 3s] Action decelerates to a moment of quiet peace',
+        '[Final 3s] Motion settles like water becoming still'
+      ],
+      qualityKeywords: 'Peaceful resolution, satisfying conclusion, moment of clarity, emotional release.'
+    },
+
+    cliffhanger: {
+      name: 'Cliffhanger',
+      description: 'Tension maintained or amplified for continuation',
+      cameraMovements: [
+        'Camera pushes in slowly on the unresolved moment, holding tension',
+        'Slow zoom into eyes or key element that holds the suspense',
+        'Camera freezes on the pivotal instant, future uncertain',
+        'Tracking shot halts abruptly, capturing the suspended moment'
+      ],
+      emotionalBeats: [
+        'expression freezes in realization or shock',
+        'body tenses, caught in the moment before action',
+        'eyes widen as understanding dawns',
+        'breath catches, held in anticipation',
+        'hand reaches but does not complete the gesture'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Motion slows to near-stillness, tension palpable',
+        '[Final 3s] Action suspends at the critical moment',
+        '[Final 3s] Time seems to stretch as the moment hangs'
+      ],
+      qualityKeywords: 'Suspended tension, pivotal moment, unresolved anticipation, dramatic pause.'
+    },
+
+    transition: {
+      name: 'Transition',
+      description: 'Scene flows naturally into the next, maintaining momentum',
+      cameraMovements: [
+        'Camera continues its movement, preparing to hand off to next scene',
+        'Smooth dolly that could seamlessly connect to following shot',
+        'Camera arcs toward the direction of the next narrative beat',
+        'Pull back that reveals the path to what comes next'
+      ],
+      emotionalBeats: [
+        'movement continues with purpose toward next objective',
+        'attention shifts toward what awaits',
+        'body orients toward the next challenge or destination',
+        'expression holds determination for what comes',
+        'first steps toward the next scene begin'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Motion maintains momentum, flowing forward',
+        '[Final 3s] Action continues seamlessly, energy preserved',
+        '[Final 3s] Movement carries through to the transition point'
+      ],
+      qualityKeywords: 'Flowing transition, continuous momentum, narrative bridge, seamless handoff.'
+    },
+
+    finality: {
+      name: 'Finality',
+      description: 'Complete conclusion, chapter/act ending, definitive closure',
+      cameraMovements: [
+        'Grand pull back to extreme wide, showing the completed story moment',
+        'Slow crane up and back, rising above the scene in conclusion',
+        'Camera gradually retreats, framing becomes symmetrical and balanced',
+        'Majestic wide shot settles into perfect compositional balance'
+      ],
+      emotionalBeats: [
+        'complete stillness achieved, journey concluded',
+        'final pose held with dignity and completion',
+        'ultimate expression of resolution and acceptance',
+        'body language signals "the end" of this chapter',
+        'eyes look toward the horizon or close in final peace'
+      ],
+      temporalPatterns: [
+        '[Final 3s] All motion comes to complete rest, perfect stillness',
+        '[Final 3s] The world settles into its final configuration',
+        '[Final 3s] Time seems to pause in acknowledgment of completion'
+      ],
+      qualityKeywords: 'Definitive ending, complete closure, final moment, epic conclusion.'
+    },
+
+    contemplative: {
+      name: 'Contemplative',
+      description: 'Reflective ending, character processing what occurred',
+      cameraMovements: [
+        'Camera holds in intimate framing as character reflects',
+        'Slow, almost imperceptible push in on thoughtful expression',
+        'Static shot with world moving around the still, contemplating figure',
+        'Gentle orbit around the figure lost in thought'
+      ],
+      emotionalBeats: [
+        'eyes gaze into middle distance, processing',
+        'subtle expressions cross the face like passing clouds',
+        'breathing becomes deep and measured in reflection',
+        'hand rises to touch face or object of significance',
+        'posture settles into contemplative stillness'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Internal processing visible in subtle facial changes',
+        '[Final 3s] Stillness of body, activity of mind visible in eyes',
+        '[Final 3s] The moment stretches as understanding deepens'
+      ],
+      qualityKeywords: 'Deep reflection, internal processing, meaningful pause, contemplative stillness.'
+    },
+
+    emotional_peak: {
+      name: 'Emotional Peak',
+      description: 'Scene ends at height of emotion, impact before resolution',
+      cameraMovements: [
+        'Camera holds tight on the emotional apex, not retreating',
+        'Push in reaches its closest point at peak emotion',
+        'Multiple angle suggestion through slight camera drift at climax',
+        'Intimate framing captures every nuance of the peak moment'
+      ],
+      emotionalBeats: [
+        'tears fall or are bravely held back',
+        'embrace tightens at fullest expression',
+        'voice would crack if speaking, emotion visible in throat',
+        'the kiss, the touch, the connection at its deepest',
+        'joy or sorrow expressed without restraint'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Emotion reaches its fullest expression',
+        '[Final 3s] The peak is held, savored, fully experienced',
+        '[Final 3s] Maximum emotional impact sustained through the end'
+      ],
+      qualityKeywords: 'Emotional climax, peak intensity, raw feeling, powerful conclusion.'
+    }
+  },
+
+  // =========================================================================
+  // CLOSURE DETECTION - Analyze scene to determine appropriate ending
+  // =========================================================================
+
+  /**
+   * Detect the appropriate closure type based on scene context
+   * @param {Object} sceneContext - Scene information
+   * @param {Object} scenePosition - Position in overall story (sceneIndex, totalScenes)
+   * @returns {string} Closure type key
+   */
+  detectClosureType(sceneContext, scenePosition = {}) {
+    const visualPrompt = (sceneContext?.visualPrompt || '').toLowerCase();
+    const narration = (sceneContext?.narration || '').toLowerCase();
+    const sceneAction = (sceneContext?.sceneAction || '').toLowerCase();
+    const combined = `${visualPrompt} ${narration} ${sceneAction}`;
+
+    const { sceneIndex = 0, totalScenes = 1 } = scenePosition;
+    const isLastScene = sceneIndex === totalScenes - 1;
+    const isNearEnd = sceneIndex >= totalScenes - 2;
+
+    // Check for explicit finality indicators (last scene, ending words)
+    if (isLastScene || /\b(finally|ultimate|last|ending|conclusion|the end)\b/.test(combined)) {
+      return 'finality';
+    }
+
+    // Check for cliffhanger indicators
+    if (/\b(suddenly|shock|reveal|discover|realize|but then|however|twist)\b/.test(combined)) {
+      return 'cliffhanger';
+    }
+
+    // Check for emotional peak indicators
+    if (/\b(tears|crying|embrace|kiss|love|grief|joy|overwhelming|burst)\b/.test(combined)) {
+      return 'emotional_peak';
+    }
+
+    // Check for contemplative indicators
+    if (/\b(think|ponder|reflect|remember|consider|gaze|stare|wonder|meditate)\b/.test(combined)) {
+      return 'contemplative';
+    }
+
+    // Check for resolution indicators
+    if (/\b(peace|calm|accept|understand|resolve|forgive|release|let go|relief)\b/.test(combined)) {
+      return 'resolution';
+    }
+
+    // Check for transition indicators
+    if (/\b(next|continue|move|toward|begin|start|then|after)\b/.test(combined)) {
+      return 'transition';
+    }
+
+    // Default based on position
+    if (isNearEnd) {
+      return 'resolution';
+    }
+
+    return 'transition'; // Default for mid-story scenes
+  },
+
+  // =========================================================================
+  // CLOSURE PROMPT GENERATION
+  // =========================================================================
+
+  /**
+   * Generate closure-enhanced prompt for the final shot
+   * @param {Object} shotData - Final shot information
+   * @param {Object} sceneContext - Scene context
+   * @param {Object} scenePosition - Position in story
+   * @param {number} videoDuration - Video duration (6 or 10)
+   * @returns {string} Enhanced closure prompt
+   */
+  generateClosurePrompt(shotData, sceneContext, scenePosition = {}, videoDuration = 10) {
+    const closureType = this.detectClosureType(sceneContext, scenePosition);
+    const closure = this.closureTypes[closureType];
+
+    if (!closure) {
+      console.warn(`[SCENE_CLOSURE_ENGINE] Unknown closure type: ${closureType}, using resolution`);
+      return this.generateClosurePrompt(shotData, sceneContext, scenePosition, videoDuration);
+    }
+
+    console.log(`[SCENE_CLOSURE_ENGINE] Detected closure type: ${closureType}`);
+
+    const parts = [];
+
+    // 1. CLOSURE CAMERA - Specific to ending type
+    const cameraMove = closure.cameraMovements[Math.floor(Math.random() * closure.cameraMovements.length)];
+    parts.push(cameraMove);
+
+    // 2. CHARACTER CLOSURE - Emotional beat for the ending
+    const character = this.extractPrimaryCharacter(sceneContext);
+    if (character) {
+      const emotionalBeat = closure.emotionalBeats[Math.floor(Math.random() * closure.emotionalBeats.length)];
+      parts.push(`${character}'s ${emotionalBeat}.`);
+    }
+
+    // 3. TEMPORAL PATTERN - How time should feel at the end
+    if (videoDuration >= 10) {
+      const temporalPattern = closure.temporalPatterns[Math.floor(Math.random() * closure.temporalPatterns.length)];
+      parts.push(temporalPattern);
+    }
+
+    // 4. EXISTING ACTION - Preserve what was in the shot
+    const existingAction = shotData.actionText || shotData.narrativeBeat?.action || '';
+    if (existingAction) {
+      parts.push(existingAction);
+    }
+
+    // 5. CLOSURE ENVIRONMENT - World responds to the ending
+    const envClosure = this.generateEnvironmentClosure(sceneContext, closureType);
+    if (envClosure) {
+      parts.push(envClosure);
+    }
+
+    // 6. QUALITY KEYWORDS - Closure-specific
+    parts.push(closure.qualityKeywords);
+    parts.push('Cinematic scene conclusion, photorealistic, smooth deceleration to stillness.');
+
+    return parts.join(' ');
+  },
+
+  /**
+   * Extract primary character name from context
+   */
+  extractPrimaryCharacter(sceneContext) {
+    const prompt = sceneContext?.visualPrompt || '';
+    const match = prompt.match(/([A-Z][a-z]+)\s+(?:sits?|stands?|walks?|looks?|gazes?)/);
+    return match ? match[1] : 'The subject';
+  },
+
+  /**
+   * Generate environment closure description
+   */
+  generateEnvironmentClosure(sceneContext, closureType) {
+    const envType = this.detectEnvironmentType(sceneContext);
+
+    const environmentClosures = {
+      urban: {
+        resolution: 'City lights seem to soften, the urban pulse settling into evening calm.',
+        cliffhanger: 'City sounds cut to silence, the metropolis holding its breath.',
+        transition: 'The city continues its rhythm as the focus shifts to what comes next.',
+        finality: 'The cityscape becomes a backdrop to the completed moment, lights twinkling like stars.',
+        contemplative: 'Urban noise fades to white noise, the city becoming mere backdrop to inner reflection.',
+        emotional_peak: 'Even the city seems to pause, honoring the emotional moment.'
+      },
+      nature: {
+        resolution: 'A gentle breeze stirs the leaves one last time, then settles into peace.',
+        cliffhanger: 'Nature falls silent, as if waiting for what comes next.',
+        transition: 'The wind picks up slightly, carrying toward the next moment.',
+        finality: 'The sun breaks through clouds, bathing the scene in golden completion.',
+        contemplative: 'Nature breathes softly around the still figure, patient and eternal.',
+        emotional_peak: 'Even the wind seems to hold its breath for this moment.'
+      },
+      interior: {
+        resolution: 'The room settles into comfortable stillness, dust motes drifting lazily.',
+        cliffhanger: 'Shadows deepen in the corners, the room thick with unresolved tension.',
+        transition: 'Light shifts toward the door, suggesting the path forward.',
+        finality: 'The space achieves perfect balance, every element in its final place.',
+        contemplative: 'The room becomes a sanctuary of quiet reflection.',
+        emotional_peak: 'The intimate space amplifies every emotion in the silence.'
+      },
+      scifi: {
+        resolution: 'Holographic displays fade to standby, technology yielding to the human moment.',
+        cliffhanger: 'Screens flash with unread data, the future hanging in digital suspension.',
+        transition: 'Systems hum with preparation for what comes next.',
+        finality: 'All displays show completion, the mission concluded in synchronized stillness.',
+        contemplative: 'Technology dims respectfully, allowing space for human reflection.',
+        emotional_peak: 'Even the machines seem to acknowledge the weight of the moment.'
+      },
+      dojo: {
+        resolution: 'Incense smoke rises in a straight line, inner and outer peace aligned.',
+        cliffhanger: 'Candle flames freeze mid-flicker, the ancient space suspended in time.',
+        transition: 'Energy flows toward the next practice, the path continuing.',
+        finality: 'Perfect stillness achieved, the space resonating with completed purpose.',
+        contemplative: 'The sacred space holds the moment in eternal meditation.',
+        emotional_peak: 'The spiritual atmosphere intensifies, honoring the emotional truth.'
+      }
+    };
+
+    const envClosures = environmentClosures[envType] || environmentClosures.interior;
+    return envClosures[closureType] || envClosures.resolution;
+  },
+
+  /**
+   * Detect environment type from context
+   */
+  detectEnvironmentType(sceneContext) {
+    const prompt = (sceneContext?.visualPrompt || '').toLowerCase();
+
+    if (/city|urban|street|neon|building|metropolis/.test(prompt)) return 'urban';
+    if (/forest|nature|outdoor|garden|tree|field|mountain/.test(prompt)) return 'nature';
+    if (/dojo|temple|shrine|meditation|spiritual/.test(prompt)) return 'dojo';
+    if (/space|ship|station|futuristic|tech|cyber|hologram/.test(prompt)) return 'scifi';
+    return 'interior';
+  },
+
+  // =========================================================================
+  // INTEGRATION - Apply closure to final shot
+  // =========================================================================
+
+  /**
+   * Enhance the final shot with proper closure
+   * Called during shot processing to ensure meaningful scene endings
+   */
+  enhanceFinalShot(finalShot, sceneContext, scenePosition, videoDuration) {
+    if (!finalShot.isLast) {
+      console.warn('[SCENE_CLOSURE_ENGINE] enhanceFinalShot called on non-final shot');
+      return finalShot;
+    }
+
+    const closurePrompt = this.generateClosurePrompt(
+      finalShot,
+      sceneContext,
+      scenePosition,
+      videoDuration
+    );
+
+    // Merge closure with existing prompt
+    const existingPrompt = finalShot.videoPrompt || '';
+
+    // If existing prompt is basic, replace entirely
+    if (existingPrompt.length < 100) {
+      finalShot.videoPrompt = closurePrompt;
+    } else {
+      // Enhance existing prompt with closure elements
+      finalShot.videoPrompt = `${existingPrompt} [SCENE CLOSURE] ${closurePrompt}`;
+    }
+
+    // Add closure metadata
+    finalShot.closureType = this.detectClosureType(sceneContext, scenePosition);
+    finalShot.hasHollywoodClosure = true;
+
+    console.log(`[SCENE_CLOSURE_ENGINE] Enhanced final shot with ${finalShot.closureType} closure`);
+
+    return finalShot;
+  },
+
+  /**
+   * Get a human-readable summary of the closure for UI display
+   */
+  getClosureSummary(closureType) {
+    const summaries = {
+      resolution: 'Scene resolves with emotional release and peace',
+      cliffhanger: 'Scene ends with suspended tension, anticipation for what comes',
+      transition: 'Scene flows naturally toward the next narrative beat',
+      finality: 'Scene concludes with complete, definitive closure',
+      contemplative: 'Scene ends in reflective stillness and inner processing',
+      emotional_peak: 'Scene ends at the height of emotional intensity'
+    };
+    return summaries[closureType] || 'Scene ends with cinematic closure';
+  }
+};
+
+// =============================================================================
+// CROSS_SHOT_INTELLIGENCE - Shot-to-Shot Narrative Continuity
+// =============================================================================
+/**
+ * CROSS_SHOT_INTELLIGENCE
+ *
+ * Ensures shots within a scene connect narratively, emotionally, and visually.
+ * Creates progressive storytelling where each shot builds on the previous.
+ *
+ * Key principles:
+ * 1. STATE PROPAGATION - Previous shot's end informs next shot's start
+ * 2. EMOTIONAL MOMENTUM - Intensity builds progressively across shots
+ * 3. ACTION CONTINUITY - Physical actions flow naturally between shots
+ * 4. VISUAL RHYTHM - Pacing varies to create dynamic viewing experience
+ * 5. NARRATIVE HOOKS - Each shot creates anticipation for the next
+ */
+const CROSS_SHOT_INTELLIGENCE = {
+
+  // =========================================================================
+  // EMOTIONAL INTENSITY CURVES - How emotion builds across shots
+  // =========================================================================
+  intensityCurves: {
+    // Standard dramatic arc
+    dramatic: {
+      name: 'Dramatic Arc',
+      description: 'Classic rising action to climax',
+      getIntensity: (shotIndex, totalShots) => {
+        const progress = shotIndex / (totalShots - 1);
+        // Sigmoid-like curve peaking before the end
+        if (progress < 0.7) {
+          return 0.2 + (progress / 0.7) * 0.7; // 0.2 → 0.9
+        } else {
+          return 0.9 - ((progress - 0.7) / 0.3) * 0.2; // 0.9 → 0.7 (slight resolution)
+        }
+      }
+    },
+    // Building tension
+    tension: {
+      name: 'Rising Tension',
+      description: 'Continuous escalation',
+      getIntensity: (shotIndex, totalShots) => {
+        const progress = shotIndex / (totalShots - 1);
+        return 0.3 + progress * 0.7; // 0.3 → 1.0
+      }
+    },
+    // Contemplative, even pacing
+    contemplative: {
+      name: 'Contemplative',
+      description: 'Even, meditative pacing',
+      getIntensity: (shotIndex, totalShots) => {
+        return 0.4 + Math.sin(shotIndex * 0.5) * 0.15; // Gentle wave around 0.4
+      }
+    },
+    // Action sequence with peaks
+    action: {
+      name: 'Action Peaks',
+      description: 'Multiple intensity peaks',
+      getIntensity: (shotIndex, totalShots) => {
+        const progress = shotIndex / (totalShots - 1);
+        // Multiple peaks
+        const wave = Math.sin(progress * Math.PI * 2) * 0.3;
+        return 0.5 + wave + progress * 0.2;
+      }
+    },
+    // Emotional release pattern
+    emotional: {
+      name: 'Emotional Journey',
+      description: 'Build to emotional release',
+      getIntensity: (shotIndex, totalShots) => {
+        const progress = shotIndex / (totalShots - 1);
+        if (progress < 0.6) {
+          return 0.3 + (progress / 0.6) * 0.6; // Build
+        } else {
+          return 0.9 + Math.sin((progress - 0.6) * Math.PI * 2.5) * 0.1; // Emotional plateau with variation
+        }
+      }
+    }
+  },
+
+  // =========================================================================
+  // TRANSITION PHRASES - How shots connect linguistically
+  // =========================================================================
+  transitionPhrases: {
+    // When previous shot ends with action
+    action_to_action: [
+      'The motion continues as',
+      'Following through from the previous movement,',
+      'The action flows forward as',
+      'Building on the momentum,'
+    ],
+    // When previous shot ends statically
+    static_to_action: [
+      'Breaking from stillness,',
+      'The moment of quiet ends as',
+      'Energy returns as',
+      'From the pause,'
+    ],
+    // When transitioning to slower moment
+    action_to_static: [
+      'The movement settles into',
+      'Motion gives way to stillness as',
+      'The energy calms into',
+      'Settling from the action,'
+    ],
+    // When intensity increases
+    build_intensity: [
+      'Intensity heightens as',
+      'The tension rises further as',
+      'Energy amplifies as',
+      'Building toward the peak,'
+    ],
+    // When intensity decreases
+    release_intensity: [
+      'The intensity begins to release as',
+      'Tension eases slightly as',
+      'The peak passes, giving way to',
+      'Energy softens as'
+    ],
+    // Emotional transitions
+    emotional_shift: [
+      'The emotional landscape shifts as',
+      'Feeling deepens as',
+      'The inner state transforms as',
+      'Emotion evolves as'
+    ]
+  },
+
+  // =========================================================================
+  // MOMENTUM MODIFIERS - Add progressive energy to prompts
+  // =========================================================================
+  momentumModifiers: {
+    building: {
+      low: ['subtle energy emerging', 'first hints of momentum', 'gentle stirring begins'],
+      medium: ['growing intensity', 'building momentum', 'energy accumulating'],
+      high: ['powerful forward motion', 'unstoppable momentum', 'peak energy driving forward']
+    },
+    sustaining: {
+      low: ['maintaining gentle pace', 'steady quiet energy', 'even flow continues'],
+      medium: ['consistent momentum held', 'stable energy maintained', 'rhythm sustained'],
+      high: ['peak intensity sustained', 'maximum energy held', 'climactic power maintained']
+    },
+    releasing: {
+      low: ['energy gently fading', 'soft release beginning', 'quiet settling starts'],
+      medium: ['momentum easing', 'energy finding rest', 'gradual deceleration'],
+      high: ['dramatic release', 'powerful resolution', 'cathartic settling']
+    }
+  },
+
+  // =========================================================================
+  // SHOT STATE TRACKING - Track what connects shots
+  // =========================================================================
+
+  /**
+   * Analyze a shot's end state for continuity
+   * @param {Object} shot - Shot data
+   * @returns {Object} End state analysis
+   */
+  analyzeEndState(shot) {
+    const endState = shot.endState || shot.narrativeBeat?.endState || '';
+    const videoPrompt = shot.videoPrompt || '';
+    const combined = `${endState} ${videoPrompt}`.toLowerCase();
+
+    // Detect motion state
+    const isInMotion = /moving|walking|running|reaching|turning|approaching|stepping/.test(combined);
+    const isStatic = /still|frozen|paused|holding|resting|waiting|standing|sitting/.test(combined);
+
+    // Detect emotional state
+    const emotionalState = this.detectEmotionalState(combined);
+
+    // Detect physical position
+    const position = this.detectPosition(combined);
+
+    // Detect attention/focus
+    const focus = this.detectFocus(combined);
+
+    return {
+      motionState: isInMotion ? 'in_motion' : isStatic ? 'static' : 'transitional',
+      emotionalState,
+      position,
+      focus,
+      rawEndState: endState
+    };
+  },
+
+  /**
+   * Detect emotional state from text
+   */
+  detectEmotionalState(text) {
+    if (/tense|anxious|worried|nervous|stressed/.test(text)) return 'tense';
+    if (/calm|peaceful|serene|relaxed|at ease/.test(text)) return 'calm';
+    if (/happy|joyful|excited|elated|thrilled/.test(text)) return 'joyful';
+    if (/sad|sorrowful|melancholy|grieving|tearful/.test(text)) return 'sad';
+    if (/angry|furious|enraged|frustrated/.test(text)) return 'angry';
+    if (/determined|resolute|focused|driven/.test(text)) return 'determined';
+    if (/curious|intrigued|wondering|questioning/.test(text)) return 'curious';
+    if (/loving|tender|affectionate|warm/.test(text)) return 'loving';
+    return 'neutral';
+  },
+
+  /**
+   * Detect physical position from text
+   */
+  detectPosition(text) {
+    if (/sitting|seated|cross-legged/.test(text)) return 'seated';
+    if (/standing|upright|on feet/.test(text)) return 'standing';
+    if (/lying|prone|supine|horizontal/.test(text)) return 'lying';
+    if (/kneeling|crouching|bent/.test(text)) return 'kneeling';
+    if (/leaning|tilted|angled/.test(text)) return 'leaning';
+    return 'undefined';
+  },
+
+  /**
+   * Detect attention/focus from text
+   */
+  detectFocus(text) {
+    if (/looking at|staring at|watching|gazing at|focused on/.test(text)) {
+      const match = text.match(/(?:looking at|staring at|watching|gazing at|focused on)\s+(\w+)/);
+      return match ? match[1] : 'something';
+    }
+    if (/eyes closed|looking inward|internal/.test(text)) return 'internal';
+    if (/looking away|averting|turned away/.test(text)) return 'away';
+    return 'forward';
+  },
+
+  // =========================================================================
+  // MAIN INTELLIGENCE METHODS
+  // =========================================================================
+
+  /**
+   * Generate continuity context for a shot based on previous shot
+   * @param {Object} currentShot - Current shot data
+   * @param {Object} previousShot - Previous shot data (null for first shot)
+   * @param {number} shotIndex - Current shot index
+   * @param {number} totalShots - Total shots in scene
+   * @param {Object} sceneContext - Overall scene context
+   * @returns {Object} Continuity enhancement data
+   */
+  generateContinuityContext(currentShot, previousShot, shotIndex, totalShots, sceneContext) {
+    const isFirst = shotIndex === 0;
+    const isLast = shotIndex === totalShots - 1;
+
+    // Determine intensity curve based on scene mood
+    const curve = this.selectIntensityCurve(sceneContext);
+    const currentIntensity = curve.getIntensity(shotIndex, totalShots);
+    const previousIntensity = isFirst ? 0.2 : curve.getIntensity(shotIndex - 1, totalShots);
+
+    // Analyze previous shot's end state
+    const previousEndState = previousShot ? this.analyzeEndState(previousShot) : null;
+
+    // Determine momentum direction
+    const momentumDirection = currentIntensity > previousIntensity ? 'building' :
+                              currentIntensity < previousIntensity ? 'releasing' : 'sustaining';
+
+    // Get intensity level (low/medium/high)
+    const intensityLevel = currentIntensity < 0.4 ? 'low' :
+                          currentIntensity < 0.7 ? 'medium' : 'high';
+
+    // Generate transition phrase
+    const transitionPhrase = this.generateTransitionPhrase(
+      previousEndState,
+      momentumDirection,
+      isFirst
+    );
+
+    // Generate momentum modifier
+    const momentumModifier = this.momentumModifiers[momentumDirection][intensityLevel]
+      [Math.floor(Math.random() * 3)];
+
+    // Generate "from previous" context
+    const fromPreviousContext = previousShot ? this.generateFromPreviousContext(previousEndState) : null;
+
+    // Generate anticipation for next shot (if not last)
+    const anticipationHook = !isLast ? this.generateAnticipationHook(currentShot, shotIndex, totalShots) : null;
+
+    return {
+      shotIndex,
+      isFirst,
+      isLast,
+      intensity: currentIntensity,
+      intensityLevel,
+      momentumDirection,
+      transitionPhrase,
+      momentumModifier,
+      fromPreviousContext,
+      anticipationHook,
+      previousEndState: previousEndState?.rawEndState || null,
+      narrativePosition: this.getNarrativePosition(shotIndex, totalShots)
+    };
+  },
+
+  /**
+   * Select appropriate intensity curve based on scene context
+   */
+  selectIntensityCurve(sceneContext) {
+    const combined = `${sceneContext?.visualPrompt || ''} ${sceneContext?.narration || ''} ${sceneContext?.sceneAction || ''}`.toLowerCase();
+
+    if (/fight|battle|chase|action|explosive/.test(combined)) {
+      return this.intensityCurves.action;
+    }
+    if (/meditat|contemplat|reflect|peace|calm|quiet/.test(combined)) {
+      return this.intensityCurves.contemplative;
+    }
+    if (/emotion|tear|love|grief|joy|sorrow/.test(combined)) {
+      return this.intensityCurves.emotional;
+    }
+    if (/tense|suspens|thriller|danger|threat/.test(combined)) {
+      return this.intensityCurves.tension;
+    }
+    return this.intensityCurves.dramatic;
+  },
+
+  /**
+   * Generate transition phrase based on previous state
+   */
+  generateTransitionPhrase(previousEndState, momentumDirection, isFirst) {
+    if (isFirst) {
+      return 'Opening the scene,';
+    }
+
+    const prevMotion = previousEndState?.motionState || 'transitional';
+
+    // Select phrase category
+    let category;
+    if (momentumDirection === 'building') {
+      category = 'build_intensity';
+    } else if (momentumDirection === 'releasing') {
+      category = 'release_intensity';
+    } else if (prevMotion === 'in_motion') {
+      category = 'action_to_action';
+    } else if (prevMotion === 'static') {
+      category = 'static_to_action';
+    } else {
+      category = 'emotional_shift';
+    }
+
+    const phrases = this.transitionPhrases[category];
+    return phrases[Math.floor(Math.random() * phrases.length)];
+  },
+
+  /**
+   * Generate context from previous shot's end state
+   */
+  generateFromPreviousContext(previousEndState) {
+    if (!previousEndState) return null;
+
+    const parts = [];
+
+    // Position continuity
+    if (previousEndState.position !== 'undefined') {
+      parts.push(`continuing from ${previousEndState.position} position`);
+    }
+
+    // Emotional continuity
+    if (previousEndState.emotionalState !== 'neutral') {
+      parts.push(`carrying the ${previousEndState.emotionalState} energy`);
+    }
+
+    // Motion continuity
+    if (previousEndState.motionState === 'in_motion') {
+      parts.push('momentum carrying forward');
+    }
+
+    // Focus continuity
+    if (previousEndState.focus && previousEndState.focus !== 'forward') {
+      parts.push(`attention still ${previousEndState.focus}`);
+    }
+
+    return parts.length > 0 ? parts.join(', ') : null;
+  },
+
+  /**
+   * Generate anticipation hook for next shot
+   */
+  generateAnticipationHook(currentShot, shotIndex, totalShots) {
+    const progress = shotIndex / (totalShots - 1);
+
+    if (progress < 0.3) {
+      return 'building toward what comes next';
+    } else if (progress < 0.6) {
+      return 'setting up the approaching climax';
+    } else if (progress < 0.85) {
+      return 'tension peaks, preparing for resolution';
+    } else {
+      return 'final moments before closure';
+    }
+  },
+
+  /**
+   * Get narrative position description
+   */
+  getNarrativePosition(shotIndex, totalShots) {
+    const progress = shotIndex / (totalShots - 1);
+
+    if (progress === 0) return 'opening';
+    if (progress < 0.25) return 'early_development';
+    if (progress < 0.5) return 'rising_action';
+    if (progress < 0.75) return 'approaching_peak';
+    if (progress < 0.95) return 'peak_to_resolution';
+    return 'closing';
+  },
+
+  // =========================================================================
+  // PROMPT ENHANCEMENT - Apply intelligence to video prompts
+  // =========================================================================
+
+  /**
+   * Enhance a shot's video prompt with cross-shot intelligence
+   * @param {Object} shot - Shot to enhance
+   * @param {Object} continuityContext - Context from generateContinuityContext
+   * @returns {string} Enhanced video prompt
+   */
+  enhancePromptWithContinuity(shot, continuityContext) {
+    const existingPrompt = shot.videoPrompt || '';
+    const parts = [];
+
+    // 1. Add transition phrase (if not first)
+    if (!continuityContext.isFirst) {
+      parts.push(continuityContext.transitionPhrase);
+    }
+
+    // 2. Add "from previous" context if available
+    if (continuityContext.fromPreviousContext) {
+      parts.push(`[From previous: ${continuityContext.fromPreviousContext}]`);
+    }
+
+    // 3. Add the existing prompt content
+    parts.push(existingPrompt);
+
+    // 4. Add momentum modifier
+    parts.push(`[Momentum: ${continuityContext.momentumModifier}]`);
+
+    // 5. Add intensity marker
+    const intensityPercent = Math.round(continuityContext.intensity * 100);
+    parts.push(`[Intensity: ${intensityPercent}%]`);
+
+    // 6. Add narrative position context
+    parts.push(`[Position: ${continuityContext.narrativePosition.replace(/_/g, ' ')}]`);
+
+    // 7. Add anticipation hook if not last
+    if (continuityContext.anticipationHook) {
+      parts.push(`[Narrative: ${continuityContext.anticipationHook}]`);
+    }
+
+    return parts.join(' ');
+  },
+
+  // =========================================================================
+  // BATCH PROCESSING - Process all shots in a scene
+  // =========================================================================
+
+  /**
+   * Process all shots in a scene with cross-shot intelligence
+   * @param {Array} shots - Array of shots
+   * @param {Object} sceneContext - Scene context
+   * @returns {Array} Enhanced shots with continuity
+   */
+  processSceneShots(shots, sceneContext) {
+    if (!shots || shots.length === 0) return shots;
+
+    const totalShots = shots.length;
+    const enhancedShots = [];
+
+    for (let i = 0; i < totalShots; i++) {
+      const currentShot = { ...shots[i] };
+      const previousShot = i > 0 ? enhancedShots[i - 1] : null;
+
+      // Generate continuity context
+      const continuityContext = this.generateContinuityContext(
+        currentShot,
+        previousShot,
+        i,
+        totalShots,
+        sceneContext
+      );
+
+      // Enhance the prompt
+      currentShot.videoPrompt = this.enhancePromptWithContinuity(currentShot, continuityContext);
+
+      // Add continuity metadata to shot
+      currentShot.crossShotIntelligence = {
+        intensity: continuityContext.intensity,
+        intensityLevel: continuityContext.intensityLevel,
+        momentumDirection: continuityContext.momentumDirection,
+        narrativePosition: continuityContext.narrativePosition,
+        fromPrevious: continuityContext.fromPreviousContext,
+        toNext: continuityContext.anticipationHook
+      };
+
+      enhancedShots.push(currentShot);
+    }
+
+    console.log(`[CROSS_SHOT_INTELLIGENCE] Processed ${totalShots} shots with narrative continuity`);
+
+    return enhancedShots;
+  },
+
+  /**
+   * Get a human-readable summary of the narrative flow
+   */
+  getNarrativeFlowSummary(shots) {
+    if (!shots || shots.length === 0) return 'No shots to analyze';
+
+    const positions = shots.map(s => s.crossShotIntelligence?.narrativePosition || 'unknown');
+    const momentums = shots.map(s => s.crossShotIntelligence?.momentumDirection || 'sustaining');
+
+    const buildingCount = momentums.filter(m => m === 'building').length;
+    const sustainingCount = momentums.filter(m => m === 'sustaining').length;
+    const releasingCount = momentums.filter(m => m === 'releasing').length;
+
+    let arcType = 'balanced';
+    if (buildingCount > releasingCount * 1.5) arcType = 'rising action dominant';
+    else if (releasingCount > buildingCount * 1.5) arcType = 'resolution dominant';
+    else if (sustainingCount > buildingCount + releasingCount) arcType = 'sustained intensity';
+
+    return `Narrative arc: ${arcType}. Flow: ${positions.join(' → ')}`;
+  }
+};
+
+// =============================================================================
 // NARRATIVE_BEAT_GENERATOR - Legacy compatibility wrapper
 // =============================================================================
 /**
@@ -43156,10 +44756,100 @@ exports.creationWizardDecomposeSceneToShots = functions
       environmentKey: extractedElements.environment
     };
 
+    // STEP 5.5: ENHANCED VIDEO PROMPTS for 10-second videos
+    // Use ENHANCED_VIDEO_PROMPT_BUILDER for motion-dense, temporally-progressive prompts
+    const is10SecondVideo = clipDuration >= 10;
+    if (is10SecondVideo) {
+      console.log(`[creationWizardDecomposeSceneToShots] Enhancing video prompts for 10-second clips using ENHANCED_VIDEO_PROMPT_BUILDER`);
+
+      const sceneContext = {
+        visualPrompt: sceneDescription,
+        narration: narration,
+        styleBible: styleBible
+      };
+
+      shotsWithPrompts.forEach((shot, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === shotsWithPrompts.length - 1;
+
+        const shotData = {
+          ...shot,
+          isFirst,
+          isLast,
+          actionText: shot.narrativeBeat?.action || shot.videoPrompt,
+          arcPosition: isFirst ? 'establish' : isLast ? 'resolve' :
+                       idx < shotsWithPrompts.length / 3 ? 'develop' :
+                       idx < (shotsWithPrompts.length * 2) / 3 ? 'build' : 'peak'
+        };
+
+        // Generate enhanced motion-dense prompt
+        const enhancedPrompt = ENHANCED_VIDEO_PROMPT_BUILDER.generateEnhancedPrompt(
+          shotData,
+          sceneContext,
+          clipDuration
+        );
+
+        // Update the shot's video prompt
+        shot.videoPrompt = enhancedPrompt;
+
+        console.log(`[creationWizardDecomposeSceneToShots] Shot ${idx + 1} enhanced prompt (${enhancedPrompt.length} chars): ${enhancedPrompt.substring(0, 100)}...`);
+      });
+    }
+
+    // STEP 5.6: HOLLYWOOD SCENE CLOSURE for final shot
+    // Use SCENE_CLOSURE_ENGINE to ensure meaningful narrative resolution
+    if (shotsWithPrompts.length > 0) {
+      const finalShotIndex = shotsWithPrompts.length - 1;
+      const finalShot = shotsWithPrompts[finalShotIndex];
+
+      // Build scene context for closure detection
+      const closureSceneContext = {
+        visualPrompt: sceneDescription,
+        narration: narration,
+        sceneAction: sceneActionData.sceneAction || ''
+      };
+
+      // Build scene position info
+      const scenePosition = {
+        sceneIndex: sceneIndex || 0,
+        totalScenes: totalScenes || 1
+      };
+
+      // Mark the shot as final
+      finalShot.isLast = true;
+
+      // Apply Hollywood closure enhancement
+      SCENE_CLOSURE_ENGINE.enhanceFinalShot(
+        finalShot,
+        closureSceneContext,
+        scenePosition,
+        clipDuration
+      );
+
+      console.log(`[creationWizardDecomposeSceneToShots] Applied ${finalShot.closureType || 'default'} closure to final shot`);
+    }
+
+    // STEP 5.7: CROSS-SHOT INTELLIGENCE - Connect shots narratively
+    // Use CROSS_SHOT_INTELLIGENCE to ensure shots build progressively
+    const crossShotSceneContext = {
+      visualPrompt: sceneDescription,
+      narration: narration,
+      sceneAction: sceneActionData.sceneAction || ''
+    };
+
+    const intelligentShots = CROSS_SHOT_INTELLIGENCE.processSceneShots(
+      shotsWithPrompts,
+      crossShotSceneContext
+    );
+
+    // Get narrative flow summary for logging
+    const narrativeFlow = CROSS_SHOT_INTELLIGENCE.getNarrativeFlowSummary(intelligentShots);
+    console.log(`[creationWizardDecomposeSceneToShots] ${narrativeFlow}`);
+
     // STEP 6: Normalize shots with all required fields
-    // Includes imagePrompt, videoPrompt, narrativeBeat, and captureSuggestion
-    const normalizedShots = shotsWithPrompts.map((shot, idx) => {
-      const isLast = idx === shotsWithPrompts.length - 1;
+    // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, and crossShotIntelligence
+    const normalizedShots = intelligentShots.map((shot, idx) => {
+      const isLast = idx === intelligentShots.length - 1;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
       return {
@@ -43187,6 +44877,16 @@ exports.creationWizardDecomposeSceneToShots = functions
           timingSeconds: { start: clipDuration - 2, end: clipDuration, recommended: clipDuration - 1 },
           stabilityColor: '#3b82f6'
         }),
+        // NEW: Hollywood scene closure (Phase 3)
+        closureType: isLast ? (shot.closureType || null) : null,
+        hasHollywoodClosure: isLast ? (shot.hasHollywoodClosure || false) : false,
+        closureSummary: isLast && shot.closureType ?
+          SCENE_CLOSURE_ENGINE.getClosureSummary(shot.closureType) : null,
+        // NEW: Cross-shot narrative intelligence (Phase 4)
+        crossShotIntelligence: shot.crossShotIntelligence || null,
+        intensity: shot.crossShotIntelligence?.intensity || null,
+        momentumDirection: shot.crossShotIntelligence?.momentumDirection || null,
+        narrativePosition: shot.crossShotIntelligence?.narrativePosition || null,
         // Generation status
         imageUrl: null,
         videoUrl: null,
@@ -44689,7 +46389,8 @@ exports.creationWizardBatchGenerateShotImages = functions
     decomposedScenes,   // Array of { sceneId, shots: [...] }
     model,              // Image model
     aspectRatio,
-    characterReference, // Optional character reference
+    characterReference, // Optional character reference image (base64) for face consistency
+    characterBible,     // Optional character bible with names/descriptions for prompt building
     globalVisualProfile // From batch decomposition
   } = data;
 
@@ -44705,6 +46406,10 @@ exports.creationWizardBatchGenerateShotImages = functions
   const ai = new GoogleGenAI({ apiKey: geminiApiKey });
   const storage = admin.storage().bucket();
   const timestamp = Date.now();
+
+  // Log character consistency parameters
+  console.log(`[creationWizardBatchGenerateShotImages] Character Reference: ${characterReference?.base64 ? 'YES (base64 present)' : 'NO'}`);
+  console.log(`[creationWizardBatchGenerateShotImages] Character Bible: ${characterBible?.enabled ? `${characterBible.characters?.length || 0} characters` : 'disabled'}`);
 
   // Flatten all shots
   const allShots = [];
@@ -44751,6 +46456,8 @@ exports.creationWizardBatchGenerateShotImages = functions
       } : null;
 
       // Build the enhanced narrative prompt using NANOBANANA_PROMPT_BUILDER
+      // Pass characterBible for character descriptions in prompts (names, attire, physical features)
+      // Character reference image (base64) is passed separately to Gemini for face consistency
       let enhancedPrompt = NANOBANANA_PROMPT_BUILDER.buildShotPrompt(
         {
           shotType: shot.shotType || 'medium',
@@ -44759,7 +46466,7 @@ exports.creationWizardBatchGenerateShotImages = functions
           mood: promptContext.mood
         },
         promptContext,
-        null, // Character bible handled via reference image
+        characterBible, // Pass character bible for descriptions in prompt
         batchStyleBible
       );
 
@@ -44770,10 +46477,11 @@ exports.creationWizardBatchGenerateShotImages = functions
 
       console.log(`[creationWizardBatchGenerateShotImages] Shot ${i + 1}/${allShots.length} prompt (first 200 chars): ${enhancedPrompt.substring(0, 200)}...`);
 
-      // Build content parts
+      // Build content parts for Gemini API
       const contentParts = [];
 
-      // Add character reference if available
+      // Add character reference image FIRST if available (for face/appearance consistency)
+      // Gemini will use this as a visual reference when generating the new image
       if (characterReference?.base64) {
         contentParts.push({
           inlineData: {
@@ -44781,13 +46489,23 @@ exports.creationWizardBatchGenerateShotImages = functions
             data: characterReference.base64
           }
         });
+        // Add instruction to use the reference
+        contentParts.push({
+          text: `REFERENCE IMAGE ABOVE: Use this character's face, features, and appearance as reference for the main character in the generated image. Maintain facial consistency.\n\n`
+        });
+        console.log(`[creationWizardBatchGenerateShotImages] Added character reference image for face consistency`);
       }
+
+      // Add the main prompt text
+      contentParts.push({
+        text: enhancedPrompt
+      });
 
       // Generate image - Use correct NanoBanana models
       const geminiModelId = model === 'nanobanana' ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
 
       console.log(`[creationWizardBatchGenerateShotImages] Generating shot ${i + 1}/${allShots.length} (Scene ${shot.sceneId}, Shot ${shot.shotIndex})`);
-      console.log(`[creationWizardBatchGenerateShotImages] Using model: ${geminiModelId}, aspect ratio: 16:9`);
+      console.log(`[creationWizardBatchGenerateShotImages] Using model: ${geminiModelId}, aspect ratio: 16:9, parts: ${contentParts.length}`);
 
       const result = await ai.models.generateContent({
         model: geminiModelId,
