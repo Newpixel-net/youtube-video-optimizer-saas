@@ -40799,10 +40799,12 @@ const NARRATIVE_BEAT_GENERATOR = {
    * @param {object} beat - The beat object for this shot
    * @param {object} shotType - Shot type info (wide, closeup, etc.)
    * @param {object} styleBible - Style settings
+   * @param {string} fallbackPrompt - Fallback visual prompt if no action data
    * @returns {string} Video prompt focused on ACTION and MOTION
    */
-  buildVideoPrompt(beat, shotType, styleBible) {
+  buildVideoPrompt(beat, shotType, styleBible, fallbackPrompt = '') {
     const parts = [];
+    let hasActionContent = false;
 
     // 1. Camera movement (always first for video)
     if (beat.cameraMotion?.movement && beat.cameraMotion.movement !== 'static') {
@@ -40812,9 +40814,11 @@ const NARRATIVE_BEAT_GENERATOR = {
     // 2. Character ACTION (the core - what's happening)
     if (beat.characterMotion?.motionDescription) {
       parts.push(beat.characterMotion.motionDescription);
+      hasActionContent = true;
     } else if (beat.characterMotion?.action) {
       const who = beat.characterMotion.who ? `${beat.characterMotion.who} ` : '';
       parts.push(`${who}${beat.characterMotion.action}`);
+      hasActionContent = true;
     }
 
     // 3. Start → End state (the progression)
@@ -40825,28 +40829,100 @@ const NARRATIVE_BEAT_GENERATOR = {
     // 4. Environment motion (secondary)
     if (beat.environmentMotion?.length > 0) {
       parts.push(`Environment: ${beat.environmentMotion.join(', ')}`);
+      hasActionContent = true;
     }
 
-    // 5. Mood/tone from narration
+    // 5. FALLBACK: If no action content, extract motion from visual prompt
+    // This ensures we always have SOMETHING for the video to animate
+    if (!hasActionContent && fallbackPrompt) {
+      // Extract verbs and motion-related words from the visual prompt
+      const motionHints = this.extractMotionFromVisual(fallbackPrompt);
+      if (motionHints) {
+        parts.push(motionHints);
+      } else {
+        // Ultimate fallback - generic subtle motion
+        parts.push('Subtle movement, gentle animation of the scene elements');
+      }
+    }
+
+    // 6. Mood/tone from narration
     if (beat.narrativeContext?.mood && beat.narrativeContext.mood !== 'neutral') {
       parts.push(`Mood: ${beat.narrativeContext.mood}`);
     }
 
-    // 6. Transition hook (what leads to next shot)
-    if (beat.nextShotHook && !beat.isLast) {
+    // 7. Transition hook (what leads to next shot) - only if we have real action
+    if (beat.nextShotHook && !beat.isLast && hasActionContent) {
       parts.push(`Leading into: ${beat.nextShotHook}`);
     }
 
-    // 7. Style bible motion quality (only motion-relevant parts)
+    // 8. Style bible motion quality (only motion-relevant parts)
     if (styleBible?.enabled) {
       if (styleBible.motionStyle) parts.push(styleBible.motionStyle);
       if (styleBible.pacing) parts.push(`Pacing: ${styleBible.pacing}`);
     }
 
-    // 8. Technical quality for video
+    // 9. Technical quality for video
     parts.push('Smooth motion, cinematic quality, natural movement');
 
     return parts.filter(p => p).join('. ').trim();
+  },
+
+  /**
+   * Extract motion hints from a visual prompt when no action data exists
+   * Looks for verbs, movement words, and generates appropriate animation direction
+   */
+  extractMotionFromVisual(visualPrompt) {
+    if (!visualPrompt) return null;
+
+    const prompt = visualPrompt.toLowerCase();
+
+    // Motion verbs that indicate action
+    const motionVerbs = [
+      { pattern: /\b(walk|walking|walks)\b/, motion: 'walking movement' },
+      { pattern: /\b(run|running|runs)\b/, motion: 'running movement' },
+      { pattern: /\b(stand|standing|stands)\b/, motion: 'subtle standing motion, slight sway' },
+      { pattern: /\b(sit|sitting|sits)\b/, motion: 'subtle seated movement, breathing' },
+      { pattern: /\b(look|looking|looks|gaze|gazing)\b/, motion: 'eyes scanning, head turns slightly' },
+      { pattern: /\b(turn|turning|turns)\b/, motion: 'turning movement' },
+      { pattern: /\b(fly|flying|flies)\b/, motion: 'flying movement through air' },
+      { pattern: /\b(float|floating|floats)\b/, motion: 'gentle floating motion' },
+      { pattern: /\b(fall|falling|falls)\b/, motion: 'falling movement' },
+      { pattern: /\b(rise|rising|rises)\b/, motion: 'rising upward movement' },
+      { pattern: /\b(move|moving|moves)\b/, motion: 'movement through the scene' },
+      { pattern: /\b(dance|dancing|dances)\b/, motion: 'dancing movement' },
+      { pattern: /\b(fight|fighting|fights)\b/, motion: 'combat movement' },
+      { pattern: /\b(drive|driving|drives)\b/, motion: 'driving movement' }
+    ];
+
+    // Check for motion verbs
+    for (const { pattern, motion } of motionVerbs) {
+      if (pattern.test(prompt)) {
+        return `Character ${motion}`;
+      }
+    }
+
+    // Environment motion hints
+    const envMotion = [];
+    if (/wind|breeze|blow/.test(prompt)) envMotion.push('wind blowing');
+    if (/rain|storm|thunder/.test(prompt)) envMotion.push('rain falling');
+    if (/cloud|sky/.test(prompt)) envMotion.push('clouds drifting');
+    if (/water|wave|ocean|sea|river/.test(prompt)) envMotion.push('water moving');
+    if (/fire|flame|torch/.test(prompt)) envMotion.push('flames flickering');
+    if (/light|glow|neon|led/.test(prompt)) envMotion.push('lights pulsing subtly');
+    if (/city|urban|street|traffic/.test(prompt)) envMotion.push('city life ambient movement');
+    if (/forest|tree|leaf/.test(prompt)) envMotion.push('leaves rustling gently');
+
+    if (envMotion.length > 0) {
+      return `Scene animation: ${envMotion.join(', ')}`;
+    }
+
+    // If character is mentioned, add subtle character animation
+    if (/character|person|man|woman|figure|he |she |they /.test(prompt)) {
+      return 'Character subtle animation: breathing, slight movements, natural idle motion';
+    }
+
+    // Default for any scene - subtle ambient motion
+    return 'Ambient scene motion, subtle environmental animation';
   }
 };
 
@@ -41231,8 +41307,9 @@ const SHOT_DECOMPOSITION_ENGINE = {
       // VIDEO PROMPT (for Minimax - ACTION focused)
       // Focus: What MOVES, what CHANGES, what HAPPENS
       // NO character appearance details - S2V-01 uses subject_reference
+      // Pass scenePrompt as fallback in case no action data exists
       // ========================================
-      const videoPrompt = NARRATIVE_BEAT_GENERATOR.buildVideoPrompt(beat, shot, styleBible);
+      const videoPrompt = NARRATIVE_BEAT_GENERATOR.buildVideoPrompt(beat, shot, styleBible, scenePrompt);
 
       // ========================================
       // Legacy prompt (combined, for backward compatibility)
