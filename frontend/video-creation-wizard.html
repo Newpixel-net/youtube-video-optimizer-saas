@@ -3762,11 +3762,27 @@
                     characters: []          // Array of { id, name, description, referenceImageUrl, referenceImageStatus, appliedToScenes[] }
                 },
                 // Location Bible - Ensures location consistency across scenes
-                // Locations maintain their visual identity with state changes (time, weather, condition)
+                // Locations maintain their visual identity with reference images for consistent backgrounds
                 locationBible: {
                     enabled: false,         // Toggle to enable/disable location bible
-                    locations: [],          // Array of { id, name, description, keyElements[], colorPalette, atmosphere, scenesUsed[] }
-                    autoPopulated: false    // Whether locations were auto-extracted from script
+                    locations: [],          // Array of location objects (see below for structure)
+                    // Location object: {
+                    //   id: 'loc-{timestamp}',
+                    //   name: 'Location name',
+                    //   description: 'Full visual description',
+                    //   type: 'exterior' | 'interior' | 'abstract',
+                    //   timeOfDay: 'day' | 'night' | 'dawn' | 'dusk' | 'golden-hour',
+                    //   weather: 'clear' | 'cloudy' | 'rainy' | 'foggy' | 'stormy',
+                    //   mood: 'tense' | 'peaceful' | 'mysterious' | 'energetic',
+                    //   referenceImageUrl: null,
+                    //   referenceImageBase64: null,
+                    //   referenceImageStatus: 'none' | 'generating' | 'ready' | 'error',
+                    //   referenceImageMimeType: 'image/png',
+                    //   lightingStyle: 'description of lighting',
+                    //   keyElements: ['element1', 'element2'],
+                    //   appliedToScenes: [] // Empty = all scenes
+                    // }
+                    autoDetected: false     // Whether locations were auto-extracted from script
                 },
                 technicalSpecs: {
                     enabled: true,          // Usually enabled by default
@@ -3776,7 +3792,10 @@
                 // Scene Memory UI state
                 showStyleBibleModal: false,
                 showCharacterBibleModal: false,
+                showLocationBibleModal: false,
                 editingCharacterId: null,   // Currently editing character ID
+                editingLocationId: null,    // Currently editing location ID
+                generatingLocationRefId: null, // Location ID currently generating reference
                 generatingPortraitCharId: null, // Character ID currently generating portrait
                 // Edit with AI state
                 editingScene: null,     // Scene ID being edited
@@ -5711,6 +5730,594 @@
 
             console.warn('[getCharacterReferenceForScene] No character with base64 portrait found!');
             return null;
+        }
+
+        // ==========================================
+        // LOCATION BIBLE MANAGEMENT
+        // Ensures location consistency across all scenes with reference images
+        // ==========================================
+
+        function toggleLocationBible(enabled) {
+            initSceneMemory();
+            state.storyboard.locationBible.enabled = enabled;
+            render();
+            scheduleAutoSave();
+            showToast(enabled ? 'Location Bible enabled' : 'Location Bible disabled', 'info');
+        }
+
+        function openLocationBibleModal() {
+            initSceneMemory();
+            state.storyboard.showLocationBibleModal = true;
+            state.storyboard.editingLocationId = null;
+            render();
+        }
+
+        function closeLocationBibleModal() {
+            state.storyboard.showLocationBibleModal = false;
+            state.storyboard.editingLocationId = null;
+            render();
+        }
+
+        function addLocation() {
+            initSceneMemory();
+            const newLocation = {
+                id: 'loc-' + Date.now(),
+                name: 'New Location',
+                description: '',
+                type: 'exterior',           // exterior | interior | abstract
+                timeOfDay: 'day',           // day | night | dawn | dusk | golden-hour
+                weather: 'clear',           // clear | cloudy | rainy | foggy | stormy
+                mood: 'neutral',            // tense | peaceful | mysterious | energetic | neutral
+                referenceImageUrl: null,
+                referenceImageBase64: null,
+                referenceImageStatus: 'none', // none | generating | ready | error
+                referenceImageMimeType: 'image/png',
+                lightingStyle: '',
+                keyElements: [],
+                appliedToScenes: []         // Empty = all scenes
+            };
+            state.storyboard.locationBible.locations.push(newLocation);
+            state.storyboard.editingLocationId = newLocation.id;
+            render();
+            scheduleAutoSave();
+        }
+
+        function editLocation(locationId) {
+            state.storyboard.editingLocationId = locationId;
+            render();
+        }
+
+        function updateLocation(locationId, field, value) {
+            const location = state.storyboard.locationBible.locations.find(l => l.id === locationId);
+            if (location) {
+                location[field] = value;
+                scheduleAutoSave();
+            }
+        }
+
+        function deleteLocation(locationId) {
+            state.storyboard.locationBible.locations =
+                state.storyboard.locationBible.locations.filter(l => l.id !== locationId);
+            if (state.storyboard.editingLocationId === locationId) {
+                state.storyboard.editingLocationId = null;
+            }
+            render();
+            scheduleAutoSave();
+            showToast('Location deleted', 'info');
+        }
+
+        function toggleLocationInScene(locationId, sceneId) {
+            const location = state.storyboard.locationBible.locations.find(l => l.id === locationId);
+            if (location) {
+                if (!location.appliedToScenes) {
+                    location.appliedToScenes = [];
+                }
+                const idx = location.appliedToScenes.indexOf(sceneId);
+                if (idx >= 0) {
+                    location.appliedToScenes.splice(idx, 1);
+                } else {
+                    location.appliedToScenes.push(sceneId);
+                }
+                render();
+                scheduleAutoSave();
+            }
+        }
+
+        function applyLocationToAllScenes(locationId) {
+            const location = state.storyboard.locationBible.locations.find(l => l.id === locationId);
+            if (location) {
+                location.appliedToScenes = []; // Empty means all scenes
+                render();
+                scheduleAutoSave();
+                showToast(`${location.name} applied to all scenes`, 'success');
+            }
+        }
+
+        // Build optimized prompt for location reference image generation
+        function buildLocationPrompt(location) {
+            const parts = [];
+
+            // Core environment
+            const typeLabel = location.type === 'exterior' ? 'EXTERIOR' :
+                              location.type === 'interior' ? 'INTERIOR' : 'ABSTRACT';
+            parts.push(`EMPTY ${typeLabel} ENVIRONMENT:`);
+
+            if (location.description) {
+                parts.push(location.description);
+            } else {
+                parts.push(location.name);
+            }
+
+            // Time and conditions
+            const timeMap = {
+                'day': 'bright daylight, midday sun',
+                'night': 'nighttime, moonlight and artificial lights',
+                'dawn': 'early dawn, soft pink and orange sky',
+                'dusk': 'dusk, golden sunset colors',
+                'golden-hour': 'golden hour, warm directional sunlight'
+            };
+            parts.push(`TIME: ${timeMap[location.timeOfDay] || 'natural lighting'}`);
+
+            const weatherMap = {
+                'clear': 'clear skies',
+                'cloudy': 'overcast, diffused light',
+                'rainy': 'rain, wet surfaces, reflections',
+                'foggy': 'fog, atmospheric haze, limited visibility',
+                'stormy': 'storm, dramatic clouds, moody lighting'
+            };
+            if (location.weather && location.weather !== 'clear') {
+                parts.push(`WEATHER: ${weatherMap[location.weather]}`);
+            }
+
+            // Mood affects lighting
+            const moodMap = {
+                'tense': 'high contrast, dramatic shadows',
+                'peaceful': 'soft, even lighting, serene',
+                'mysterious': 'shadows, pools of light, intrigue',
+                'energetic': 'vibrant, dynamic lighting',
+                'neutral': 'balanced, natural lighting'
+            };
+            parts.push(`MOOD: ${moodMap[location.mood] || 'atmospheric'}`);
+
+            // Custom lighting if specified
+            if (location.lightingStyle) {
+                parts.push(`LIGHTING STYLE: ${location.lightingStyle}`);
+            }
+
+            // Key elements
+            if (location.keyElements && location.keyElements.length > 0) {
+                parts.push(`KEY ELEMENTS: ${location.keyElements.join(', ')}`);
+            }
+
+            // Critical - no people
+            parts.push('');
+            parts.push('CRITICAL: NO PEOPLE, NO CHARACTERS, NO FIGURES, NO HUMAN SILHOUETTES.');
+            parts.push('Generate an EMPTY environment suitable for character compositing.');
+
+            // Technical quality
+            parts.push('');
+            parts.push('TECHNICAL: Photorealistic, cinematic composition, 8K detail, professional cinematography.');
+            parts.push('Shot on Arri Alexa Mini LF, anamorphic lens, subtle film grain, HDR range.');
+            parts.push('16:9 aspect ratio, wide establishing shot showing full environment.');
+
+            return parts.join('\n');
+        }
+
+        // Generate location reference image using NanoBananaPro
+        async function generateLocationReference(locationId) {
+            const location = state.storyboard.locationBible.locations.find(l => l.id === locationId);
+            if (!location) {
+                showToast('Location not found', 'error');
+                return;
+            }
+
+            // Check if description is sufficient
+            if (!location.description && location.name === 'New Location') {
+                showToast('Please add a name or description first', 'error');
+                return;
+            }
+
+            location.referenceImageStatus = 'generating';
+            state.storyboard.generatingLocationRefId = locationId;
+            render();
+
+            try {
+                // Build optimized location prompt
+                const prompt = buildLocationPrompt(location);
+                console.log('[Location Bible] Generating reference for:', location.name);
+                console.log('[Location Bible] Prompt:', prompt);
+
+                // Generate using NanoBananaPro (no character reference - pure environment)
+                const generateFn = functions.httpsCallable('generateCreativeImage', { timeout: 120000 });
+                const result = await generateFn({
+                    prompt: prompt,
+                    model: 'nanobanana-pro',
+                    quantity: 1,
+                    aspectRatio: '16:9',
+                    quality: 'hd',
+                    negativePrompt: 'people, humans, figures, silhouettes, characters, person, man, woman, child, crowd, faces, bodies, hands, feet, blurry, low quality, watermark, text'
+                });
+
+                if (result.data.success && result.data.images && result.data.images.length > 0) {
+                    const imageUrl = result.data.images[0].url;
+                    location.referenceImageUrl = imageUrl;
+
+                    // Fetch and convert to base64 for API usage
+                    const base64 = await fetchImageAsBase64(imageUrl);
+                    location.referenceImageBase64 = base64;
+                    location.referenceImageStatus = 'ready';
+
+                    showToast(`${location.name} reference generated!`, 'success');
+                    console.log('[Location Bible] Reference generated:', imageUrl);
+                } else {
+                    throw new Error(result.data.error || 'No image generated');
+                }
+
+            } catch (error) {
+                console.error('[Location Bible] Generation error:', error);
+                location.referenceImageStatus = 'error';
+                showToast(`Failed to generate: ${error.message}`, 'error');
+            } finally {
+                state.storyboard.generatingLocationRefId = null;
+                render();
+                scheduleAutoSave();
+            }
+        }
+
+        // Upload custom location reference image
+        async function uploadLocationReference(locationId) {
+            const location = state.storyboard.locationBible.locations.find(l => l.id === locationId);
+            if (!location) return;
+
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Validate file size (max 10MB)
+                if (file.size > 10 * 1024 * 1024) {
+                    showToast('Image too large (max 10MB)', 'error');
+                    return;
+                }
+
+                location.referenceImageStatus = 'generating';
+                render();
+
+                try {
+                    // Read as base64
+                    const reader = new FileReader();
+                    reader.onload = async (event) => {
+                        const dataUrl = event.target.result;
+
+                        // Extract base64 and mime type
+                        const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+                        if (!matches) {
+                            throw new Error('Invalid image format');
+                        }
+
+                        location.referenceImageMimeType = matches[1];
+                        location.referenceImageBase64 = matches[2];
+                        location.referenceImageUrl = dataUrl; // Use data URL for display
+                        location.referenceImageStatus = 'ready';
+
+                        render();
+                        scheduleAutoSave();
+                        showToast('Location image uploaded!', 'success');
+                    };
+                    reader.onerror = () => {
+                        throw new Error('Failed to read file');
+                    };
+                    reader.readAsDataURL(file);
+
+                } catch (error) {
+                    console.error('[Location Bible] Upload error:', error);
+                    location.referenceImageStatus = 'error';
+                    showToast(`Upload failed: ${error.message}`, 'error');
+                    render();
+                }
+            };
+            input.click();
+        }
+
+        function removeLocationReference(locationId) {
+            const location = state.storyboard.locationBible.locations.find(l => l.id === locationId);
+            if (!location) return;
+
+            location.referenceImageUrl = null;
+            location.referenceImageBase64 = null;
+            location.referenceImageStatus = 'none';
+
+            render();
+            scheduleAutoSave();
+            showToast('Location reference removed', 'info');
+        }
+
+        // Get location reference data for scene generation
+        function getLocationReferenceForScene(sceneId) {
+            if (!state.storyboard.locationBible?.enabled) {
+                console.log('[getLocationReferenceForScene] Location Bible disabled');
+                return null;
+            }
+
+            const allLocations = state.storyboard.locationBible.locations || [];
+
+            // Find location assigned to this scene
+            const location = allLocations.find(loc => {
+                const includeInAll = !loc.appliedToScenes || loc.appliedToScenes.length === 0;
+                const includeInScene = loc.appliedToScenes && loc.appliedToScenes.includes(sceneId);
+                return (includeInAll || includeInScene) &&
+                       loc.referenceImageBase64 &&
+                       loc.referenceImageStatus === 'ready';
+            });
+
+            if (location) {
+                console.log(`[getLocationReferenceForScene] Scene "${sceneId}" using location: "${location.name}"`);
+                return {
+                    base64: location.referenceImageBase64,
+                    mimeType: location.referenceImageMimeType || 'image/png',
+                    locationName: location.name,
+                    locationDescription: location.description,
+                    lightingStyle: location.lightingStyle,
+                    timeOfDay: location.timeOfDay,
+                    weather: location.weather,
+                    mood: location.mood
+                };
+            }
+
+            console.log(`[getLocationReferenceForScene] No location reference for scene "${sceneId}"`);
+            return null;
+        }
+
+        // Get all locations assigned to a scene
+        function getLocationsForScene(sceneId) {
+            if (!state.storyboard.locationBible?.enabled) return [];
+            const locations = state.storyboard.locationBible.locations || [];
+            return locations.filter(loc => {
+                const includeInAll = !loc.appliedToScenes || loc.appliedToScenes.length === 0;
+                const includeInScene = loc.appliedToScenes && loc.appliedToScenes.includes(sceneId);
+                return includeInAll || includeInScene;
+            });
+        }
+
+        // ==========================================
+        // AUTO-EXTRACT LOCATIONS FROM SCRIPT
+        // Analyzes the script and creates location entries automatically
+        // ==========================================
+
+        async function extractLocationsFromScript() {
+            const script = state.content.script || '';
+            const scenes = state.storyboard.scenes || [];
+
+            if (!script && scenes.length === 0) {
+                showToast('No script or scenes to analyze', 'error');
+                return;
+            }
+
+            showToast('Analyzing script for locations...', 'info');
+
+            try {
+                // Combine all text sources
+                let textToAnalyze = script + '\n\n';
+                scenes.forEach((scene, idx) => {
+                    textToAnalyze += `Scene ${idx + 1}: ${scene.description || ''}\n`;
+                    if (scene.action) textToAnalyze += `Action: ${scene.action}\n`;
+                    if (scene.imagePrompt) textToAnalyze += `Visual: ${scene.imagePrompt}\n`;
+                });
+
+                // Use regex patterns to extract location hints
+                const locationPatterns = [
+                    // Interior locations
+                    /(?:inside|within|in)\s+(?:a|the|an)?\s*([^,.]+(?:room|office|lab|kitchen|bedroom|studio|warehouse|factory|chamber|corridor|hall|apartment|house|building|facility|station|headquarters|cockpit|cabin|garage|basement|attic))/gi,
+                    // Exterior locations
+                    /(?:outside|on|at|near|beside|overlooking)\s+(?:a|the|an)?\s*([^,.]+(?:street|rooftop|park|plaza|forest|beach|mountain|city|alley|bridge|garden|field|desert|ocean|lake|river|highway|road|path|trail|cliff|valley|canyon))/gi,
+                    // Setting patterns
+                    /(?:the|a|an)\s+([^,.]+(?:metropolis|landscape|skyline|horizon|wasteland|jungle|tundra|swamp|marsh|cave|ruins|temple|castle|palace|fortress|tower|arena|stadium|market|bazaar|harbor|port|dock))/gi,
+                    // Sci-fi/fantasy
+                    /(?:aboard|inside)\s+(?:a|the)?\s*([^,.]+(?:spacecraft|spaceship|station|ship|vessel|starship|cruiser|freighter))/gi,
+                    // Generic environment descriptors
+                    /(?:dark|bright|neon|urban|rural|futuristic|ancient|modern|abandoned)\s+([^,.]+(?:environment|setting|world|realm|dimension|sector|zone|district|quarter))/gi
+                ];
+
+                const extractedLocations = new Set();
+                const locationDetails = [];
+
+                locationPatterns.forEach(pattern => {
+                    let match;
+                    while ((match = pattern.exec(textToAnalyze)) !== null) {
+                        const locationName = match[1].trim();
+                        // Clean up and normalize
+                        const cleanName = locationName
+                            .replace(/\b(the|a|an)\b/gi, '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+
+                        if (cleanName.length > 2 && cleanName.length < 50 && !extractedLocations.has(cleanName.toLowerCase())) {
+                            extractedLocations.add(cleanName.toLowerCase());
+
+                            // Determine type
+                            const isInterior = /room|office|lab|kitchen|bedroom|studio|warehouse|factory|chamber|corridor|hall|apartment|house|building|facility|cockpit|cabin|garage|basement|attic|aboard|inside/i.test(match[0]);
+
+                            // Guess time of day from context
+                            let timeOfDay = 'day';
+                            const contextStart = Math.max(0, match.index - 100);
+                            const contextEnd = Math.min(textToAnalyze.length, match.index + match[0].length + 100);
+                            const context = textToAnalyze.substring(contextStart, contextEnd).toLowerCase();
+
+                            if (context.includes('night') || context.includes('midnight') || context.includes('dark')) {
+                                timeOfDay = 'night';
+                            } else if (context.includes('sunset') || context.includes('dusk') || context.includes('evening')) {
+                                timeOfDay = 'dusk';
+                            } else if (context.includes('sunrise') || context.includes('dawn') || context.includes('morning')) {
+                                timeOfDay = 'dawn';
+                            } else if (context.includes('golden hour')) {
+                                timeOfDay = 'golden-hour';
+                            }
+
+                            // Guess weather
+                            let weather = 'clear';
+                            if (context.includes('rain') || context.includes('storm') || context.includes('wet')) {
+                                weather = 'rainy';
+                            } else if (context.includes('fog') || context.includes('mist') || context.includes('haze')) {
+                                weather = 'foggy';
+                            } else if (context.includes('cloud') || context.includes('overcast')) {
+                                weather = 'cloudy';
+                            }
+
+                            // Guess mood
+                            let mood = 'neutral';
+                            if (context.includes('tense') || context.includes('danger') || context.includes('threat')) {
+                                mood = 'tense';
+                            } else if (context.includes('peace') || context.includes('calm') || context.includes('serene')) {
+                                mood = 'peaceful';
+                            } else if (context.includes('myster') || context.includes('strange') || context.includes('eerie')) {
+                                mood = 'mysterious';
+                            } else if (context.includes('excit') || context.includes('action') || context.includes('energy')) {
+                                mood = 'energetic';
+                            }
+
+                            locationDetails.push({
+                                name: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
+                                type: isInterior ? 'interior' : 'exterior',
+                                timeOfDay: timeOfDay,
+                                weather: weather,
+                                mood: mood,
+                                description: `${isInterior ? 'Interior:' : 'Exterior:'} ${cleanName}`
+                            });
+                        }
+                    }
+                });
+
+                if (locationDetails.length === 0) {
+                    showToast('No distinct locations found in script', 'info');
+                    return;
+                }
+
+                // Add extracted locations to Location Bible
+                initSceneMemory();
+                let addedCount = 0;
+                locationDetails.forEach(locData => {
+                    // Check if similar location already exists
+                    const exists = state.storyboard.locationBible.locations.some(
+                        existing => existing.name.toLowerCase() === locData.name.toLowerCase()
+                    );
+
+                    if (!exists) {
+                        const newLocation = {
+                            id: 'loc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+                            name: locData.name,
+                            description: locData.description,
+                            type: locData.type,
+                            timeOfDay: locData.timeOfDay,
+                            weather: locData.weather,
+                            mood: locData.mood,
+                            referenceImageUrl: null,
+                            referenceImageBase64: null,
+                            referenceImageStatus: 'none',
+                            referenceImageMimeType: 'image/png',
+                            lightingStyle: '',
+                            keyElements: [],
+                            appliedToScenes: []
+                        };
+                        state.storyboard.locationBible.locations.push(newLocation);
+                        addedCount++;
+                    }
+                });
+
+                state.storyboard.locationBible.autoDetected = true;
+                render();
+                scheduleAutoSave();
+                showToast(`Found ${addedCount} new location(s)!`, 'success');
+
+            } catch (error) {
+                console.error('[Location Bible] Extraction error:', error);
+                showToast(`Failed to extract locations: ${error.message}`, 'error');
+            }
+        }
+
+        // Apply location template preset
+        function applyLocationTemplate(locationId, templateName) {
+            const location = state.storyboard.locationBible.locations.find(l => l.id === locationId);
+            if (!location) return;
+
+            const templates = {
+                'urban-night': {
+                    name: 'Urban Night Street',
+                    description: 'Neon-lit city street at night, wet pavement reflecting colorful lights, tall buildings with glowing windows, steam rising from vents, cinematic urban atmosphere',
+                    type: 'exterior',
+                    timeOfDay: 'night',
+                    weather: 'clear',
+                    mood: 'mysterious',
+                    lightingStyle: 'Neon signs, streetlights, wet surface reflections, deep shadows',
+                    keyElements: ['neon signs', 'wet pavement', 'tall buildings', 'steam vents', 'street lights']
+                },
+                'forest-day': {
+                    name: 'Forest Clearing',
+                    description: 'Sunlit forest clearing with ancient trees, dappled light filtering through leaves, moss-covered rocks, peaceful natural atmosphere',
+                    type: 'exterior',
+                    timeOfDay: 'day',
+                    weather: 'clear',
+                    mood: 'peaceful',
+                    lightingStyle: 'Dappled sunlight through tree canopy, soft ambient fill',
+                    keyElements: ['ancient trees', 'moss', 'filtered sunlight', 'forest floor', 'ferns']
+                },
+                'tech-lab': {
+                    name: 'High-Tech Laboratory',
+                    description: 'Futuristic research laboratory with holographic displays, clean white surfaces, glass partitions, advanced equipment, controlled lighting',
+                    type: 'interior',
+                    timeOfDay: 'day',
+                    weather: 'clear',
+                    mood: 'neutral',
+                    lightingStyle: 'Cool LED overhead lighting, screen glow, sterile white ambiance',
+                    keyElements: ['holographic displays', 'glass walls', 'lab equipment', 'workstations', 'data screens']
+                },
+                'desert-sunset': {
+                    name: 'Desert at Sunset',
+                    description: 'Vast desert landscape at golden hour, dramatic rock formations, endless sand dunes, warm orange sky, epic scale',
+                    type: 'exterior',
+                    timeOfDay: 'golden-hour',
+                    weather: 'clear',
+                    mood: 'peaceful',
+                    lightingStyle: 'Golden directional sunlight, long shadows, warm color temperature',
+                    keyElements: ['sand dunes', 'rock formations', 'orange sky', 'desert plants', 'distant mountains']
+                },
+                'industrial': {
+                    name: 'Industrial Complex',
+                    description: 'Abandoned industrial facility, rusted metal structures, broken windows, dramatic shafts of light, gritty atmosphere',
+                    type: 'interior',
+                    timeOfDay: 'day',
+                    weather: 'cloudy',
+                    mood: 'tense',
+                    lightingStyle: 'Harsh directional light through broken windows, deep shadows',
+                    keyElements: ['rusted metal', 'broken windows', 'concrete floors', 'machinery', 'debris']
+                },
+                'space-station': {
+                    name: 'Space Station Interior',
+                    description: 'Futuristic space station corridor, curved walls, viewport windows showing stars, ambient blue lighting, high-tech panels',
+                    type: 'interior',
+                    timeOfDay: 'night',
+                    weather: 'clear',
+                    mood: 'mysterious',
+                    lightingStyle: 'Cool blue ambient lighting, viewport starlight, panel illumination',
+                    keyElements: ['curved corridors', 'viewports', 'control panels', 'airlock doors', 'stars visible']
+                }
+            };
+
+            const template = templates[templateName];
+            if (template) {
+                Object.assign(location, template);
+                // Keep the existing ID
+                location.id = locationId;
+                // Reset image (template changed, old image may not match)
+                location.referenceImageUrl = null;
+                location.referenceImageBase64 = null;
+                location.referenceImageStatus = 'none';
+
+                render();
+                scheduleAutoSave();
+                showToast(`Applied "${template.name}" template`, 'success');
+            }
         }
 
         // ==========================================
@@ -13841,65 +14448,92 @@
                             <span style="font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #06b6d4, #8b5cf6); border-radius: 0.75rem; color: white; font-weight: 600;">NEW</span>
                         </div>
                         <div style="color: rgba(255,255,255,0.4); font-size: 0.65rem; margin-bottom: 0.75rem;">
-                            Keep visual consistency across all scenes with Style & Character Bibles
+                            Visual consistency with Style, Character & Location Bibles
                         </div>
 
-                        <!-- Style Bible Card -->
-                        <div style="background: ${state.storyboard.styleBible?.enabled ? 'rgba(139, 92, 246, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.styleBible?.enabled ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.5rem;">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span style="font-size: 0.85rem;">🎨</span>
-                                    <div>
-                                        <div style="color: white; font-size: 0.8rem; font-weight: 600;">Style Bible</div>
-                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.6rem;">${state.storyboard.styleBible?.enabled ? (state.storyboard.styleBible?.style ? 'Custom style defined' : 'No style defined yet') : 'Visual DNA for all scenes'}</div>
+                        <!-- Bible Cards Row - Style, Character, Location side by side -->
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+                            <!-- Style Bible Card -->
+                            <div style="flex: 1; min-width: 180px; background: ${state.storyboard.styleBible?.enabled ? 'rgba(139, 92, 246, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.styleBible?.enabled ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.6rem;">
+                                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.3rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 0;">
+                                        <span style="font-size: 0.8rem;">🎨</span>
+                                        <div style="min-width: 0;">
+                                            <div style="color: white; font-size: 0.75rem; font-weight: 600;">Style Bible</div>
+                                            <div style="color: rgba(255,255,255,0.4); font-size: 0.55rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${state.storyboard.styleBible?.enabled ? (state.storyboard.styleBible?.style ? 'Custom style defined' : 'Not configured') : 'Visual DNA'}</div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0;">
+                                        <button onclick="openStyleBibleModal()" style="padding: 0.2rem 0.4rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.25rem; color: white; font-size: 0.55rem; cursor: pointer;">
+                                            Edit
+                                        </button>
+                                        <input type="checkbox" ${state.storyboard.styleBible?.enabled ? 'checked' : ''} onchange="toggleStyleBible(this.checked)" style="accent-color: #8b5cf6; width: 14px; height: 14px;">
                                     </div>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <button onclick="openStyleBibleModal()" style="padding: 0.3rem 0.6rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.35rem; color: white; font-size: 0.65rem; cursor: pointer;">
-                                        ${state.storyboard.styleBible?.enabled ? 'Edit' : 'Setup'}
-                                    </button>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;">
-                                        <input type="checkbox" ${state.storyboard.styleBible?.enabled ? 'checked' : ''} onchange="toggleStyleBible(this.checked)" style="accent-color: #8b5cf6;">
-                                    </label>
-                                </div>
+                                ${state.storyboard.styleBible?.enabled && state.storyboard.styleBible?.style ? `
+                                    <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                        <div style="color: rgba(255,255,255,0.5); font-size: 0.5rem; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                            "${state.storyboard.styleBible.style}"
+                                        </div>
+                                    </div>
+                                ` : ''}
                             </div>
-                            ${state.storyboard.styleBible?.enabled && state.storyboard.styleBible?.style ? `
-                                <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                                    <div style="color: rgba(255,255,255,0.5); font-size: 0.6rem; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                        "${state.storyboard.styleBible.style}"
-                                    </div>
-                                </div>
-                            ` : ''}
-                        </div>
 
-                        <!-- Character Bible Card -->
-                        <div style="background: ${state.storyboard.characterBible?.enabled ? 'rgba(6, 182, 212, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.characterBible?.enabled ? 'rgba(6, 182, 212, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 0.5rem;">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <span style="font-size: 0.85rem;">👤</span>
-                                    <div>
-                                        <div style="color: white; font-size: 0.8rem; font-weight: 600;">Character Bible</div>
-                                        <div style="color: rgba(255,255,255,0.4); font-size: 0.6rem;">${state.storyboard.characterBible?.enabled ? ((state.storyboard.characterBible?.characters?.length || 0) + ' character(s) defined') : 'Consistent character appearances'}</div>
+                            <!-- Character Bible Card -->
+                            <div style="flex: 1; min-width: 180px; background: ${state.storyboard.characterBible?.enabled ? 'rgba(6, 182, 212, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.characterBible?.enabled ? 'rgba(6, 182, 212, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.6rem;">
+                                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.3rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 0;">
+                                        <span style="font-size: 0.8rem;">👤</span>
+                                        <div style="min-width: 0;">
+                                            <div style="color: white; font-size: 0.75rem; font-weight: 600;">Character Bible</div>
+                                            <div style="color: rgba(255,255,255,0.4); font-size: 0.55rem;">${state.storyboard.characterBible?.enabled ? ((state.storyboard.characterBible?.characters?.length || 0) + ' character(s)') : 'Consistent faces'}</div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0;">
+                                        <button onclick="openCharacterBibleModal()" style="padding: 0.2rem 0.4rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.25rem; color: white; font-size: 0.55rem; cursor: pointer;">
+                                            Edit
+                                        </button>
+                                        <input type="checkbox" ${state.storyboard.characterBible?.enabled ? 'checked' : ''} onchange="toggleCharacterBible(this.checked)" style="accent-color: #06b6d4; width: 14px; height: 14px;">
                                     </div>
                                 </div>
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <button onclick="openCharacterBibleModal()" style="padding: 0.3rem 0.6rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.35rem; color: white; font-size: 0.65rem; cursor: pointer;">
-                                        ${state.storyboard.characterBible?.enabled ? 'Edit' : 'Setup'}
-                                    </button>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;">
-                                        <input type="checkbox" ${state.storyboard.characterBible?.enabled ? 'checked' : ''} onchange="toggleCharacterBible(this.checked)" style="accent-color: #06b6d4;">
-                                    </label>
-                                </div>
-                            </div>
-                            ${state.storyboard.characterBible?.enabled && state.storyboard.characterBible?.characters?.length > 0 ? `
-                                <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                                ${state.storyboard.characterBible?.enabled && state.storyboard.characterBible?.characters?.length > 0 ? `
+                                    <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.2rem; flex-wrap: wrap;">
                                     ${state.storyboard.characterBible.characters.slice(0, 3).map(c => `
                                         <span style="background: rgba(6, 182, 212, 0.2); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem; color: rgba(255,255,255,0.7);">${c.name}</span>
                                     `).join('')}
                                     ${state.storyboard.characterBible.characters.length > 3 ? `<span style="color: rgba(255,255,255,0.4); font-size: 0.6rem;">+${state.storyboard.characterBible.characters.length - 3} more</span>` : ''}
                                 </div>
                             ` : ''}
+                            </div>
+
+                            <!-- Location Bible Card -->
+                            <div style="flex: 1; min-width: 180px; background: ${state.storyboard.locationBible?.enabled ? 'rgba(245, 158, 11, 0.1)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.locationBible?.enabled ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; padding: 0.6rem;">
+                                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.3rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 0;">
+                                        <span style="font-size: 0.8rem;">📍</span>
+                                        <div style="min-width: 0;">
+                                            <div style="color: white; font-size: 0.75rem; font-weight: 600;">Location Bible</div>
+                                            <div style="color: rgba(255,255,255,0.4); font-size: 0.55rem;">${state.storyboard.locationBible?.enabled ? ((state.storyboard.locationBible?.locations?.length || 0) + ' location(s)') : 'Consistent environments'}</div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0;">
+                                        <button onclick="openLocationBibleModal()" style="padding: 0.2rem 0.4rem; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 0.25rem; color: white; font-size: 0.55rem; cursor: pointer;">
+                                            Edit
+                                        </button>
+                                        <input type="checkbox" ${state.storyboard.locationBible?.enabled ? 'checked' : ''} onchange="toggleLocationBible(this.checked)" style="accent-color: #f59e0b; width: 14px; height: 14px;">
+                                    </div>
+                                </div>
+                                ${state.storyboard.locationBible?.enabled && state.storyboard.locationBible?.locations?.length > 0 ? `
+                                    <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.2rem; flex-wrap: wrap;">
+                                    ${state.storyboard.locationBible.locations.slice(0, 3).map(loc => `
+                                        <span style="background: rgba(245, 158, 11, 0.2); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.5rem; color: rgba(255,255,255,0.7);">${loc.name}</span>
+                                    `).join('')}
+                                    ${state.storyboard.locationBible.locations.length > 3 ? `<span style="color: rgba(255,255,255,0.4); font-size: 0.5rem;">+${state.storyboard.locationBible.locations.length - 3} more</span>` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
                         </div>
+                        <!-- End Bible Cards Row -->
 
                         <!-- Technical Specs (Collapsed) -->
                         <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; padding: 0.5rem 0.75rem;">
@@ -13969,6 +14603,11 @@
             // Character Bible Modal
             if (state.storyboard.showCharacterBibleModal) {
                 html += renderCharacterBibleModal();
+            }
+
+            // Location Bible Modal
+            if (state.storyboard.showLocationBibleModal) {
+                html += renderLocationBibleModal();
             }
 
             // Storyboard Grid
@@ -14497,6 +15136,257 @@
                             <div style="display: flex; gap: 0.5rem;">
                                 <button onclick="closeCharacterBibleModal()" style="padding: 0.6rem 1.25rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; cursor: pointer;">Close</button>
                                 <button onclick="toggleCharacterBible(true); closeCharacterBibleModal();" style="padding: 0.6rem 1.25rem; background: linear-gradient(135deg, #06b6d4, #8b5cf6); border: none; border-radius: 0.5rem; color: white; font-size: 0.85rem; cursor: pointer; font-weight: 600;">Save & Enable</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderLocationBibleModal() {
+            const bible = state.storyboard.locationBible || { locations: [] };
+            const locations = bible.locations || [];
+            const editingLoc = locations.find(l => l.id === state.storyboard.editingLocationId);
+            const scenes = state.script.scenes || [];
+            const isGeneratingRef = state.storyboard.generatingLocationRefId === editingLoc?.id;
+
+            return `
+                <div id="location-bible-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem;" onclick="if(event.target.id === 'location-bible-modal') closeLocationBibleModal()">
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 1rem; width: 100%; max-width: 950px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+                        <!-- Header -->
+                        <div style="padding: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 1.1rem; font-weight: 700; color: white;">📍 Location Bible</div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Define consistent environments with reference images</div>
+                            </div>
+                            <button onclick="closeLocationBibleModal()" style="background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; padding: 0.25rem;">×</button>
+                        </div>
+
+                        <!-- Content -->
+                        <div style="display: flex; flex: 1; overflow: hidden;">
+                            <!-- Location List (Left Panel) -->
+                            <div style="width: 220px; border-right: 1px solid rgba(255,255,255,0.1); padding: 1rem; overflow-y: auto;">
+                                <button onclick="addLocation()" style="width: 100%; padding: 0.6rem; background: rgba(245, 158, 11, 0.2); border: 1px dashed rgba(245, 158, 11, 0.5); border-radius: 0.5rem; color: #f59e0b; font-size: 0.75rem; cursor: pointer; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+                                    <span style="font-size: 1.2rem;">+</span> Add Location
+                                </button>
+
+                                <!-- Auto-extract locations from script -->
+                                ${state.script.scenes && state.script.scenes.length > 0 ? `
+                                <button onclick="extractLocationsFromScript()" style="width: 100%; padding: 0.5rem; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.5rem; color: #a78bfa; font-size: 0.7rem; cursor: pointer; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+                                    <span>🔍</span> Auto-detect from Script
+                                </button>
+                                ` : ''}
+
+                                ${locations.length === 0 ? `
+                                    <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 0.75rem; padding: 1rem;">
+                                        ${state.script.scenes && state.script.scenes.length > 0 ?
+                                            'No locations yet.<br>Click "Auto-detect" to analyze your script.' :
+                                            'No locations yet.<br>Add one to get started.'}
+                                    </div>
+                                ` : locations.map(loc => `
+                                    <div onclick="editLocation('${loc.id}')"
+                                         style="padding: 0.5rem; background: ${state.storyboard.editingLocationId === loc.id ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${state.storyboard.editingLocationId === loc.id ? 'rgba(245, 158, 11, 0.5)' : 'rgba(255,255,255,0.1)'}; border-radius: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                                        <!-- Location Thumbnail -->
+                                        <div style="width: 50px; height: 35px; border-radius: 0.35rem; overflow: hidden; flex-shrink: 0; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center;">
+                                            ${loc.referenceImageUrl && loc.referenceImageStatus === 'ready' ?
+                                                `<img src="${loc.referenceImageUrl}" style="width: 100%; height: 100%; object-fit: cover;">` :
+                                                loc.referenceImageStatus === 'generating' ?
+                                                `<div class="animate-spin" style="width: 0.8rem; height: 0.8rem; border: 2px solid rgba(245,158,11,0.3); border-top-color: #f59e0b; border-radius: 50%;"></div>` :
+                                                `<span style="font-size: 1rem; color: rgba(255,255,255,0.3);">📍</span>`
+                                            }
+                                        </div>
+                                        <div style="flex: 1; min-width: 0;">
+                                            <div style="color: white; font-size: 0.7rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${loc.name || 'Unnamed'}</div>
+                                            <div style="color: rgba(255,255,255,0.4); font-size: 0.55rem;">${loc.type} · ${loc.timeOfDay}</div>
+                                            ${loc.referenceImageStatus === 'ready' ? `<div style="color: #10b981; font-size: 0.5rem;">✓ Reference</div>` : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+
+                            <!-- Location Editor (Right Panel) -->
+                            <div style="flex: 1; padding: 1rem; overflow-y: auto;">
+                                ${editingLoc ? `
+                                    <div style="display: flex; gap: 1.25rem;">
+                                        <!-- Reference Image Column -->
+                                        <div style="width: 200px; flex-shrink: 0;">
+                                            <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.5rem;">Reference Image</label>
+                                            <div style="width: 200px; height: 115px; border-radius: 0.5rem; overflow: hidden; background: rgba(255,255,255,0.05); border: 2px dashed rgba(255,255,255,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+                                                ${editingLoc.referenceImageUrl && editingLoc.referenceImageStatus === 'ready' ? `
+                                                    <img src="${editingLoc.referenceImageUrl}" style="width: 100%; height: 100%; object-fit: cover;">
+                                                    <button onclick="event.stopPropagation(); removeLocationReference('${editingLoc.id}')"
+                                                            style="position: absolute; top: 0.35rem; right: 0.35rem; width: 1.5rem; height: 1.5rem; background: rgba(239, 68, 68, 0.9); border: none; border-radius: 50%; color: white; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">×</button>
+                                                ` : isGeneratingRef ? `
+                                                    <div class="animate-spin" style="width: 2rem; height: 2rem; border: 3px solid rgba(245,158,11,0.3); border-top-color: #f59e0b; border-radius: 50%; margin-bottom: 0.5rem;"></div>
+                                                    <div style="color: rgba(255,255,255,0.5); font-size: 0.7rem;">Generating...</div>
+                                                ` : `
+                                                    <span style="font-size: 2.5rem; color: rgba(255,255,255,0.2); margin-bottom: 0.25rem;">🏞️</span>
+                                                    <div style="color: rgba(255,255,255,0.4); font-size: 0.65rem; text-align: center;">No reference yet</div>
+                                                `}
+                                            </div>
+                                            <!-- Reference Action Buttons -->
+                                            <div style="display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem;">
+                                                <button onclick="generateLocationReference('${editingLoc.id}')"
+                                                        ${isGeneratingRef ? 'disabled' : ''}
+                                                        style="width: 100%; padding: 0.5rem; background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(234, 88, 12, 0.3)); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: ${isGeneratingRef ? 'not-allowed' : 'pointer'}; opacity: ${isGeneratingRef ? '0.5' : '1'};">
+                                                    🎨 ${editingLoc.referenceImageUrl ? 'Regenerate' : 'Generate'} Reference
+                                                </button>
+                                                <button onclick="uploadLocationReference('${editingLoc.id}')"
+                                                        ${isGeneratingRef ? 'disabled' : ''}
+                                                        style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.35rem; color: white; font-size: 0.7rem; cursor: ${isGeneratingRef ? 'not-allowed' : 'pointer'}; opacity: ${isGeneratingRef ? '0.5' : '1'};">
+                                                    📤 Upload Image
+                                                </button>
+                                            </div>
+                                            <div style="font-size: 0.55rem; color: rgba(255,255,255,0.4); margin-top: 0.5rem; text-align: center;">
+                                                Reference provides consistent<br>backgrounds for scene generation
+                                            </div>
+                                        </div>
+
+                                        <!-- Location Details Column -->
+                                        <div style="flex: 1;">
+                                            <!-- Location Name -->
+                                            <div style="margin-bottom: 0.6rem;">
+                                                <label style="display: block; font-size: 0.75rem; color: rgba(255,255,255,0.6); margin-bottom: 0.25rem;">Location Name</label>
+                                                <input type="text"
+                                                       value="${editingLoc.name || ''}"
+                                                       onchange="updateLocation('${editingLoc.id}', 'name', this.value)"
+                                                       style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.4rem; color: white; font-size: 0.85rem;">
+                                            </div>
+
+                                            <!-- Quick Templates -->
+                                            <div style="margin-bottom: 0.6rem;">
+                                                <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">Quick Templates</div>
+                                                <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                                                    <button onclick="applyLocationTemplate('${editingLoc.id}', 'urban-night')" style="padding: 0.2rem 0.4rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.2rem; color: white; font-size: 0.55rem; cursor: pointer;">🌃 Urban Night</button>
+                                                    <button onclick="applyLocationTemplate('${editingLoc.id}', 'forest-day')" style="padding: 0.2rem 0.4rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.2rem; color: white; font-size: 0.55rem; cursor: pointer;">🌲 Forest</button>
+                                                    <button onclick="applyLocationTemplate('${editingLoc.id}', 'tech-lab')" style="padding: 0.2rem 0.4rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.2rem; color: white; font-size: 0.55rem; cursor: pointer;">🔬 Tech Lab</button>
+                                                    <button onclick="applyLocationTemplate('${editingLoc.id}', 'desert-sunset')" style="padding: 0.2rem 0.4rem; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 0.2rem; color: white; font-size: 0.55rem; cursor: pointer;">🏜️ Desert</button>
+                                                    <button onclick="applyLocationTemplate('${editingLoc.id}', 'industrial')" style="padding: 0.2rem 0.4rem; background: rgba(107, 114, 128, 0.3); border: 1px solid rgba(107, 114, 128, 0.5); border-radius: 0.2rem; color: white; font-size: 0.55rem; cursor: pointer;">🏭 Industrial</button>
+                                                    <button onclick="applyLocationTemplate('${editingLoc.id}', 'space-station')" style="padding: 0.2rem 0.4rem; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.4); border-radius: 0.2rem; color: white; font-size: 0.55rem; cursor: pointer;">🚀 Space</button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Type, Time, Weather Row -->
+                                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.6rem;">
+                                                <div style="flex: 1;">
+                                                    <label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.2rem;">Type</label>
+                                                    <select onchange="updateLocation('${editingLoc.id}', 'type', this.value)"
+                                                            style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.75rem;">
+                                                        <option value="exterior" ${editingLoc.type === 'exterior' ? 'selected' : ''}>Exterior</option>
+                                                        <option value="interior" ${editingLoc.type === 'interior' ? 'selected' : ''}>Interior</option>
+                                                        <option value="abstract" ${editingLoc.type === 'abstract' ? 'selected' : ''}>Abstract</option>
+                                                    </select>
+                                                </div>
+                                                <div style="flex: 1;">
+                                                    <label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.2rem;">Time of Day</label>
+                                                    <select onchange="updateLocation('${editingLoc.id}', 'timeOfDay', this.value)"
+                                                            style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.75rem;">
+                                                        <option value="day" ${editingLoc.timeOfDay === 'day' ? 'selected' : ''}>Day</option>
+                                                        <option value="night" ${editingLoc.timeOfDay === 'night' ? 'selected' : ''}>Night</option>
+                                                        <option value="dawn" ${editingLoc.timeOfDay === 'dawn' ? 'selected' : ''}>Dawn</option>
+                                                        <option value="dusk" ${editingLoc.timeOfDay === 'dusk' ? 'selected' : ''}>Dusk</option>
+                                                        <option value="golden-hour" ${editingLoc.timeOfDay === 'golden-hour' ? 'selected' : ''}>Golden Hour</option>
+                                                    </select>
+                                                </div>
+                                                <div style="flex: 1;">
+                                                    <label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.2rem;">Weather</label>
+                                                    <select onchange="updateLocation('${editingLoc.id}', 'weather', this.value)"
+                                                            style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.75rem;">
+                                                        <option value="clear" ${editingLoc.weather === 'clear' ? 'selected' : ''}>Clear</option>
+                                                        <option value="cloudy" ${editingLoc.weather === 'cloudy' ? 'selected' : ''}>Cloudy</option>
+                                                        <option value="rainy" ${editingLoc.weather === 'rainy' ? 'selected' : ''}>Rainy</option>
+                                                        <option value="foggy" ${editingLoc.weather === 'foggy' ? 'selected' : ''}>Foggy</option>
+                                                        <option value="stormy" ${editingLoc.weather === 'stormy' ? 'selected' : ''}>Stormy</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <!-- Mood -->
+                                            <div style="margin-bottom: 0.6rem;">
+                                                <label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.2rem;">Mood / Atmosphere</label>
+                                                <select onchange="updateLocation('${editingLoc.id}', 'mood', this.value)"
+                                                        style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.75rem;">
+                                                    <option value="neutral" ${editingLoc.mood === 'neutral' ? 'selected' : ''}>Neutral</option>
+                                                    <option value="tense" ${editingLoc.mood === 'tense' ? 'selected' : ''}>Tense / Dramatic</option>
+                                                    <option value="peaceful" ${editingLoc.mood === 'peaceful' ? 'selected' : ''}>Peaceful / Serene</option>
+                                                    <option value="mysterious" ${editingLoc.mood === 'mysterious' ? 'selected' : ''}>Mysterious / Eerie</option>
+                                                    <option value="energetic" ${editingLoc.mood === 'energetic' ? 'selected' : ''}>Energetic / Dynamic</option>
+                                                </select>
+                                            </div>
+
+                                            <!-- Description -->
+                                            <div style="margin-bottom: 0.6rem;">
+                                                <label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.2rem;">Visual Description</label>
+                                                <textarea id="loc-description-${editingLoc.id}"
+                                                          placeholder="Describe the environment in detail: architecture, colors, textures, key elements..."
+                                                          onchange="updateLocation('${editingLoc.id}', 'description', this.value)"
+                                                          style="width: 100%; padding: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.4rem; color: white; font-size: 0.8rem; resize: none; height: 60px;">${editingLoc.description || ''}</textarea>
+                                            </div>
+
+                                            <!-- Lighting Style -->
+                                            <div style="margin-bottom: 0.6rem;">
+                                                <label style="display: block; font-size: 0.65rem; color: rgba(255,255,255,0.5); margin-bottom: 0.2rem;">Lighting Style (optional)</label>
+                                                <input type="text"
+                                                       value="${editingLoc.lightingStyle || ''}"
+                                                       placeholder="e.g., Neon signs with wet surface reflections, dramatic rim lighting"
+                                                       onchange="updateLocation('${editingLoc.id}', 'lightingStyle', this.value)"
+                                                       style="width: 100%; padding: 0.4rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); border-radius: 0.35rem; color: white; font-size: 0.75rem;">
+                                            </div>
+
+                                            <!-- Scene Assignment -->
+                                            <div style="margin-bottom: 0.5rem;">
+                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                                    <label style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Used in Scenes</label>
+                                                    <button onclick="applyLocationToAllScenes('${editingLoc.id}')" style="padding: 0.15rem 0.3rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.2rem; color: white; font-size: 0.5rem; cursor: pointer;">Apply to All</button>
+                                                </div>
+                                                <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                                                    ${scenes.map((scene, idx) => {
+                                                        const isAssigned = !editingLoc.appliedToScenes?.length || editingLoc.appliedToScenes.includes(scene.id);
+                                                        return `
+                                                            <button onclick="toggleLocationInScene('${editingLoc.id}', ${scene.id})"
+                                                                    style="padding: 0.2rem 0.4rem; background: ${isAssigned ? 'rgba(245, 158, 11, 0.3)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isAssigned ? 'rgba(245, 158, 11, 0.5)' : 'rgba(255,255,255,0.15)'}; border-radius: 0.25rem; color: white; font-size: 0.6rem; cursor: pointer;">
+                                                                ${idx + 1}
+                                                            </button>
+                                                        `;
+                                                    }).join('')}
+                                                </div>
+                                                <div style="font-size: 0.5rem; color: rgba(255,255,255,0.4); margin-top: 0.2rem;">
+                                                    ${!editingLoc.appliedToScenes?.length ? 'Currently applies to ALL scenes' : `Applies to ${editingLoc.appliedToScenes.length} scene(s)`}
+                                                </div>
+                                            </div>
+
+                                            <!-- Delete Button -->
+                                            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                                <button onclick="if(confirm('Delete this location?')) deleteLocation('${editingLoc.id}')"
+                                                        style="padding: 0.4rem 0.75rem; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.35rem; color: #ef4444; font-size: 0.7rem; cursor: pointer;">
+                                                    🗑️ Delete Location
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ` : `
+                                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,0.4); text-align: center;">
+                                        <span style="font-size: 3rem; margin-bottom: 1rem;">📍</span>
+                                        <div style="font-size: 0.9rem; margin-bottom: 0.5rem;">Select a location to edit</div>
+                                        <div style="font-size: 0.75rem;">or add a new one from the list</div>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Footer -->
+                        <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">
+                                ${bible.enabled ? '✅ Location Bible is active' : '⚠️ Enable toggle to apply'}
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.75rem; color: rgba(255,255,255,0.7);">
+                                    <input type="checkbox" ${bible.enabled ? 'checked' : ''} onchange="toggleLocationBible(this.checked)" style="accent-color: #f59e0b;">
+                                    Enable
+                                </label>
+                                <button onclick="closeLocationBibleModal()" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 0.5rem; color: white; font-weight: 600; cursor: pointer;">
+                                    Done
+                                </button>
                             </div>
                         </div>
                     </div>
