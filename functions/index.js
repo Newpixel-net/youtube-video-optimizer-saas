@@ -43556,6 +43556,408 @@ const CROSS_SHOT_INTELLIGENCE = {
 };
 
 // =============================================================================
+// VISUAL_CONTINUITY_ENGINE - Shot-to-Shot Visual Coherence (Inspired by Qwen workflow)
+// =============================================================================
+/**
+ * VISUAL_CONTINUITY_ENGINE
+ *
+ * Ensures visual coherence across shots by implementing key principles from
+ * professional video generation workflows:
+ *
+ * 1. VISUAL ANCHOR EXTRACTION - Lock core visual elements (character, wardrobe, lighting)
+ * 2. OUTPUT → INPUT CHAINING - Previous shot's output informs next shot's generation
+ * 3. LAST FRAME REFERENCE - Capture last frame for video-to-video continuity
+ * 4. PROMPT PARTITIONING - Separate locked elements from variable action/camera
+ *
+ * Based on Qwen Image Edit workflow principle:
+ * "Preserve core identifiers (names, outfit, props) and lighting terms;
+ *  vary only the action and camera language between scenes."
+ */
+const VISUAL_CONTINUITY_ENGINE = {
+
+  // =========================================================================
+  // VISUAL ANCHOR CATEGORIES - Elements that must stay consistent
+  // =========================================================================
+  anchorCategories: {
+    character: {
+      name: 'Character Identity',
+      extractors: [
+        /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:is|stands|sits|walks|looks)/gi,
+        /(?:the\s+)?(man|woman|person|figure|character)\s+(?:with|wearing|in)/gi
+      ],
+      preservePattern: 'Maintain exact character appearance from reference:'
+    },
+    wardrobe: {
+      name: 'Wardrobe & Props',
+      extractors: [
+        /wearing\s+([^,.]+)/gi,
+        /dressed\s+in\s+([^,.]+)/gi,
+        /(?:with|carrying|holding)\s+(?:a\s+)?([^,.]+(?:coat|jacket|shirt|dress|suit|robe|armor|hat|glasses|bag|sword|weapon)[^,.]*)/gi
+      ],
+      preservePattern: 'Same clothing and props as reference:'
+    },
+    lighting: {
+      name: 'Lighting Setup',
+      extractors: [
+        /((?:soft|hard|dramatic|natural|ambient|neon|golden|blue|warm|cool|dim|bright)\s+(?:light|lighting|glow|illumination))/gi,
+        /(backlit|sidelit|frontlit|rim\s+light|key\s+light)/gi,
+        /((?:morning|evening|sunset|sunrise|night|day)\s+light)/gi
+      ],
+      preservePattern: 'Maintain lighting from reference:'
+    },
+    colorPalette: {
+      name: 'Color Palette',
+      extractors: [
+        /((?:warm|cool|muted|vibrant|desaturated|saturated)\s+(?:colors?|palette|tones?))/gi,
+        /((?:orange|teal|blue|green|red|purple|golden|silver)\s+(?:hues?|tint|cast))/gi
+      ],
+      preservePattern: 'Match color palette from reference:'
+    },
+    environment: {
+      name: 'Environment',
+      extractors: [
+        /(?:in|at|inside|within)\s+(?:a|the|an)?\s*([^,.]{5,40}(?:room|office|street|forest|city|building|space|station|dojo|temple|home|studio)[^,.]*)/gi,
+        /((?:urban|rural|futuristic|ancient|modern|industrial|natural)\s+(?:setting|environment|backdrop))/gi
+      ],
+      preservePattern: 'Same environment as reference:'
+    },
+    style: {
+      name: 'Visual Style',
+      extractors: [
+        /(photorealistic|cinematic|film\s+noir|anime|illustration|hyper-?realistic)/gi,
+        /((?:35mm|50mm|85mm)\s+(?:film|lens|photography))/gi,
+        /((?:Arri|RED|Blackmagic|IMAX)\s+(?:camera|cinematography)?)/gi
+      ],
+      preservePattern: 'Maintain visual style from reference:'
+    }
+  },
+
+  // =========================================================================
+  // ANCHOR EXTRACTION - Pull consistent elements from scene description
+  // =========================================================================
+
+  /**
+   * Extract all visual anchors from a scene/shot description
+   * @param {string} sceneDescription - The visual prompt or scene description
+   * @param {Object} styleBible - Optional style bible for additional anchors
+   * @returns {Object} Extracted anchors by category
+   */
+  extractVisualAnchors(sceneDescription, styleBible = null) {
+    const anchors = {};
+    const text = sceneDescription || '';
+
+    // Extract from each category
+    for (const [category, config] of Object.entries(this.anchorCategories)) {
+      const matches = [];
+
+      for (const extractor of config.extractors) {
+        let match;
+        const regex = new RegExp(extractor.source, extractor.flags);
+        while ((match = regex.exec(text)) !== null) {
+          const extracted = match[1] || match[0];
+          if (extracted && extracted.length > 2) {
+            matches.push(extracted.trim());
+          }
+        }
+      }
+
+      if (matches.length > 0) {
+        anchors[category] = {
+          values: [...new Set(matches)], // Deduplicate
+          preservePattern: config.preservePattern
+        };
+      }
+    }
+
+    // Add style bible elements if available
+    if (styleBible) {
+      if (styleBible.style && !anchors.style) {
+        anchors.style = {
+          values: [styleBible.style],
+          preservePattern: this.anchorCategories.style.preservePattern
+        };
+      }
+      if (styleBible.colorGrade && !anchors.colorPalette) {
+        anchors.colorPalette = {
+          values: [styleBible.colorGrade],
+          preservePattern: this.anchorCategories.colorPalette.preservePattern
+        };
+      }
+      if (styleBible.lighting && !anchors.lighting) {
+        anchors.lighting = {
+          values: [styleBible.lighting],
+          preservePattern: this.anchorCategories.lighting.preservePattern
+        };
+      }
+    }
+
+    return anchors;
+  },
+
+  /**
+   * Build a locked anchor string that should be prepended to all shot prompts
+   * @param {Object} anchors - Extracted anchors
+   * @returns {string} Anchor preservation string
+   */
+  buildAnchorLockString(anchors) {
+    const parts = ['[VISUAL CONTINUITY LOCK]'];
+
+    for (const [category, data] of Object.entries(anchors)) {
+      if (data.values && data.values.length > 0) {
+        parts.push(`${data.preservePattern} ${data.values.join(', ')}`);
+      }
+    }
+
+    parts.push('[END LOCK - Only action and camera may vary below]');
+
+    return parts.join(' ');
+  },
+
+  // =========================================================================
+  // SHOT CHAINING - Connect shot outputs to subsequent inputs
+  // =========================================================================
+
+  /**
+   * Generate "from previous shot" visual context
+   * This simulates the Qwen workflow's image-to-image conditioning
+   * @param {Object} previousShot - Previous shot data (including generated image URL)
+   * @returns {Object} Chaining context
+   */
+  generateChainingContext(previousShot) {
+    if (!previousShot) return null;
+
+    const context = {
+      hasImageReference: !!previousShot.imageUrl,
+      imageUrl: previousShot.imageUrl || null,
+      endState: previousShot.endState || previousShot.narrativeBeat?.endState || null,
+      visualElements: this.extractEndFrameElements(previousShot)
+    };
+
+    // Build textual description of what to maintain
+    const maintainParts = [];
+
+    if (context.visualElements.characterPosition) {
+      maintainParts.push(`Character positioned ${context.visualElements.characterPosition}`);
+    }
+    if (context.visualElements.cameraAngle) {
+      maintainParts.push(`Camera angle: ${context.visualElements.cameraAngle}`);
+    }
+    if (context.visualElements.lightingState) {
+      maintainParts.push(`Lighting: ${context.visualElements.lightingState}`);
+    }
+
+    context.chainingPrompt = maintainParts.length > 0
+      ? `[FROM PREVIOUS FRAME: ${maintainParts.join('. ')}]`
+      : '[CONTINUING FROM PREVIOUS SHOT]';
+
+    return context;
+  },
+
+  /**
+   * Extract visual elements from end of previous shot
+   */
+  extractEndFrameElements(shot) {
+    const endState = (shot.endState || shot.narrativeBeat?.endState || '').toLowerCase();
+    const prompt = (shot.videoPrompt || '').toLowerCase();
+    const combined = `${endState} ${prompt}`;
+
+    return {
+      characterPosition: this.detectPosition(combined),
+      cameraAngle: this.detectCameraAngle(combined),
+      lightingState: this.detectLightingState(combined),
+      emotionalState: this.detectEmotionalState(combined)
+    };
+  },
+
+  detectPosition(text) {
+    if (/center|middle|foreground/.test(text)) return 'center frame';
+    if (/left/.test(text)) return 'frame left';
+    if (/right/.test(text)) return 'frame right';
+    if (/background|distant/.test(text)) return 'background';
+    return null;
+  },
+
+  detectCameraAngle(text) {
+    if (/close-?up|closeup|tight/.test(text)) return 'close-up';
+    if (/wide|establishing/.test(text)) return 'wide';
+    if (/medium/.test(text)) return 'medium';
+    if (/over.?shoulder|ots/.test(text)) return 'over-shoulder';
+    return null;
+  },
+
+  detectLightingState(text) {
+    if (/bright|lit|illuminate/.test(text)) return 'well-lit';
+    if (/dark|shadow|dim/.test(text)) return 'low-light';
+    if (/dramatic|contrast/.test(text)) return 'dramatic contrast';
+    return null;
+  },
+
+  detectEmotionalState(text) {
+    if (/tense|anxious|nervous/.test(text)) return 'tense';
+    if (/calm|peaceful|serene/.test(text)) return 'calm';
+    if (/happy|joyful|excited/.test(text)) return 'joyful';
+    if (/sad|sorrowful/.test(text)) return 'sad';
+    return 'neutral';
+  },
+
+  // =========================================================================
+  // LAST FRAME CAPTURE INSTRUCTIONS - For video-to-video continuity
+  // =========================================================================
+
+  /**
+   * Generate instructions for capturing and using last frame
+   * This is metadata for the video generation process
+   */
+  generateLastFrameInstructions(shotIndex, totalShots, isLast) {
+    if (isLast) {
+      return {
+        captureLastFrame: false, // No need for final shot
+        reason: 'Final shot of scene - no subsequent shot to chain'
+      };
+    }
+
+    return {
+      captureLastFrame: true,
+      captureTimingMs: 'final_frame', // Capture at end of video
+      useFor: 'next_shot_reference',
+      reason: 'Chain visual continuity to next shot',
+      instructions: [
+        'Capture the final rendered frame of this video',
+        'Store as reference image for Shot ' + (shotIndex + 2),
+        'Use as first_frame_image OR as visual conditioning context'
+      ]
+    };
+  },
+
+  // =========================================================================
+  // PROMPT PARTITIONING - Separate locked vs variable elements
+  // =========================================================================
+
+  /**
+   * Partition a prompt into locked (consistent) and variable (action/camera) parts
+   * @param {string} fullPrompt - Complete shot prompt
+   * @param {Object} anchors - Visual anchors to preserve
+   * @returns {Object} Partitioned prompt
+   */
+  partitionPrompt(fullPrompt, anchors) {
+    // The locked part comes from anchors
+    const lockedPart = this.buildAnchorLockString(anchors);
+
+    // The variable part is action and camera description
+    // Try to extract just the action/camera portions
+    const actionPatterns = [
+      /(?:camera|shot)\s+(?:pushes?|pulls?|tracks?|pans?|tilts?|cranes?|dollies?)[^.]+/gi,
+      /\[\d+s-\d+s\][^[]+/g, // Temporal segments
+      /(?:walks?|runs?|sits?|stands?|moves?|reaches?|turns?|looks?)[^.]+/gi
+    ];
+
+    let variablePart = fullPrompt;
+
+    // Remove anchor content from variable part to avoid duplication
+    for (const [category, data] of Object.entries(anchors)) {
+      if (data.values) {
+        for (const value of data.values) {
+          variablePart = variablePart.replace(new RegExp(value, 'gi'), '');
+        }
+      }
+    }
+
+    return {
+      locked: lockedPart,
+      variable: variablePart.trim(),
+      combined: `${lockedPart} ${variablePart.trim()}`
+    };
+  },
+
+  // =========================================================================
+  // SCENE PROCESSING - Apply continuity to all shots in a scene
+  // =========================================================================
+
+  /**
+   * Process all shots in a scene with visual continuity
+   * @param {Array} shots - Array of shot objects
+   * @param {Object} sceneContext - Scene context (visualPrompt, styleBible, etc.)
+   * @returns {Array} Enhanced shots with continuity data
+   */
+  processSceneWithContinuity(shots, sceneContext) {
+    if (!shots || shots.length === 0) return shots;
+
+    // Extract global anchors from scene description
+    const globalAnchors = this.extractVisualAnchors(
+      sceneContext?.visualPrompt || '',
+      sceneContext?.styleBible || null
+    );
+
+    const anchorLockString = this.buildAnchorLockString(globalAnchors);
+
+    console.log(`[VISUAL_CONTINUITY_ENGINE] Extracted ${Object.keys(globalAnchors).length} anchor categories`);
+
+    const enhancedShots = [];
+
+    for (let i = 0; i < shots.length; i++) {
+      const shot = { ...shots[i] };
+      const previousShot = i > 0 ? enhancedShots[i - 1] : null;
+      const isLast = i === shots.length - 1;
+
+      // 1. Add chaining context from previous shot
+      const chainingContext = this.generateChainingContext(previousShot);
+
+      // 2. Add last frame capture instructions
+      const lastFrameInstructions = this.generateLastFrameInstructions(i, shots.length, isLast);
+
+      // 3. Enhance the video prompt with continuity elements
+      let enhancedPrompt = shot.videoPrompt || '';
+
+      // Prepend anchor lock (if not already present)
+      if (!enhancedPrompt.includes('[VISUAL CONTINUITY LOCK]')) {
+        enhancedPrompt = `${anchorLockString} ${enhancedPrompt}`;
+      }
+
+      // Add chaining context (if not first shot)
+      if (chainingContext && !shot.isFirst) {
+        enhancedPrompt = `${chainingContext.chainingPrompt} ${enhancedPrompt}`;
+      }
+
+      shot.videoPrompt = enhancedPrompt;
+
+      // 4. Add continuity metadata
+      shot.visualContinuity = {
+        globalAnchors: i === 0 ? globalAnchors : null, // Only store on first shot
+        chainingContext: chainingContext,
+        lastFrameCapture: lastFrameInstructions,
+        anchorCategories: Object.keys(globalAnchors)
+      };
+
+      enhancedShots.push(shot);
+    }
+
+    console.log(`[VISUAL_CONTINUITY_ENGINE] Processed ${shots.length} shots with visual continuity`);
+
+    return enhancedShots;
+  },
+
+  // =========================================================================
+  // UTILITIES - Helper methods
+  // =========================================================================
+
+  /**
+   * Get a summary of visual continuity for logging/UI
+   */
+  getContinuitySummary(shots) {
+    if (!shots || shots.length === 0) return 'No shots to analyze';
+
+    const firstShot = shots[0];
+    const anchors = firstShot?.visualContinuity?.globalAnchors || {};
+    const categories = Object.keys(anchors);
+
+    const chainedCount = shots.filter(s => s.visualContinuity?.chainingContext).length;
+    const captureCount = shots.filter(s => s.visualContinuity?.lastFrameCapture?.captureLastFrame).length;
+
+    return `Visual continuity: ${categories.length} anchor categories locked, ${chainedCount} shots chained, ${captureCount} frames to capture`;
+  }
+};
+
+// =============================================================================
 // NARRATIVE_BEAT_GENERATOR - Legacy compatibility wrapper
 // =============================================================================
 /**
@@ -44846,10 +45248,26 @@ exports.creationWizardDecomposeSceneToShots = functions
     const narrativeFlow = CROSS_SHOT_INTELLIGENCE.getNarrativeFlowSummary(intelligentShots);
     console.log(`[creationWizardDecomposeSceneToShots] ${narrativeFlow}`);
 
+    // STEP 5.8: VISUAL CONTINUITY - Lock visual anchors across shots
+    // Based on Qwen workflow principle: "preserve core identifiers, vary only action/camera"
+    const visualContinuityContext = {
+      visualPrompt: sceneDescription,
+      styleBible: styleBible
+    };
+
+    const continuityShots = VISUAL_CONTINUITY_ENGINE.processSceneWithContinuity(
+      intelligentShots,
+      visualContinuityContext
+    );
+
+    // Get continuity summary for logging
+    const continuitySummary = VISUAL_CONTINUITY_ENGINE.getContinuitySummary(continuityShots);
+    console.log(`[creationWizardDecomposeSceneToShots] ${continuitySummary}`);
+
     // STEP 6: Normalize shots with all required fields
-    // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, and crossShotIntelligence
-    const normalizedShots = intelligentShots.map((shot, idx) => {
-      const isLast = idx === intelligentShots.length - 1;
+    // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, and visualContinuity
+    const normalizedShots = continuityShots.map((shot, idx) => {
+      const isLast = idx === continuityShots.length - 1;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
       return {
@@ -44887,6 +45305,10 @@ exports.creationWizardDecomposeSceneToShots = functions
         intensity: shot.crossShotIntelligence?.intensity || null,
         momentumDirection: shot.crossShotIntelligence?.momentumDirection || null,
         narrativePosition: shot.crossShotIntelligence?.narrativePosition || null,
+        // NEW: Visual continuity (Qwen-inspired)
+        visualContinuity: shot.visualContinuity || null,
+        lastFrameCapture: shot.visualContinuity?.lastFrameCapture || null,
+        anchorCategories: shot.visualContinuity?.anchorCategories || [],
         // Generation status
         imageUrl: null,
         videoUrl: null,
