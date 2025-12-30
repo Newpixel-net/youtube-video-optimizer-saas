@@ -7455,14 +7455,16 @@ exports.upscaleSceneImage = functions
 /**
  * upscaleImageInternal - Internal helper for upscaling images (Fix 3)
  * Used by shot generation functions - no auth/token checks
- * Uses fal.ai AuraSR (FREE) for 4x upscaling
+ * Uses fal.ai Recraft Crisp for face-preserving enhancement ($0.004/image)
+ * Fallback to AuraSR (FREE) if Recraft fails
  *
  * @param {string} imageUrl - URL of image to upscale
  * @param {string} aspectRatio - Target aspect ratio (default '16:9')
  * @param {string} quality - 'hd' (1920x1080) or '4k' (3840x2160)
+ * @param {boolean} preserveFaces - Use Recraft Crisp for face preservation (default true)
  * @returns {Promise<object>} { success, url, width, height }
  */
-async function upscaleImageInternal(imageUrl, aspectRatio = '16:9', quality = 'hd') {
+async function upscaleImageInternal(imageUrl, aspectRatio = '16:9', quality = 'hd', preserveFaces = true) {
   if (!imageUrl) {
     console.warn('[upscaleImageInternal] No image URL provided, skipping upscale');
     return { success: false, url: imageUrl, skipped: true };
@@ -7478,24 +7480,53 @@ async function upscaleImageInternal(imageUrl, aspectRatio = '16:9', quality = 'h
 
     fal.config({ credentials: falKey });
 
-    console.log(`[upscaleImageInternal] Starting ${quality} upscale: ${imageUrl.substring(0, 80)}...`);
+    let upscaledUrl = null;
+    let modelUsed = null;
 
-    // Call AuraSR for 4x upscale (FREE!)
-    const result = await fal.subscribe('fal-ai/aura-sr', {
-      input: {
-        image_url: imageUrl,
-        upscaling_factor: 4,
-        overlapping_tiles: true
+    // PRIMARY: Use Recraft Crisp for face-preserving enhancement ($0.004/image)
+    if (preserveFaces) {
+      try {
+        console.log(`[upscaleImageInternal] Using Recraft Crisp (face-preserving): ${imageUrl.substring(0, 60)}...`);
+
+        const recraftResult = await fal.subscribe('fal-ai/recraft/upscale/crisp', {
+          input: {
+            image_url: imageUrl
+          }
+        });
+
+        if (recraftResult.data?.image?.url) {
+          upscaledUrl = recraftResult.data.image.url;
+          modelUsed = 'recraft-crisp';
+          console.log('[upscaleImageInternal] Recraft Crisp enhancement complete');
+        } else {
+          console.warn('[upscaleImageInternal] Recraft Crisp returned no image, falling back to AuraSR');
+        }
+      } catch (recraftError) {
+        console.warn('[upscaleImageInternal] Recraft Crisp failed, falling back to AuraSR:', recraftError.message);
       }
-    });
-
-    if (!result.data?.image?.url) {
-      console.error('[upscaleImageInternal] No image returned from AuraSR');
-      return { success: false, url: imageUrl, error: 'No image returned' };
     }
 
-    const upscaledUrl = result.data.image.url;
-    console.log(`[upscaleImageInternal] AuraSR complete, resizing to target dimensions`);
+    // FALLBACK: Use AuraSR (FREE) if Recraft failed or not requested
+    if (!upscaledUrl) {
+      console.log(`[upscaleImageInternal] Using AuraSR (free fallback): ${imageUrl.substring(0, 60)}...`);
+
+      const auraResult = await fal.subscribe('fal-ai/aura-sr', {
+        input: {
+          image_url: imageUrl,
+          upscaling_factor: 4,
+          overlapping_tiles: true
+        }
+      });
+
+      if (!auraResult.data?.image?.url) {
+        console.error('[upscaleImageInternal] AuraSR also failed - no image returned');
+        return { success: false, url: imageUrl, error: 'Both upscalers failed' };
+      }
+
+      upscaledUrl = auraResult.data.image.url;
+      modelUsed = 'aura-sr';
+      console.log('[upscaleImageInternal] AuraSR upscale complete');
+    }
 
     // Get target dimensions
     const targetDimensions = getTargetDimensions(aspectRatio, quality);
@@ -7518,7 +7549,7 @@ async function upscaleImageInternal(imageUrl, aspectRatio = '16:9', quality = 'h
     // Upload to Firebase Storage
     const storage = admin.storage().bucket();
     const timestamp = Date.now();
-    const storagePath = `shot-upscales/${timestamp}_${quality}.png`;
+    const storagePath = `shot-upscales/${timestamp}_${modelUsed}_${quality}.png`;
     const file = storage.file(storagePath);
 
     await file.save(resizedBuffer, {
@@ -7526,7 +7557,7 @@ async function upscaleImageInternal(imageUrl, aspectRatio = '16:9', quality = 'h
         contentType: 'image/png',
         metadata: {
           originalUrl: imageUrl,
-          upscaleModel: 'aura-sr',
+          upscaleModel: modelUsed,
           quality: quality,
           dimensions: `${targetWidth}x${targetHeight}`
         }
@@ -7536,7 +7567,7 @@ async function upscaleImageInternal(imageUrl, aspectRatio = '16:9', quality = 'h
     await file.makePublic();
     const finalUrl = `https://storage.googleapis.com/${storage.name}/${storagePath}`;
 
-    console.log(`[upscaleImageInternal] Upscale complete: ${targetWidth}x${targetHeight}`);
+    console.log(`[upscaleImageInternal] Upscale complete (${modelUsed}): ${targetWidth}x${targetHeight}`);
 
     return {
       success: true,
@@ -7544,7 +7575,8 @@ async function upscaleImageInternal(imageUrl, aspectRatio = '16:9', quality = 'h
       originalUrl: imageUrl,
       width: targetWidth,
       height: targetHeight,
-      quality: quality
+      quality: quality,
+      model: modelUsed
     };
 
   } catch (error) {
