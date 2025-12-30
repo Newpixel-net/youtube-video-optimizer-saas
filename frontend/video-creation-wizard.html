@@ -4714,6 +4714,7 @@
             state.content.pacing = pacing;
 
             // Auto-configure video model duration based on pacing
+            // MiniMax-Hailuo-2.3 supports both 6s and 10s durations
             if (!state.content.videoModel) {
                 state.content.videoModel = { provider: 'minimax', model: 'hailuo-2.3', duration: '10s', resolution: '768p', mode: 'quality' };
             }
@@ -4744,9 +4745,12 @@
             state.content.videoModel.mode = mode;
 
             // Map mode to model
+            // hailuo-2.3 and hailuo-02 support both 6s and 10s
+            // hailuo-2.3-fast only supports 6s
+            const is10sVideo = state.content.videoModel.duration === '10s';
             const modeToModel = {
                 'quality': 'hailuo-2.3',
-                'fast': 'hailuo-2.3-fast',
+                'fast': is10sVideo ? 'hailuo-2.3' : 'hailuo-2.3-fast',  // Fast only supports 6s
                 'continuity': 'hailuo-02'
             };
             state.content.videoModel.model = modeToModel[mode] || 'hailuo-2.3';
@@ -4762,7 +4766,12 @@
 
             state.content.videoModel.duration = duration;
 
-            // If switching to 10s, force 768p (1080p not supported for 10s)
+            // Auto-switch from fast mode if selecting 10s (fast mode doesn't support 10s)
+            if (duration === '10s' && state.content.videoModel.model === 'hailuo-2.3-fast') {
+                state.content.videoModel.model = 'hailuo-2.3';
+            }
+
+            // 10s clips only support 768p
             if (duration === '10s' && state.content.videoModel.resolution === '1080p') {
                 state.content.videoModel.resolution = '768p';
             }
@@ -8533,8 +8542,8 @@
                     const modeLabel = result.data.usedCharacterConsistency ? '👤' : '🎬';
                     showToast(`${modeLabel} Shot ${shotIndex + 1} video started! Polling...`, 'success');
 
-                    // Start polling for this shot
-                    startSingleShotVideoPolling(sceneId, shotIndex, result.data.taskId);
+                    // Start polling for this shot - pass duration for timeout calculation
+                    startSingleShotVideoPolling(sceneId, shotIndex, result.data.taskId, shot.duration);
                 } else {
                     throw new Error('Failed to start video generation');
                 }
@@ -8562,10 +8571,19 @@
             const processingShots = decomposed.shots.filter(s => s.videoStatus === 'processing' && s.videoTaskId);
             if (processingShots.length === 0) return;
 
+            // Determine if we're generating 10s videos (check from video model or first shot's duration)
+            const clipDuration = state.content.videoModel?.duration || '10s';
+            const firstShotDuration = processingShots[0]?.duration;
+            const is10sVideo = clipDuration === '10s' || firstShotDuration === 10;
+
             let pollCount = 0;
             let consecutiveErrors = 0;
-            const maxPolls = 180; // 6 minutes max (2s intervals) - Minimax can take a while
+            // Dynamic timeout: 10s videos need 10 minutes, 6s videos need 6 minutes
+            const maxPolls = is10sVideo ? 300 : 180; // 10 min (300×2s) or 6 min (180×2s)
+            const timeoutMinutes = is10sVideo ? 10 : 6;
             const maxConsecutiveErrors = 10; // Stop after 10 consecutive errors
+
+            console.log(`[Video Poll Batch] Starting batch polling - ${is10sVideo ? '10s' : '6s'} videos, timeout: ${timeoutMinutes} minutes`);
 
             const pollInterval = setInterval(async () => {
                 pollCount++;
@@ -8576,9 +8594,10 @@
                     processingShots.forEach(shot => {
                         if (shot.videoStatus === 'processing') {
                             shot.videoStatus = 'error';
-                            shot.videoError = 'Timed out after 6 minutes';
+                            shot.videoError = `Timed out after ${timeoutMinutes} minutes`;
                         }
                     });
+                    showToast(`⏱️ Video generation timed out after ${timeoutMinutes} minutes`, 'error');
                     render();
                     return;
                 }
@@ -8685,8 +8704,12 @@
 
         /**
          * Poll for single shot video completion
+         * @param {string} sceneId - Scene identifier
+         * @param {number} shotIndex - Shot index
+         * @param {string} taskId - Minimax task ID
+         * @param {number} shotDuration - Shot duration in seconds (6 or 10)
          */
-        function startSingleShotVideoPolling(sceneId, shotIndex, taskId) {
+        function startSingleShotVideoPolling(sceneId, shotIndex, taskId, shotDuration = 10) {
             const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
             if (!decomposed || !decomposed.shots[shotIndex]) return;
 
@@ -8694,8 +8717,16 @@
             shot.videoPollCount = 0;
             shot.videoPollStartTime = Date.now();
             shot.videoConsecutiveErrors = 0;
-            const maxPolls = 150; // 5 minutes at 2s intervals - Minimax can take a while
+
+            // Dynamic timeout based on video duration:
+            // - 6s videos: 5 minutes (150 polls × 2s) - typically complete in 3-4 minutes
+            // - 10s videos: 10 minutes (300 polls × 2s) - can take 6-8 minutes on Minimax
+            const is10sVideo = shotDuration === 10 || shotDuration === '10s' || shotDuration === '10';
+            const maxPolls = is10sVideo ? 300 : 150;
+            const timeoutMinutes = is10sVideo ? 10 : 5;
             const maxConsecutiveErrors = 10; // Stop after 10 consecutive errors
+
+            console.log(`[Video Poll] Starting polling for ${shotDuration}s video - timeout: ${timeoutMinutes} minutes (${maxPolls} polls)`);
 
             const pollInterval = setInterval(async () => {
                 shot.videoPollCount = (shot.videoPollCount || 0) + 1;
@@ -8708,8 +8739,8 @@
                     removePollingInterval(pollInterval);
                     if (shot.videoStatus === 'processing') {
                         shot.videoStatus = 'error';
-                        shot.videoError = 'Video generation timed out after 5 minutes';
-                        showToast(`⏱️ Shot ${shotIndex + 1} video timed out. Try again.`, 'error');
+                        shot.videoError = `Video generation timed out after ${timeoutMinutes} minutes`;
+                        showToast(`⏱️ Shot ${shotIndex + 1} video timed out after ${timeoutMinutes} min. Try again.`, 'error');
                         render();
                         renderShotDecompositionModal();
                     }
@@ -12641,6 +12672,7 @@
             `;
 
             // AI Video Model Selection Card
+            // MiniMax-Hailuo-2.3 supports both 6s and 10s durations
             const videoModel = state.content.videoModel || { model: 'hailuo-2.3', duration: '10s', resolution: '768p', mode: 'quality' };
             const canUse1080p = videoModel.duration === '6s'; // 1080p only available for 6s
             html += `

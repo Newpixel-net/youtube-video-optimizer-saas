@@ -33420,37 +33420,38 @@ exports.creationWizardUpdateAnimation = functions.https.onCall(async (data, cont
  * Minimax Video Model Configuration
  */
 const MINIMAX_VIDEO_MODELS = {
+  // IMPORTANT: Model IDs must match official Minimax API names
+  // See: https://platform.minimax.io/docs/api-reference/video-generation-t2v
   'hailuo-2.3': {
     name: 'Hailuo 2.3 Quality',
-    modelId: 'T2V-01',
+    modelId: 'MiniMax-Hailuo-2.3',  // Supports 10s at 768p
     inputTypes: ['text', 'image'],
     durations: {
       '6s': ['768p', '1080p'],
-      '10s': ['768p']
+      '10s': ['768p']  // 10s only at 768p
     },
     pricing: { '6s-768p': 0.28, '6s-1080p': 0.49, '10s-768p': 0.40 },
     features: ['camera_control', 'prompt_optimizer'],
-    description: 'Standard quality video generation'
+    description: 'Standard quality video generation (6s and 10s)'
   },
   'hailuo-2.3-fast': {
     name: 'Hailuo 2.3 Fast',
-    modelId: 'T2V-01-Fast',
+    modelId: 'T2V-01-Fast',  // Fast mode - 6s only
     inputTypes: ['image'],
     durations: {
-      '6s': ['768p', '1080p'],
-      '10s': ['768p']
+      '6s': ['768p', '1080p']
     },
-    pricing: { '6s-768p': 0.14, '6s-1080p': 0.25, '10s-768p': 0.20 },
+    pricing: { '6s-768p': 0.14, '6s-1080p': 0.25 },
     features: ['camera_control', 'fast_generation'],
-    description: 'Faster generation, image-to-video only'
+    description: 'Faster generation, image-to-video only (6s only)'
   },
   'hailuo-02': {
     name: 'Hailuo 02',
-    modelId: 'T2V-02',
+    modelId: 'MiniMax-Hailuo-02',  // Supports 10s at 768p
     inputTypes: ['text', 'image'],
     durations: {
-      '6s': ['512p', '768p', '1080p'],
-      '10s': ['512p', '768p']
+      '6s': ['768p', '1080p'],
+      '10s': ['768p']  // 10s only at 768p
     },
     pricing: { '6s-768p': 0.28, '6s-1080p': 0.49, '10s-768p': 0.40 },
     features: ['camera_control', 'last_frame_conditioning'],
@@ -33853,16 +33854,25 @@ exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data,
     throw new functions.https.HttpsError('invalid-argument', 'Video prompt is required (min 5 chars)');
   }
 
-  // Validate model
-  const modelConfig = MINIMAX_VIDEO_MODELS[model];
+  // Validate model - auto-switch for models that don't support requested duration
+  let effectiveModel = model;
+  const is10sVideo = duration === '10s';
+
+  // Only hailuo-2.3-fast doesn't support 10s - auto-switch to hailuo-2.3
+  if (is10sVideo && model === 'hailuo-2.3-fast') {
+    console.log(`[creationWizardGenerateMinimaxVideo] Auto-switching from ${model} to hailuo-2.3 for 10s duration`);
+    effectiveModel = 'hailuo-2.3';
+  }
+
+  const modelConfig = MINIMAX_VIDEO_MODELS[effectiveModel];
   if (!modelConfig) {
-    throw new functions.https.HttpsError('invalid-argument', `Invalid model: ${model}`);
+    throw new functions.https.HttpsError('invalid-argument', `Invalid model: ${effectiveModel}`);
   }
 
   // Validate duration/resolution combination
   const allowedResolutions = modelConfig.durations[duration];
   if (!allowedResolutions) {
-    throw new functions.https.HttpsError('invalid-argument', `Duration ${duration} not supported for model ${model}`);
+    throw new functions.https.HttpsError('invalid-argument', `Duration ${duration} not supported for model ${effectiveModel}`);
   }
   if (!allowedResolutions.includes(resolution)) {
     throw new functions.https.HttpsError('invalid-argument', `Resolution ${resolution} not supported for ${duration} duration. Allowed: ${allowedResolutions.join(', ')}`);
@@ -43597,11 +43607,13 @@ exports.creationWizardGenerateShotVideo = functions
     // MODEL SELECTION
     // ==========================================
     // NOTE: S2V-01 (character consistency) is currently disabled due to API issues
-    // Using video-01 for all video generation until S2V-01 is properly tested
     const useCharacterConsistency = false; // Disabled: hasCharacters && characterReference;
-    const selectedModel = 'video-01'; // Always use video-01 for now
 
-    console.log(`[creationWizardGenerateShotVideo] Model: ${selectedModel} (S2V-01 disabled)`);
+    // Use MiniMax-Hailuo-2.3 which supports both 6s and 10s durations
+    // See: https://platform.minimax.io/docs/api-reference/video-generation-t2v
+    const selectedModel = 'MiniMax-Hailuo-2.3';
+
+    console.log(`[creationWizardGenerateShotVideo] Model: ${selectedModel} (duration: ${duration})`);
     console.log(`[creationWizardGenerateShotVideo] Has Characters: ${hasCharacters}, Character Reference: ${characterReference ? 'YES' : 'NO'}`);
     if (primaryCharacterName) {
       console.log(`[creationWizardGenerateShotVideo] Primary Character: ${primaryCharacterName}`);
@@ -43809,16 +43821,19 @@ exports.creationWizardGenerateAllShotVideos = functions
         // Convert duration string ('6s' or '10s') to integer for Minimax API
         const durationSeconds = duration === '6s' ? 6 : 10;
 
+        // Use MiniMax-Hailuo-2.3 which supports both 6s and 10s durations
+        const selectedModel = 'MiniMax-Hailuo-2.3';
+
         // Call Minimax API
         const payload = {
-          model: 'video-01',
+          model: selectedModel,
           prompt: videoPrompt,
           first_frame_image: shot.imageUrl,
           prompt_optimizer: true,
           duration: durationSeconds // CRITICAL: Must include duration or API defaults to 5s
         };
 
-        console.log(`[creationWizardGenerateAllShotVideos] Shot ${i + 1} payload with duration=${durationSeconds}`);
+        console.log(`[creationWizardGenerateAllShotVideos] Shot ${i + 1} payload: model=${selectedModel}, duration=${durationSeconds}s`);
 
         const minimaxResponse = await axios.post(
           'https://api.minimax.io/v1/video_generation',
