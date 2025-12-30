@@ -26871,6 +26871,29 @@ ${productionSettings.specialInstructions ? `\nPRODUCTION SPECIAL: ${productionSe
    - cameraIntent: WHY this camera move serves the story
    - transition: { type, purpose } - purposeful transitions
    - duration: ${visualDuration}
+   - sceneAction: CRITICAL FOR VIDEO GENERATION (see below)
+
+=== CRITICAL: sceneAction IS THE STORY ENGINE ===
+The sceneAction field drives the entire video animation system. Each scene will be divided into ${actualShotsPerScene} video shots of ${clipDuration} seconds each. The sceneAction describes the COMPLETE ACTION SEQUENCE that unfolds across all shots.
+
+POOR sceneAction (DO NOT DO THIS):
+"Kai confronts the Shadow Warrior"
+- Too brief, no detail, nothing to animate
+
+EXCELLENT sceneAction (DO THIS):
+"Kai stands at the edge of the rooftop, surveying Neo-Shaolin's sprawling neon skyline below. Wind catches his coat as he turns to face Ryu and Li Mei, his expression shifting from contemplation to resolve. He speaks, gesturing toward their destination in the distance. Ryu steps forward with a confident grin, cracking his knuckles in anticipation. Li Mei moves to Kai's side, placing her hand on his shoulder in support. The three exchange determined looks, then turn as one toward the rooftop's edge. Together they break into a run and leap from the building, coats billowing dramatically as they descend toward the glowing streets below."
+
+This sceneAction will be divided into shots:
+- Shot 1 (10s): Kai surveys city, turns to companions, begins speaking
+- Shot 2 (10s): Ryu and Li Mei respond, they gather and prepare
+- Shot 3 (10s): They turn, run, and leap from the building
+
+REQUIREMENTS for sceneAction:
+1. Describe ALL character movements, gestures, and expression changes
+2. Include physical interactions between characters
+3. Show environmental responses (wind, light changes, etc.)
+4. Provide enough detail for ${actualShotsPerScene} distinct 10-second video clips
+5. End with a clear "landing moment" that can be captured as a freeze frame
 
 5. AUDIO TIMING:
    - Voiceover scenes: ~${wordsPerScene} words
@@ -27053,7 +27076,7 @@ Return ONLY valid JSON:
       },
       "visualPrompt": "[Camera Movement] Detailed cinematography for AI video generation",
       "visual": "[Camera Movement] Same as visualPrompt for backwards compatibility",
-      "sceneAction": "WHAT IS HAPPENING: Brief description of the action/interaction in this scene (e.g., 'Kai confronts the Shadow Warrior', 'Maya and Kai discuss their plan')",
+      "sceneAction": "DETAILED ACTION SEQUENCE: The complete story action for this ${actualSceneDuration}-second scene. Describe ALL physical actions, character movements, interactions, and reactions in sequence. This will be divided into ${actualShotsPerScene} shots of ${clipDuration} seconds each. Example for a 30s scene with 3 shots: 'Kai stands on the rooftop surveying the city, his coat rippling in the wind. He turns to face Ryu and Li Mei, speaking with growing conviction as he outlines their mission. Ryu steps forward with a confident nod, cracking his knuckles. Li Mei places her hand on Kai\\'s shoulder reassuringly. Together they turn toward the rooftop edge. In unison, the three heroes leap from the building, coats billowing as they descend toward the neon-lit streets below.' Include: character movements, gestures, expressions changing, physical interactions, environmental responses.",
       "audioLayer": {
         "type": "voiceover|dialogue|internal_monologue|action_sfx|music_only",
         "voiceover": "Narrator text if type=voiceover, otherwise null",
@@ -40386,21 +40409,389 @@ exports.PROMPT_CHAIN_ARCHITECTURE = {
 // =============================================================================
 
 // =============================================================================
-// NARRATIVE_BEAT_GENERATOR - Story-Driven Video Prompt Generation
+// STORY_BEAT_DECOMPOSER - Frame-Chain Video Prompt Generation
 // =============================================================================
 /**
- * NARRATIVE_BEAT_GENERATOR - Creates STORY-DRIVEN video prompts
+ * STORY_BEAT_DECOMPOSER - Decomposes sceneAction into connected shot beats
  *
- * The KEY insight: Video prompts must describe SPECIFIC ACTIONS that happen,
- * not generic arc labels. Each shot's prompt tells Minimax exactly what motion
- * to animate from the starting frame.
+ * The KEY insight: Each shot must have START → ACTION → END structure.
+ * - END STATE of Shot N becomes START STATE of Shot N+1 (frame chain)
+ * - Each shot describes 10 seconds of rich, dense action
+ * - Prompts must guide Minimax to animate TOWARD the end state
  *
- * Example for scene "Kai sits cross-legged, troubled. Li Mei stands nearby":
- * - Shot 1: "Kai breathes slowly, tension visible in his shoulders"
- * - Shot 2: "Li Mei takes a step forward, reaching toward Kai"
- * - Shot 3: "Kai lifts his gaze, expression softening"
- *
- * NOT generic labels like "Establishing scene" or "Developing interior"
+ * Example for sceneAction: "Kai surveys the city, turns to companions, they leap"
+ * - Shot 1: START: Rooftop view → ACTION: Kai surveys, turns, speaks → END: Facing companions mid-gesture
+ * - Shot 2: START: Kai facing companions → ACTION: They respond, gather, prepare → END: Three at rooftop edge
+ * - Shot 3: START: Three at edge → ACTION: Run, leap, descend → END: Mid-air with city below
+ */
+const STORY_BEAT_DECOMPOSER = {
+  /**
+   * Decompose sceneAction into shot beats with END STATES
+   * @param {string} sceneAction - Rich action sequence for the scene
+   * @param {number} shotCount - Number of shots to create
+   * @param {object} sceneContext - { visualPrompt, narration, characters }
+   * @returns {Array} Array of shot beats with start/action/end
+   */
+  decomposeIntoShots(sceneAction, shotCount, sceneContext = {}) {
+    if (!sceneAction || sceneAction.trim().length < 20) {
+      // Fallback: use visualPrompt if sceneAction is missing/brief
+      return this.fallbackDecomposition(sceneContext.visualPrompt, shotCount, sceneContext);
+    }
+
+    // Parse sceneAction into sentences/action segments
+    const actionSegments = this.parseActionSegments(sceneAction);
+
+    // Distribute segments across shots
+    const shotBeats = this.distributeToShots(actionSegments, shotCount);
+
+    // Define END STATES for each shot (capture points)
+    const shotsWithEndStates = this.defineEndStates(shotBeats, sceneContext);
+
+    // Generate video prompts with START → ACTION → END structure
+    return this.generateShotPrompts(shotsWithEndStates, sceneContext);
+  },
+
+  /**
+   * Parse sceneAction into individual action segments
+   */
+  parseActionSegments(sceneAction) {
+    // Split by sentence-ending punctuation, keeping the punctuation
+    const sentences = sceneAction
+      .split(/(?<=[.!?])\s+/)
+      .filter(s => s.trim().length > 0);
+
+    // Further split long sentences at natural break points
+    const segments = [];
+    for (const sentence of sentences) {
+      if (sentence.length > 150) {
+        // Split at commas or "and"/"then"/"as" connectors
+        const parts = sentence.split(/,\s+(?:and|then|as|while)\s+|,\s+/);
+        segments.push(...parts.filter(p => p.trim().length > 10));
+      } else {
+        segments.push(sentence);
+      }
+    }
+
+    return segments.map(s => s.trim());
+  },
+
+  /**
+   * Distribute action segments across shots
+   */
+  distributeToShots(segments, shotCount) {
+    const shots = Array(shotCount).fill(null).map(() => ({ segments: [] }));
+
+    if (segments.length === 0) {
+      return shots;
+    }
+
+    // Calculate segments per shot
+    const segmentsPerShot = Math.ceil(segments.length / shotCount);
+
+    let segmentIndex = 0;
+    for (let shotIndex = 0; shotIndex < shotCount; shotIndex++) {
+      const endIndex = Math.min(segmentIndex + segmentsPerShot, segments.length);
+      shots[shotIndex].segments = segments.slice(segmentIndex, endIndex);
+      segmentIndex = endIndex;
+    }
+
+    // Ensure last shot gets any remaining segments
+    if (segmentIndex < segments.length) {
+      shots[shotCount - 1].segments.push(...segments.slice(segmentIndex));
+    }
+
+    return shots;
+  },
+
+  /**
+   * Define END STATES (capture points) for each shot
+   */
+  defineEndStates(shotBeats, sceneContext) {
+    return shotBeats.map((shot, index) => {
+      const isFirst = index === 0;
+      const isLast = index === shotBeats.length - 1;
+      const segments = shot.segments;
+
+      // Determine what this shot's action describes
+      const actionText = segments.join(' ');
+
+      // Extract the END STATE from the last segment
+      const lastSegment = segments[segments.length - 1] || '';
+      const endState = this.extractEndState(lastSegment, actionText, isLast);
+
+      // Determine START STATE (from previous shot's end, or scene opening)
+      const startState = isFirst
+        ? this.extractOpeningState(sceneContext.visualPrompt, actionText)
+        : null; // Will be filled in from previous shot's end
+
+      return {
+        shotIndex: index,
+        isFirst,
+        isLast,
+        segments,
+        actionText,
+        startState,
+        endState
+      };
+    });
+  },
+
+  /**
+   * Extract end state from action text
+   */
+  extractEndState(lastSegment, fullAction, isLast) {
+    // Look for position/pose indicators
+    const positionPatterns = [
+      /(?:stands?|standing)\s+(?:at|by|near|on)\s+[^,.]+/i,
+      /(?:sits?|sitting)\s+(?:down|in|on)\s+[^,.]+/i,
+      /(?:facing|turned toward|looking at)\s+[^,.]+/i,
+      /(?:reaches?|reaching|extends?|extending)\s+(?:toward|for|out)/i,
+      /(?:leaps?|leaping|jumps?|jumping|descends?|descending)/i,
+      /(?:runs?|running|walks?|walking)\s+(?:toward|into|through)/i,
+      /(?:holds?|holding|grips?|gripping)\s+[^,.]+/i
+    ];
+
+    // Try to find a specific pose/position
+    for (const pattern of positionPatterns) {
+      const match = fullAction.match(pattern);
+      if (match) {
+        return this.formatEndState(match[0], isLast);
+      }
+    }
+
+    // Fallback: use the last meaningful phrase
+    const lastPhrase = lastSegment.replace(/[.!?]+$/, '').trim();
+    return this.formatEndState(lastPhrase, isLast);
+  },
+
+  /**
+   * Format end state as a capturable moment
+   */
+  formatEndState(rawState, isLast) {
+    if (isLast) {
+      return `Scene concludes with: ${rawState}. Hold for final frame.`;
+    }
+    return `CAPTURE POINT: ${rawState}. This frame transitions to next shot.`;
+  },
+
+  /**
+   * Extract opening state from visual prompt
+   */
+  extractOpeningState(visualPrompt, actionText) {
+    if (!visualPrompt) {
+      return 'Scene opens';
+    }
+
+    // Look for character positions in visual prompt
+    const positionMatch = visualPrompt.match(
+      /(?:stands?|sits?|positions?|located)\s+(?:at|by|near|on|in)\s+[^,.]+/i
+    );
+
+    if (positionMatch) {
+      return `Opening: ${positionMatch[0]}`;
+    }
+
+    // Look for character + location
+    const charMatch = visualPrompt.match(
+      /([A-Z][a-z]+)\s+(?:is|are|stands?|sits?)\s+[^,.]+/i
+    );
+
+    if (charMatch) {
+      return `Opening: ${charMatch[0]}`;
+    }
+
+    return 'Scene opens with established visual';
+  },
+
+  /**
+   * Generate final shot prompts with START → ACTION → END structure
+   */
+  generateShotPrompts(shotsWithEndStates, sceneContext) {
+    // First pass: set start states from previous end states
+    for (let i = 1; i < shotsWithEndStates.length; i++) {
+      const prevEndState = shotsWithEndStates[i - 1].endState;
+      shotsWithEndStates[i].startState = `Continuing from: ${prevEndState.replace('CAPTURE POINT: ', '').replace('. This frame transitions to next shot.', '')}`;
+    }
+
+    // Second pass: generate video prompts
+    return shotsWithEndStates.map(shot => {
+      const videoPrompt = this.buildVideoPrompt(shot, sceneContext);
+      return {
+        ...shot,
+        videoPrompt,
+        motionDescription: this.createMotionSummary(shot)
+      };
+    });
+  },
+
+  /**
+   * Build the video prompt with START → ACTION → END structure
+   */
+  buildVideoPrompt(shot, sceneContext) {
+    const parts = [];
+
+    // 1. START STATE (where we begin)
+    if (shot.isFirst) {
+      parts.push(`OPENING: ${shot.startState}`);
+    } else {
+      parts.push(`${shot.startState}`);
+    }
+
+    // 2. ACTION (what happens over 10 seconds)
+    const actionContent = shot.actionText || shot.segments.join('. ');
+    if (actionContent) {
+      parts.push(`ACTION: ${actionContent}`);
+    }
+
+    // 3. END STATE (where we land - capture point)
+    parts.push(`${shot.endState}`);
+
+    // 4. Animation guidance
+    const animationGuidance = shot.isLast
+      ? 'Smooth motion leading to final resting pose.'
+      : 'Animate smoothly toward the capture point for seamless transition to next shot.';
+    parts.push(animationGuidance);
+
+    return parts.join(' ');
+  },
+
+  /**
+   * Create a brief motion summary for UI display
+   */
+  createMotionSummary(shot) {
+    const action = shot.actionText || '';
+    // Extract key verbs/actions
+    const verbMatch = action.match(/\b(walks?|runs?|leaps?|turns?|speaks?|reaches?|stands?|sits?|looks?|moves?)\b/gi);
+    if (verbMatch && verbMatch.length > 0) {
+      const uniqueVerbs = [...new Set(verbMatch.map(v => v.toLowerCase()))];
+      return `Shot ${shot.shotIndex + 1}: ${uniqueVerbs.slice(0, 3).join(', ')}`;
+    }
+    return `Shot ${shot.shotIndex + 1}: Progressive action`;
+  },
+
+  /**
+   * Fallback decomposition when sceneAction is missing
+   * Uses visualPrompt to generate basic progressive shots
+   */
+  fallbackDecomposition(visualPrompt, shotCount, sceneContext) {
+    const prompt = visualPrompt || '';
+    const shots = [];
+
+    // Extract any characters mentioned
+    const characters = this.extractCharacters(prompt);
+    const environment = this.extractEnvironment(prompt);
+
+    // Create progressive shots based on typical scene structure
+    const phases = ['establish', 'develop', 'build', 'peak', 'resolve'];
+
+    for (let i = 0; i < shotCount; i++) {
+      const phase = phases[Math.min(i, phases.length - 1)];
+      const isFirst = i === 0;
+      const isLast = i === shotCount - 1;
+
+      const shot = this.createFallbackShot(
+        i, phase, characters, environment,
+        { isFirst, isLast, shotCount }
+      );
+      shots.push(shot);
+    }
+
+    return shots;
+  },
+
+  /**
+   * Create a fallback shot when no sceneAction exists
+   */
+  createFallbackShot(index, phase, characters, environment, meta) {
+    const char = characters[0] || 'Subject';
+    const env = environment || 'the scene';
+
+    const phaseActions = {
+      establish: {
+        action: `${char} is revealed in ${env}, establishing the setting with subtle environmental motion`,
+        end: `${char} positioned in frame, environment established`
+      },
+      develop: {
+        action: `${char} shows subtle movement and expression change, engaging with the surroundings`,
+        end: `${char} in developed pose, ready for next action`
+      },
+      build: {
+        action: `Energy increases as ${char} moves with purpose, tension building in the scene`,
+        end: `${char} at heightened state, movement intensifying`
+      },
+      peak: {
+        action: `${char} reaches the dramatic high point, maximum visual impact and motion`,
+        end: `${char} at peak dramatic moment`
+      },
+      resolve: {
+        action: `${char} settles into resolution, motion slowing to satisfying conclusion`,
+        end: `${char} in final resting state, scene complete`
+      }
+    };
+
+    const phaseData = phaseActions[phase] || phaseActions.develop;
+
+    return {
+      shotIndex: index,
+      isFirst: meta.isFirst,
+      isLast: meta.isLast,
+      segments: [phaseData.action],
+      actionText: phaseData.action,
+      startState: meta.isFirst ? `Opening on ${env}` : 'Continuing from previous frame',
+      endState: meta.isLast
+        ? `Scene concludes: ${phaseData.end}. Hold for final frame.`
+        : `CAPTURE POINT: ${phaseData.end}. This frame transitions to next shot.`,
+      videoPrompt: this.buildVideoPrompt({
+        isFirst: meta.isFirst,
+        isLast: meta.isLast,
+        startState: meta.isFirst ? `Opening on ${env}` : 'Continuing from previous frame',
+        actionText: phaseData.action,
+        endState: meta.isLast
+          ? `Scene concludes: ${phaseData.end}. Hold for final frame.`
+          : `CAPTURE POINT: ${phaseData.end}. This frame transitions to next shot.`
+      }, {}),
+      motionDescription: `Shot ${index + 1}: ${phase} phase`
+    };
+  },
+
+  /**
+   * Extract character names from text
+   */
+  extractCharacters(text) {
+    const charPatterns = [
+      /([A-Z][a-z]+)\s+(?:stands?|sits?|walks?|looks?|gazes?|holds?)/g,
+      /(?:Foreground|Midground|Background):\s*([A-Z][a-z]+)/g
+    ];
+
+    const characters = new Set();
+    for (const pattern of charPatterns) {
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        if (match[1] && match[1].length > 2) {
+          characters.add(match[1]);
+        }
+      }
+    }
+
+    return [...characters];
+  },
+
+  /**
+   * Extract environment description
+   */
+  extractEnvironment(text) {
+    const envMatch = text.match(
+      /(?:in|at|on)\s+(?:a|the|an)?\s*([^,.]{10,50})/i
+    );
+    return envMatch ? envMatch[1].trim() : null;
+  }
+};
+
+// =============================================================================
+// NARRATIVE_BEAT_GENERATOR - Legacy compatibility wrapper
+// =============================================================================
+/**
+ * NARRATIVE_BEAT_GENERATOR - Now wraps STORY_BEAT_DECOMPOSER for backward compatibility
  */
 const NARRATIVE_BEAT_GENERATOR = {
   /**
@@ -41157,30 +41548,37 @@ const SHOT_DECOMPOSITION_ENGINE = {
     // Extract key elements from scene prompt for IMAGE generation
     const extractedElements = this.extractSceneElements(scenePrompt);
 
-    // Generate PROGRESSIVE video prompts using the intelligent system
-    // Pass the ACTUAL shot sequence (not a dummy one) for proper camera movement analysis
-    const progressivePrompts = NARRATIVE_BEAT_GENERATOR.generateProgressivePrompts(
+    // ================================================================
+    // NEW: Use STORY_BEAT_DECOMPOSER for video prompts
+    // This decomposes sceneAction into connected shots with END STATES
+    // Each shot has: START → ACTION → END (capture point) structure
+    // ================================================================
+    const storyBeats = STORY_BEAT_DECOMPOSER.decomposeIntoShots(
+      sceneActionData.sceneAction,  // Primary source: rich action sequence
       shotSequence.length,
       {
         visualPrompt: scenePrompt,
-        narration: narration
-      },
-      shotSequence  // Pass the real shot sequence with actual camera movements
+        narration: narration,
+        characters: characterBible
+      }
     );
 
     // Convert to legacy beat format for backward compatibility with the rest of the code
-    const narrativeBeats = progressivePrompts.map((p, idx) => ({
+    const narrativeBeats = storyBeats.map((beat, idx) => ({
       shotIndex: idx,
-      isFirst: idx === 0,
-      isLast: idx === shotSequence.length - 1,
+      isFirst: beat.isFirst,
+      isLast: beat.isLast,
       progress: shotSequence.length > 1 ? idx / (shotSequence.length - 1) : 0.5,
-      characterMotion: { motionDescription: p.motionDescription },
+      characterMotion: { motionDescription: beat.motionDescription },
       cameraMotion: { movement: shotSequence[idx]?.cameraMovement || 'tracking' },
       environmentMotion: [],
       narrativeContext: { mood: 'neutral' },
-      nextShotHook: idx < shotSequence.length - 1 ? 'continues to next moment' : null,
-      videoPrompt: p.videoPrompt,  // Use the intelligently generated video prompt
-      arcPosition: p.arcPosition
+      nextShotHook: beat.isLast ? null : 'Frame chains to next shot',
+      videoPrompt: beat.videoPrompt,  // START → ACTION → END structured prompt
+      arcPosition: beat.isFirst ? 'establish' : beat.isLast ? 'resolve' : 'develop',
+      // NEW: Expose end state for UI display
+      endState: beat.endState,
+      startState: beat.startState
     }));
 
     // Generate prompts for each shot
