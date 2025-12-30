@@ -40385,6 +40385,471 @@ exports.PROMPT_CHAIN_ARCHITECTURE = {
 // Transforms single scenes into multi-shot cinematic sequences
 // =============================================================================
 
+// =============================================================================
+// NARRATIVE_BEAT_GENERATOR - Distributes scene action across shots
+// =============================================================================
+/**
+ * NARRATIVE_BEAT_GENERATOR - Converts scene-level action into progressive shot beats
+ *
+ * This engine takes the overall scene action (sceneAction, actionBlueprint) and
+ * intelligently distributes it across multiple shots to create:
+ * - Progressive motion that tells a story
+ * - Start/end states for each shot
+ * - Natural transitions between shots
+ * - Character MOTION (not appearance - that's handled by Character Bible + S2V-01)
+ */
+const NARRATIVE_BEAT_GENERATOR = {
+  /**
+   * Generate progressive beats for all shots in a scene
+   * @param {number} shotCount - Number of shots in the scene
+   * @param {object} sceneData - { sceneAction, actionBlueprint, narration, visualPrompt }
+   * @returns {Array} Array of beat objects for each shot
+   */
+  generateBeats(shotCount, sceneData) {
+    const { sceneAction, actionBlueprint, narration } = sceneData;
+    const beats = [];
+
+    // Extract character action progression
+    const charAction = actionBlueprint?.characterAction || {};
+    const cameraAction = actionBlueprint?.cameraAction || {};
+    const envActions = actionBlueprint?.environmentAction || [];
+
+    // If we have a high-level sceneAction but no detailed characterAction, parse it
+    if (sceneAction && !charAction.action) {
+      const parsedAction = this.parseSceneAction(sceneAction);
+      Object.assign(charAction, parsedAction);
+    }
+
+    // Divide the main action into progression stages
+    const actionStages = this.divideAction(charAction, shotCount);
+    const cameraStages = this.divideCameraMotion(cameraAction, shotCount);
+    const envStages = this.divideEnvironmentActions(envActions, shotCount);
+    const narrativeArc = this.divideNarration(narration, shotCount);
+
+    for (let i = 0; i < shotCount; i++) {
+      const isFirst = i === 0;
+      const isLast = i === shotCount - 1;
+      const progress = shotCount > 1 ? i / (shotCount - 1) : 0;
+
+      beats.push({
+        shotIndex: i,
+        isFirst,
+        isLast,
+        progress, // 0.0 to 1.0
+
+        // Character motion for this shot (MINIMAL appearance, FOCUS on action)
+        characterMotion: actionStages[i],
+
+        // Camera movement for this shot
+        cameraMotion: cameraStages[i],
+
+        // Environmental animations for this shot
+        environmentMotion: envStages[i],
+
+        // Narrative context
+        narrativeContext: narrativeArc[i],
+
+        // Transition info
+        transitionIn: isFirst ? 'scene_start' : 'continuation',
+        transitionOut: isLast ? 'scene_end' : 'leads_to_next',
+
+        // What leads to the next shot (for continuity)
+        nextShotHook: !isLast ? this.generateTransitionHook(actionStages[i], actionStages[i + 1]) : null
+      });
+    }
+
+    return beats;
+  },
+
+  /**
+   * Parse a high-level scene action into character action components
+   * e.g., "Kai slowly turns from the sunrise" -> { who: "Kai", action: "slowly turns", ... }
+   */
+  parseSceneAction(sceneAction) {
+    if (!sceneAction) return {};
+
+    const parsed = {};
+
+    // Try to extract character name (capitalized word at start or after articles)
+    const nameMatch = sceneAction.match(/^([A-Z][a-z]+)|(?:the |a )([A-Z][a-z]+)/);
+    if (nameMatch) {
+      parsed.who = nameMatch[1] || nameMatch[2];
+    }
+
+    // Extract the main action verb phrase
+    const actionMatch = sceneAction.match(/(?:^[A-Z][a-z]+\s+)?(.+?)(?:\.|,|$)/);
+    if (actionMatch) {
+      parsed.action = actionMatch[1].trim();
+    }
+
+    // Look for directional/positional info
+    const fromMatch = sceneAction.match(/from (?:the |a )?([^,.]+)/i);
+    const toMatch = sceneAction.match(/(?:toward|towards|to|into) (?:the |a )?([^,.]+)/i);
+
+    if (fromMatch) parsed.startPose = fromMatch[1].trim();
+    if (toMatch) parsed.endPose = toMatch[1].trim();
+
+    return parsed;
+  },
+
+  /**
+   * Divide character action into progressive stages across shots
+   */
+  divideAction(charAction, shotCount) {
+    const stages = [];
+
+    if (!charAction.action) {
+      // No specific action - generate subtle progression
+      for (let i = 0; i < shotCount; i++) {
+        stages.push({
+          who: charAction.who || null,
+          action: null,
+          startState: null,
+          endState: null,
+          timing: 'throughout shot'
+        });
+      }
+      return stages;
+    }
+
+    // Parse the action into a progression
+    const { who, startPose, action, endPose, timing } = charAction;
+
+    // Split action into phases based on shot count
+    if (shotCount === 1) {
+      stages.push({
+        who,
+        action: action,
+        startState: startPose,
+        endState: endPose,
+        timing: timing || 'throughout shot',
+        motionDescription: `${who || 'Character'} ${action}${startPose ? `, from ${startPose}` : ''}${endPose ? ` to ${endPose}` : ''}`
+      });
+    } else if (shotCount === 2) {
+      // Two shots: beginning and completion
+      stages.push({
+        who,
+        action: `begins to ${this.verbToGerund(action)}`,
+        startState: startPose,
+        endState: 'midway through motion',
+        timing: 'building',
+        motionDescription: `${who || 'Character'} starts ${action}`
+      });
+      stages.push({
+        who,
+        action: `completes ${this.verbToGerund(action)}`,
+        startState: 'continuing motion',
+        endState: endPose,
+        timing: 'concluding',
+        motionDescription: `${who || 'Character'} finishes ${action}${endPose ? `, arriving at ${endPose}` : ''}`
+      });
+    } else {
+      // Multiple shots: beginning, middle progression, completion
+      const midPoints = shotCount - 2;
+
+      // First shot: initiation
+      stages.push({
+        who,
+        action: `begins ${this.verbToGerund(action)}`,
+        startState: startPose,
+        endState: 'motion initiated',
+        timing: 'beginning',
+        motionDescription: `${who || 'Character'} starts to ${action}${startPose ? ` from ${startPose}` : ''}`
+      });
+
+      // Middle shots: progression
+      for (let m = 0; m < midPoints; m++) {
+        const midProgress = (m + 1) / (midPoints + 1);
+        const progressDesc = midProgress < 0.5 ? 'continues' : 'approaches completion of';
+        stages.push({
+          who,
+          action: `${progressDesc} ${this.verbToGerund(action)}`,
+          startState: 'in motion',
+          endState: 'continuing motion',
+          timing: 'progressing',
+          motionDescription: `${who || 'Character'} ${progressDesc} ${this.verbToGerund(action)}, ${Math.round(midProgress * 100)}% through movement`
+        });
+      }
+
+      // Last shot: completion
+      stages.push({
+        who,
+        action: `completes ${this.verbToGerund(action)}`,
+        startState: 'nearly complete',
+        endState: endPose,
+        timing: 'concluding',
+        motionDescription: `${who || 'Character'} completes ${action}${endPose ? `, settling into ${endPose}` : ''}`
+      });
+    }
+
+    return stages;
+  },
+
+  /**
+   * Divide camera motion across shots
+   */
+  divideCameraMotion(cameraAction, shotCount) {
+    const stages = [];
+    const { movement, speed, focus } = cameraAction;
+
+    for (let i = 0; i < shotCount; i++) {
+      const isFirst = i === 0;
+      const isLast = i === shotCount - 1;
+
+      // Vary camera movement across shots for visual interest
+      let shotMovement = movement || 'static';
+
+      // If it's a continuous camera move, break it into parts
+      if (movement === 'slow_push' || movement === 'push_in') {
+        if (isFirst) shotMovement = 'begins slow push in';
+        else if (isLast) shotMovement = 'completes push in';
+        else shotMovement = 'continues pushing in';
+      } else if (movement === 'pull_out' || movement === 'slow_pull') {
+        if (isFirst) shotMovement = 'begins pulling out';
+        else if (isLast) shotMovement = 'completes pull out';
+        else shotMovement = 'continues pulling back';
+      } else if (movement === 'orbit' || movement === 'arc') {
+        const arcDegrees = Math.round((i / shotCount) * 90);
+        shotMovement = `orbiting, ${arcDegrees}° arc`;
+      } else if (movement === 'pan') {
+        if (isFirst) shotMovement = 'begins panning';
+        else if (isLast) shotMovement = 'completes pan';
+        else shotMovement = 'continues pan';
+      }
+
+      stages.push({
+        movement: shotMovement,
+        speed: speed || 'moderate',
+        focus: focus || 'subject',
+        description: `Camera ${shotMovement}, ${speed || 'moderate'} speed, focus on ${focus || 'main subject'}`
+      });
+    }
+
+    return stages;
+  },
+
+  /**
+   * Distribute environment animations across shots
+   */
+  divideEnvironmentActions(envActions, shotCount) {
+    const stages = [];
+
+    if (!envActions || envActions.length === 0) {
+      for (let i = 0; i < shotCount; i++) {
+        stages.push([]);
+      }
+      return stages;
+    }
+
+    // Continuous environmental elements appear in all shots
+    // Event-based elements are distributed
+    const continuous = [];
+    const events = [];
+
+    envActions.forEach(action => {
+      const actionStr = typeof action === 'string' ? action : action.description || '';
+      if (this.isContinuousEnvironment(actionStr)) {
+        continuous.push(actionStr);
+      } else {
+        events.push(actionStr);
+      }
+    });
+
+    // Distribute events across shots
+    for (let i = 0; i < shotCount; i++) {
+      const shotEnv = [...continuous]; // All continuous effects
+
+      // Add distributed events
+      events.forEach((event, eventIdx) => {
+        const eventShot = Math.floor((eventIdx / events.length) * shotCount);
+        if (i === eventShot) {
+          shotEnv.push(event);
+        }
+      });
+
+      stages.push(shotEnv);
+    }
+
+    return stages;
+  },
+
+  /**
+   * Divide narration into contextual segments for each shot
+   */
+  divideNarration(narration, shotCount) {
+    const segments = [];
+
+    if (!narration) {
+      for (let i = 0; i < shotCount; i++) {
+        segments.push({ mood: 'neutral', keywords: [] });
+      }
+      return segments;
+    }
+
+    const words = narration.split(/\s+/);
+    const wordsPerShot = Math.ceil(words.length / shotCount);
+
+    for (let i = 0; i < shotCount; i++) {
+      const start = i * wordsPerShot;
+      const end = Math.min(start + wordsPerShot, words.length);
+      const segment = words.slice(start, end).join(' ');
+
+      // Extract emotional keywords
+      const emotionalKeywords = this.extractEmotionalKeywords(segment);
+
+      segments.push({
+        text: segment,
+        mood: this.inferMood(segment),
+        keywords: emotionalKeywords
+      });
+    }
+
+    return segments;
+  },
+
+  /**
+   * Generate a transition hook that connects this shot to the next
+   */
+  generateTransitionHook(currentAction, nextAction) {
+    if (!currentAction || !nextAction) {
+      return 'continues into next moment';
+    }
+
+    // The end state of current should lead into start of next
+    const currentEnd = currentAction.endState || 'concluding motion';
+    const nextStart = nextAction.startState || 'beginning next action';
+
+    return `${currentEnd}, leading into ${nextStart}`;
+  },
+
+  /**
+   * Convert verb to gerund form (walk -> walking)
+   */
+  verbToGerund(verb) {
+    if (!verb) return 'moving';
+    const v = verb.toLowerCase().trim();
+
+    // Already gerund
+    if (v.endsWith('ing')) return v;
+
+    // Special cases
+    const irregulars = {
+      'run': 'running',
+      'sit': 'sitting',
+      'stand': 'standing',
+      'lie': 'lying',
+      'die': 'dying'
+    };
+    if (irregulars[v]) return irregulars[v];
+
+    // Ends in 'e' - remove and add 'ing'
+    if (v.endsWith('e')) return v.slice(0, -1) + 'ing';
+
+    // Consonant-vowel-consonant - double last letter
+    if (/[^aeiou][aeiou][^aeiouwxy]$/.test(v)) {
+      return v + v[v.length - 1] + 'ing';
+    }
+
+    return v + 'ing';
+  },
+
+  /**
+   * Check if environmental action is continuous (wind, rain) vs event-based (explosion)
+   */
+  isContinuousEnvironment(action) {
+    const continuous = ['wind', 'rain', 'snow', 'fog', 'mist', 'clouds moving', 'waves',
+      'leaves rustling', 'dust', 'smoke drifting', 'light flickering', 'shadows shifting'];
+    const lowerAction = action.toLowerCase();
+    return continuous.some(c => lowerAction.includes(c));
+  },
+
+  /**
+   * Extract emotional keywords from text
+   */
+  extractEmotionalKeywords(text) {
+    const emotionWords = [
+      'hope', 'fear', 'anger', 'joy', 'sadness', 'surprise', 'trust', 'anticipation',
+      'love', 'hate', 'excitement', 'calm', 'tension', 'peace', 'conflict', 'resolution',
+      'mysterious', 'dramatic', 'intense', 'serene', 'chaotic', 'powerful', 'vulnerable'
+    ];
+
+    const lower = text.toLowerCase();
+    return emotionWords.filter(word => lower.includes(word));
+  },
+
+  /**
+   * Infer the mood from text
+   */
+  inferMood(text) {
+    const lower = text.toLowerCase();
+
+    if (/tense|danger|threat|fear|anxious/.test(lower)) return 'tense';
+    if (/joy|happy|excit|hope|bright/.test(lower)) return 'uplifting';
+    if (/sad|sorrow|grief|loss|mourn/.test(lower)) return 'somber';
+    if (/mysteri|secret|hidden|unknown/.test(lower)) return 'mysterious';
+    if (/power|strong|mighty|epic|grand/.test(lower)) return 'epic';
+    if (/peace|calm|quiet|serene|gentle/.test(lower)) return 'serene';
+    if (/conflict|battle|fight|struggle/.test(lower)) return 'intense';
+
+    return 'neutral';
+  },
+
+  /**
+   * Build the final VIDEO prompt for a shot (action-focused, minimal appearance)
+   * @param {object} beat - The beat object for this shot
+   * @param {object} shotType - Shot type info (wide, closeup, etc.)
+   * @param {object} styleBible - Style settings
+   * @returns {string} Video prompt focused on ACTION and MOTION
+   */
+  buildVideoPrompt(beat, shotType, styleBible) {
+    const parts = [];
+
+    // 1. Camera movement (always first for video)
+    if (beat.cameraMotion?.movement && beat.cameraMotion.movement !== 'static') {
+      parts.push(`Camera: ${beat.cameraMotion.movement}`);
+    }
+
+    // 2. Character ACTION (the core - what's happening)
+    if (beat.characterMotion?.motionDescription) {
+      parts.push(beat.characterMotion.motionDescription);
+    } else if (beat.characterMotion?.action) {
+      const who = beat.characterMotion.who ? `${beat.characterMotion.who} ` : '';
+      parts.push(`${who}${beat.characterMotion.action}`);
+    }
+
+    // 3. Start → End state (the progression)
+    if (beat.characterMotion?.startState && beat.characterMotion?.endState) {
+      parts.push(`From: ${beat.characterMotion.startState}. To: ${beat.characterMotion.endState}`);
+    }
+
+    // 4. Environment motion (secondary)
+    if (beat.environmentMotion?.length > 0) {
+      parts.push(`Environment: ${beat.environmentMotion.join(', ')}`);
+    }
+
+    // 5. Mood/tone from narration
+    if (beat.narrativeContext?.mood && beat.narrativeContext.mood !== 'neutral') {
+      parts.push(`Mood: ${beat.narrativeContext.mood}`);
+    }
+
+    // 6. Transition hook (what leads to next shot)
+    if (beat.nextShotHook && !beat.isLast) {
+      parts.push(`Leading into: ${beat.nextShotHook}`);
+    }
+
+    // 7. Style bible motion quality (only motion-relevant parts)
+    if (styleBible?.enabled) {
+      if (styleBible.motionStyle) parts.push(styleBible.motionStyle);
+      if (styleBible.pacing) parts.push(`Pacing: ${styleBible.pacing}`);
+    }
+
+    // 8. Technical quality for video
+    parts.push('Smooth motion, cinematic quality, natural movement');
+
+    return parts.filter(p => p).join('. ').trim();
+  }
+};
+
 /**
  * SHOT_DECOMPOSITION_ENGINE
  *
@@ -40673,100 +41138,124 @@ const SHOT_DECOMPOSITION_ENGINE = {
   /**
    * LOCAL shot prompt generation - no AI required
    * Uses smart mathematical decomposition of the scene prompt
+   *
+   * NEW: Generates SEPARATE prompts for IMAGE and VIDEO generation:
+   * - imagePrompt: Visual composition (environment, lighting, framing) for Imagen
+   * - videoPrompt: ACTION and MOTION focused prompt for Minimax video
+   *
+   * @param {string} scenePrompt - Visual description of the scene
+   * @param {string} narration - Narration text for this scene
+   * @param {Array} shotSequence - Array of shot objects from generateShotSequence
+   * @param {object} styleBible - Style settings
+   * @param {Array} characterBible - Character definitions (MINIMAL use for video - let S2V-01 handle faces)
+   * @param {object} sceneActionData - { sceneAction, actionBlueprint } for motion generation
    */
-  generateLocalShotPrompts(scenePrompt, narration, shotSequence, styleBible, characterBible) {
-    // Extract key elements from scene prompt
+  generateLocalShotPrompts(scenePrompt, narration, shotSequence, styleBible, characterBible, sceneActionData = {}) {
+    // Extract key elements from scene prompt for IMAGE generation
     const extractedElements = this.extractSceneElements(scenePrompt);
+
+    // Generate narrative beats for VIDEO generation using action data
+    const narrativeBeats = NARRATIVE_BEAT_GENERATOR.generateBeats(
+      shotSequence.length,
+      {
+        sceneAction: sceneActionData.sceneAction,
+        actionBlueprint: sceneActionData.actionBlueprint,
+        narration: narration,
+        visualPrompt: scenePrompt
+      }
+    );
 
     // Generate prompts for each shot
     return shotSequence.map((shot, idx) => {
       const isFirst = idx === 0;
       const isLast = idx === shotSequence.length - 1;
       const progress = idx / (shotSequence.length - 1 || 1); // 0 to 1
+      const beat = narrativeBeats[idx] || {};
 
-      // Build shot-specific prompt
-      let prompt = shot.promptPrefix + ' ';
-
-      // Add camera movement
-      const movementDescriptions = {
-        'static': 'Static shot,',
-        'slow_push': 'Slow push in,',
-        'slow_pull': 'Slow pull back,',
-        'tracking': 'Tracking shot,',
-        'pan': 'Panning shot,',
-        'tilt': 'Tilting shot,'
-      };
-      prompt += (movementDescriptions[shot.cameraMovement] || '') + ' ';
+      // ========================================
+      // IMAGE PROMPT (for Imagen - visual composition)
+      // Focus: Environment, lighting, composition, framing
+      // Minimal character description - let Character Bible handle it
+      // ========================================
+      let imagePrompt = shot.promptPrefix + ' ';
 
       // Build the scene description based on shot type
-      // IMPORTANT: Always show characters FULLY (head to toe) to avoid cropping
       if (shot.shotType.includes('establishing') || shot.shotType === 'wide' || shot.shotType === 'medium_wide') {
-        // Wide/establishing shots - show FULL BODY of characters in environment
-        prompt += extractedElements.environment + ' ';
-        prompt += extractedElements.atmosphere + ' ';
+        imagePrompt += extractedElements.environment + ' ';
+        imagePrompt += extractedElements.atmosphere + ' ';
         if (extractedElements.subject) {
-          prompt += `${extractedElements.subject} shown FULL BODY from head to feet, standing in the scene. `;
-          prompt += 'Ensure entire body is visible, no cropping of heads or limbs. ';
+          imagePrompt += `${extractedElements.subject} shown FULL BODY from head to feet, standing in the scene. `;
+          imagePrompt += 'Ensure entire body is visible, no cropping of heads or limbs. ';
         }
       } else if (shot.shotType.includes('closeup') || shot.shotType === 'extreme_closeup') {
-        // Closeups focus on face/upper body
         if (extractedElements.subject) {
-          prompt += `Close-up view of ${extractedElements.subject}, face and upper body clearly visible. `;
+          imagePrompt += `Close-up view of ${extractedElements.subject}, face and upper body clearly visible. `;
         }
-        prompt += extractedElements.emotionalContext + ' ';
-        prompt += 'Sharp focus on facial features and expression, head fully in frame. ';
+        imagePrompt += extractedElements.emotionalContext + ' ';
+        imagePrompt += 'Sharp focus on facial features and expression, head fully in frame. ';
       } else {
-        // Medium shots show waist-up or full body
         if (extractedElements.subject) {
-          prompt += extractedElements.subject + ', shown from waist up with head clearly visible. ';
+          imagePrompt += extractedElements.subject + ', shown from waist up with head clearly visible. ';
         }
-        prompt += extractedElements.action + ' ';
-        prompt += `with ${extractedElements.environment} visible in background. `;
-        prompt += 'Character fully framed, no cropping of head or shoulders. ';
+        imagePrompt += `with ${extractedElements.environment} visible in background. `;
+        imagePrompt += 'Character fully framed, no cropping of head or shoulders. ';
       }
 
-      // Add lighting and atmosphere (consistent across all shots)
-      prompt += extractedElements.lighting + ' ';
+      // Add lighting and atmosphere
+      imagePrompt += extractedElements.lighting + ' ';
 
-      // Add style bible elements if provided
+      // Add style bible elements for visual consistency
       if (styleBible && styleBible.enabled) {
-        if (styleBible.style) prompt += styleBible.style + ' ';
-        if (styleBible.colorGrade) prompt += styleBible.colorGrade + ' ';
-        if (styleBible.lighting) prompt += 'Lighting: ' + styleBible.lighting + ' ';
-        if (styleBible.atmosphere) prompt += styleBible.atmosphere + ' ';
+        if (styleBible.style) imagePrompt += styleBible.style + ' ';
+        if (styleBible.colorGrade) imagePrompt += styleBible.colorGrade + ' ';
+        if (styleBible.lighting) imagePrompt += 'Lighting: ' + styleBible.lighting + ' ';
+        if (styleBible.atmosphere) imagePrompt += styleBible.atmosphere + ' ';
       }
 
-      // Add character bible elements if provided
-      // IMPORTANT: Include full character details to ensure proper rendering
-      if (characterBible && characterBible.length > 0) {
-        prompt += 'CHARACTERS (must be shown clearly with faces visible): ';
-        characterBible.forEach((char, idx) => {
-          if (char.description || char.name) {
-            const charName = char.name || `Character ${idx + 1}`;
-            const charDesc = char.description || '';
-            prompt += `${charName}: ${charDesc}. `;
-          }
-        });
-        prompt += 'All characters must have faces clearly visible, not cut off. ';
+      // MINIMAL character info for image - just name reference, not full description
+      // The Character Bible portraits + S2V-01 subject_reference handles face consistency
+      if (characterBible && characterBible.length > 0 && beat.characterMotion?.who) {
+        const charName = beat.characterMotion.who;
+        imagePrompt += `${charName} clearly visible in frame. `;
       }
 
-      // Add technical quality
-      prompt += 'Cinematic quality, 4K resolution, professional lighting, shallow depth of field. ';
+      // Technical quality for images
+      imagePrompt += 'Cinematic quality, 4K resolution, professional lighting, shallow depth of field. ';
 
-      // Add emotional progression based on narration
-      if (narration) {
-        const words = narration.split(' ');
-        const startIdx = Math.floor(progress * words.length * 0.8);
-        const endIdx = Math.min(startIdx + 10, words.length);
-        const relevantWords = words.slice(startIdx, endIdx).join(' ');
-        if (relevantWords) {
-          prompt += `Mood reflecting: "${relevantWords}" `;
-        }
+      // Emotional context from narration
+      if (narration && beat.narrativeContext?.mood && beat.narrativeContext.mood !== 'neutral') {
+        imagePrompt += `Mood: ${beat.narrativeContext.mood}. `;
       }
+
+      // ========================================
+      // VIDEO PROMPT (for Minimax - ACTION focused)
+      // Focus: What MOVES, what CHANGES, what HAPPENS
+      // NO character appearance details - S2V-01 uses subject_reference
+      // ========================================
+      const videoPrompt = NARRATIVE_BEAT_GENERATOR.buildVideoPrompt(beat, shot, styleBible);
+
+      // ========================================
+      // Legacy prompt (combined, for backward compatibility)
+      // ========================================
+      const legacyPrompt = imagePrompt.trim();
 
       return {
         ...shot,
-        prompt: prompt.trim(),
+        // NEW: Separate prompts for image and video
+        imagePrompt: imagePrompt.trim(),
+        videoPrompt: videoPrompt,
+        // Legacy: Keep 'prompt' for backward compatibility
+        prompt: legacyPrompt,
+        // Narrative beat info for UI display
+        narrativeBeat: {
+          action: beat.characterMotion?.action || null,
+          motionDescription: beat.characterMotion?.motionDescription || null,
+          startState: beat.characterMotion?.startState || null,
+          endState: beat.characterMotion?.endState || null,
+          transitionHook: beat.nextShotHook || null,
+          mood: beat.narrativeContext?.mood || 'neutral',
+          progress: beat.progress
+        },
         purpose: this.getShotPurpose(shot.shotType, isFirst, isLast),
         focusElement: this.getFocusElement(shot.shotType, extractedElements)
       };
@@ -40942,6 +41431,13 @@ exports.creationWizardDecomposeSceneToShots = functions
   // Clip duration from Minimax (6s or 10s)
   const clipDuration = inputClipDuration || 6;
 
+  // NEW: Extract action data for video prompt generation
+  // This includes sceneAction (high-level what happens) and actionBlueprint (detailed motion)
+  const sceneActionData = {
+    sceneAction: scene.sceneAction || scene.action || null,
+    actionBlueprint: scene.actionBlueprint || null
+  };
+
   try {
     // STEP 1: Analyze scene type based on keywords
     const sceneType = SHOT_DECOMPOSITION_ENGINE.analyzeSceneType(sceneDescription);
@@ -40972,13 +41468,16 @@ exports.creationWizardDecomposeSceneToShots = functions
     console.log(`[creationWizardDecomposeSceneToShots] Scene ${scene.id}: ${sceneType} type, ${shotCount} shots, ${sceneDuration}s duration`);
 
     // STEP 4: Generate LOCAL prompts using mathematical decomposition
-    // Extracts visual elements from scene prompt and recombines for each shot
+    // NEW: Generates separate imagePrompt and videoPrompt for each shot
+    // - imagePrompt: Visual composition for Imagen
+    // - videoPrompt: ACTION-focused prompt for Minimax (motion, progression, transitions)
     const shotsWithPrompts = SHOT_DECOMPOSITION_ENGINE.generateLocalShotPrompts(
       sceneDescription,
       narration,
       baseSequence,
       styleBible,
-      characterBible
+      characterBible,
+      sceneActionData  // NEW: Pass action data for video prompt generation
     );
 
     // STEP 5: Extract consistency anchors from original prompt
@@ -40992,6 +41491,7 @@ exports.creationWizardDecomposeSceneToShots = functions
     };
 
     // STEP 6: Normalize shots with all required fields
+    // NEW: Include separate imagePrompt, videoPrompt, and narrativeBeat
     const normalizedShots = shotsWithPrompts.map((shot, idx) => ({
       id: `${scene.id}_shot_${idx + 1}`,
       sceneId: scene.id,
@@ -41000,7 +41500,12 @@ exports.creationWizardDecomposeSceneToShots = functions
       shotTypeName: shot.shotTypeName,
       duration: shot.duration,
       cameraMovement: shot.cameraMovement,
-      prompt: shot.prompt,
+      // NEW: Separate prompts for image and video generation
+      imagePrompt: shot.imagePrompt,    // For Imagen - visual composition
+      videoPrompt: shot.videoPrompt,    // For Minimax - ACTION focused
+      prompt: shot.prompt,              // Legacy - backward compatibility
+      // NEW: Narrative beat info for progressive action
+      narrativeBeat: shot.narrativeBeat || null,
       purpose: shot.purpose,
       focusElement: shot.focusElement,
       transition: shot.transition || 'cut',
