@@ -40424,9 +40424,606 @@ exports.PROMPT_CHAIN_ARCHITECTURE = {
  * - Shot 2: START: Kai facing companions → ACTION: They respond, gather, prepare → END: Three at rooftop edge
  * - Shot 3: START: Three at edge → ACTION: Run, leap, descend → END: Mid-air with city below
  */
+
+/**
+ * ACTION_LIBRARY (Upgrade 4)
+ * Pre-built action templates for common scene types
+ * Used by AI decomposition as reference examples for rich, cinematic action sequences
+ */
+const ACTION_LIBRARY = {
+  // Scene type templates with example action sequences
+  templates: {
+    action: {
+      name: 'Action Sequence',
+      description: 'High-energy physical action, fights, chases, stunts',
+      examples: [
+        {
+          scenario: 'Combat Confrontation',
+          shots: [
+            { action: 'Character takes defensive stance, eyes locked on opponent, muscles tensing as they circle', endState: 'Crouched in fighting stance, fists raised' },
+            { action: 'Explosive first strike - lunge forward, punch/kick delivered with full body rotation', endState: 'Follow-through pose, extended limb, weight shifted forward' },
+            { action: 'Counter-attack sequence - block, dodge, return strike with increasing intensity', endState: 'Both fighters locked in close combat, gripping each other' }
+          ],
+          captureNotes: 'Capture at peak extension moments or brief pauses between exchanges'
+        },
+        {
+          scenario: 'Chase/Pursuit',
+          shots: [
+            { action: 'Character bursts into sprint, environment blurring past, dodging obstacles', endState: 'Mid-stride, leaning forward into run' },
+            { action: 'Vaulting over obstacle, sliding under barrier, sharp direction change', endState: 'Landing from jump or emerging from slide' },
+            { action: 'Close call - near miss, last-second dodge, desperate final push', endState: 'Reaching safety or catching target' }
+          ],
+          captureNotes: 'Capture at landing moments, direction changes, or obstacle clearance'
+        },
+        {
+          scenario: 'Heroic Leap/Stunt',
+          shots: [
+            { action: 'Character surveys the gap, backs up for running start, determined expression', endState: 'At edge, coiled to jump, arms back' },
+            { action: 'Explosive leap into the air, body extended, defying gravity', endState: 'Peak of jump, silhouetted against sky/background' },
+            { action: 'Descent and landing - controlled fall, impact, recovery roll', endState: 'Landed in heroic pose, dust settling' }
+          ],
+          captureNotes: 'Capture at peak height or stable landing pose'
+        }
+      ]
+    },
+    dialogue: {
+      name: 'Dialogue Scene',
+      description: 'Conversation, negotiation, verbal confrontation',
+      examples: [
+        {
+          scenario: 'Important Conversation',
+          shots: [
+            { action: 'Speaker approaches, settles into position, makes eye contact, begins speaking with hand gestures', endState: 'Mid-gesture, leaning in, engaged expression' },
+            { action: 'Listener reacts - nodding, frowning, shifting weight, responding with body language', endState: 'Contemplative pose, hand on chin or crossed arms' },
+            { action: 'Speaker concludes point with emphatic gesture, steps back, awaits response', endState: 'Arms open in question or statement pose' }
+          ],
+          captureNotes: 'Capture during pauses between dialogue beats, at gesture completion'
+        },
+        {
+          scenario: 'Confrontation/Argument',
+          shots: [
+            { action: 'Characters face off, tension building, one steps forward with accusatory gesture', endState: 'Pointing finger, body leaning forward aggressively' },
+            { action: 'Defensive response - stepping back, raising hands, shaking head in denial', endState: 'Defensive posture, palms out or arms crossed' },
+            { action: 'Emotional peak - voice raised, dramatic gesture, turning away in frustration', endState: 'Turned away, shoulders tense, or storming off' }
+          ],
+          captureNotes: 'Capture at emotional peaks or moment before/after turn'
+        }
+      ]
+    },
+    emotional: {
+      name: 'Emotional Moment',
+      description: 'Deep feelings, grief, joy, love, revelation of emotion',
+      examples: [
+        {
+          scenario: 'Grief/Loss',
+          shots: [
+            { action: 'Character receives news, face falls, body begins to crumble, hand reaches for support', endState: 'Collapsed against wall or into chair, head bowed' },
+            { action: 'Tears flow, shoulders shake, hand covers face or reaches out to lost memory', endState: 'Head in hands, or reaching toward photograph/memento' },
+            { action: 'Slow composure gathering, wiping eyes, taking deep breath, steeling themselves', endState: 'Looking up with wet eyes but determined expression' }
+          ],
+          captureNotes: 'Capture during stillness of grief or moment of composure'
+        },
+        {
+          scenario: 'Joy/Celebration',
+          shots: [
+            { action: 'Realization dawns, smile spreads, eyes widen, body straightens with excitement', endState: 'Beaming smile, hands coming together or raising' },
+            { action: 'Celebratory action - jumping, embracing others, pumping fist, spinning', endState: 'Arms raised in victory or mid-embrace' },
+            { action: 'Sharing the moment - looking to loved ones, inclusive gesture, group celebration', endState: 'Connected with others, shared joy visible' }
+          ],
+          captureNotes: 'Capture at peak of joy or in embrace/connection moment'
+        },
+        {
+          scenario: 'Tender/Romantic',
+          shots: [
+            { action: 'Characters draw closer, tentative touches, eyes meeting with meaning', endState: 'Faces close, hand on cheek or holding hands' },
+            { action: 'The moment builds, breath held, leaning in, world fading away', endState: 'Foreheads touching or on verge of kiss' },
+            { action: 'Connection made - embrace, kiss, or holding each other close', endState: 'Embracing, peaceful expressions, intimate closeness' }
+          ],
+          captureNotes: 'Capture in tender held moments, not during movement'
+        }
+      ]
+    },
+    establishing: {
+      name: 'Establishing Scene',
+      description: 'Setting the scene, arrival, location reveal, time of day',
+      examples: [
+        {
+          scenario: 'Location Reveal',
+          shots: [
+            { action: 'Wide view of location, camera slowly revealing scope, ambient movement (birds, vehicles, people)', endState: 'Full location visible, establishing geography' },
+            { action: 'Moving closer, picking out details, signs of life or atmosphere', endState: 'Medium view showing key location feature' }
+          ],
+          captureNotes: 'Capture when camera has settled on clean composition'
+        },
+        {
+          scenario: 'Character Arrival',
+          shots: [
+            { action: 'Character approaches in distance, environment framing them, purpose in stride', endState: 'Character centered in frame, destination visible' },
+            { action: 'Reaching destination, pausing to take in surroundings, orienting themselves', endState: 'Standing at threshold, looking at destination' },
+            { action: 'First step into new space, crossing threshold, environment reacting to presence', endState: 'Just inside, surveying new space' }
+          ],
+          captureNotes: 'Capture at threshold moments or survey pauses'
+        }
+      ]
+    },
+    revelation: {
+      name: 'Revelation/Discovery',
+      description: 'Finding something, realizing truth, dramatic discovery',
+      examples: [
+        {
+          scenario: 'Object Discovery',
+          shots: [
+            { action: 'Searching, scanning environment, attention caught by something, moving toward it', endState: 'Reaching toward or crouching near discovery' },
+            { action: 'Picking up/examining object, turning it over, recognition dawning', endState: 'Holding object at eye level, studying it' },
+            { action: 'Reaction to discovery - shock, understanding, determination to act', endState: 'Standing with purpose, object clutched, decision made' }
+          ],
+          captureNotes: 'Capture at moment of recognition or decision'
+        },
+        {
+          scenario: 'Truth Revealed',
+          shots: [
+            { action: 'Evidence presented or witnessed, character processing information', endState: 'Frozen in realization, eyes fixed on proof' },
+            { action: 'Mind racing - flashbacks implied, puzzle pieces connecting, understanding growing', endState: 'Eyes widening, mouth opening, body stiffening' },
+            { action: 'Full realization hits - emotional response, decision forming, action initiated', endState: 'Transformed by truth, new resolve visible' }
+          ],
+          captureNotes: 'Capture at peak of realization or moment of transformation'
+        }
+      ]
+    },
+    contemplative: {
+      name: 'Contemplative/Reflective',
+      description: 'Quiet reflection, decision-making, solitary moments',
+      examples: [
+        {
+          scenario: 'Solitary Reflection',
+          shots: [
+            { action: 'Character in thoughtful pose, gazing at vista/object, slight movements showing internal processing', endState: 'Still, gazing into distance, weight of thoughts visible' },
+            { action: 'Small action reveals thought - touching memento, adjusting clothing, deep breath', endState: 'Settled after small action, more contemplative' }
+          ],
+          captureNotes: 'Capture in stillness, when character is most composed'
+        },
+        {
+          scenario: 'Decision Making',
+          shots: [
+            { action: 'Weighing options - looking between choices, internal debate visible in expression', endState: 'Focused on one direction, consideration evident' },
+            { action: 'Resolution forming - jaw sets, shoulders square, small nod of self-agreement', endState: 'Decided, body language committed' },
+            { action: 'First move toward decision - turning, reaching, stepping with purpose', endState: 'In motion toward chosen path' }
+          ],
+          captureNotes: 'Capture at moment of decision or just before movement'
+        }
+      ]
+    },
+    montage: {
+      name: 'Montage Sequence',
+      description: 'Rapid progression, training, preparation, time passing',
+      examples: [
+        {
+          scenario: 'Training/Preparation',
+          shots: [
+            { action: 'First attempt - struggling, imperfect form, determination despite difficulty', endState: 'Catching breath, minor failure visible' },
+            { action: 'Improvement showing - faster, stronger, more precise movements', endState: 'Better pose, confidence growing' },
+            { action: 'Mastery moment - perfect execution, power and grace combined', endState: 'Peak form, triumphant expression' }
+          ],
+          captureNotes: 'Capture at completion of each training beat'
+        },
+        {
+          scenario: 'Assembly/Creation',
+          shots: [
+            { action: 'Gathering materials, laying out components, preparation visible', endState: 'Components arranged, ready to begin' },
+            { action: 'Building/creating - hands working, focus intense, progress visible', endState: 'Mid-creation, work taking shape' },
+            { action: 'Completion - final touch, stepping back, admiring work', endState: 'Creation complete, creator satisfied' }
+          ],
+          captureNotes: 'Capture at completion of each assembly stage'
+        }
+      ]
+    }
+  },
+
+  /**
+   * Get relevant examples for a scene type
+   * @param {string} sceneType - The type of scene
+   * @param {string} sceneAction - The actual scene action (for scenario matching)
+   * @returns {object} Matching template with examples
+   */
+  getTemplateForType(sceneType, sceneAction = '') {
+    const template = this.templates[sceneType] || this.templates.dialogue;
+
+    // Try to find most relevant example based on sceneAction keywords
+    if (sceneAction) {
+      const actionLower = sceneAction.toLowerCase();
+      const scoredExamples = template.examples.map(example => {
+        const scenarioLower = example.scenario.toLowerCase();
+        let score = 0;
+        // Simple keyword matching
+        if (actionLower.includes('fight') || actionLower.includes('combat')) score += scenarioLower.includes('combat') ? 10 : 0;
+        if (actionLower.includes('chase') || actionLower.includes('run')) score += scenarioLower.includes('chase') ? 10 : 0;
+        if (actionLower.includes('talk') || actionLower.includes('speak')) score += scenarioLower.includes('conversation') ? 10 : 0;
+        if (actionLower.includes('argue') || actionLower.includes('confront')) score += scenarioLower.includes('confrontation') ? 10 : 0;
+        if (actionLower.includes('cry') || actionLower.includes('grief')) score += scenarioLower.includes('grief') ? 10 : 0;
+        if (actionLower.includes('joy') || actionLower.includes('celebrate')) score += scenarioLower.includes('joy') ? 10 : 0;
+        if (actionLower.includes('love') || actionLower.includes('kiss')) score += scenarioLower.includes('romantic') ? 10 : 0;
+        if (actionLower.includes('discover') || actionLower.includes('find')) score += scenarioLower.includes('discovery') ? 10 : 0;
+        if (actionLower.includes('think') || actionLower.includes('decide')) score += scenarioLower.includes('decision') ? 10 : 0;
+        if (actionLower.includes('train') || actionLower.includes('practice')) score += scenarioLower.includes('training') ? 10 : 0;
+        if (actionLower.includes('arrive') || actionLower.includes('enter')) score += scenarioLower.includes('arrival') ? 10 : 0;
+        if (actionLower.includes('leap') || actionLower.includes('jump')) score += scenarioLower.includes('leap') ? 10 : 0;
+        return { example, score };
+      });
+
+      const bestMatch = scoredExamples.sort((a, b) => b.score - a.score)[0];
+      if (bestMatch.score > 0) {
+        return {
+          ...template,
+          bestExample: bestMatch.example,
+          allExamples: template.examples
+        };
+      }
+    }
+
+    return {
+      ...template,
+      bestExample: template.examples[0],
+      allExamples: template.examples
+    };
+  },
+
+  /**
+   * Format examples for AI prompt inclusion
+   * @param {string} sceneType - The scene type
+   * @param {string} sceneAction - The scene action for matching
+   * @param {number} shotCount - Target number of shots
+   * @returns {string} Formatted examples for prompt
+   */
+  formatForPrompt(sceneType, sceneAction, shotCount) {
+    const template = this.getTemplateForType(sceneType, sceneAction);
+    const example = template.bestExample;
+
+    let formatted = `
+ACTION LIBRARY REFERENCE (${template.name}):
+Scenario: "${example.scenario}"
+${example.captureNotes}
+
+Example shot structure:`;
+
+    example.shots.forEach((shot, idx) => {
+      formatted += `
+Shot ${idx + 1}: ${shot.action}
+  → ENDS WITH: ${shot.endState}`;
+    });
+
+    formatted += `
+
+Adapt this structure to your scene's specific action. Match the energy and pacing of "${template.name}" scenes.`;
+
+    return formatted;
+  }
+};
+
 const STORY_BEAT_DECOMPOSER = {
   /**
-   * Decompose sceneAction into shot beats with END STATES
+   * AI-Powered Action Decomposition using GPT
+   * Intelligently divides sceneAction into shots with proper capture points
+   * @param {string} sceneAction - Rich action sequence for the scene
+   * @param {number} shotCount - Number of shots to create
+   * @param {number} clipDuration - Duration per shot (6 or 10 seconds)
+   * @param {object} sceneContext - { visualPrompt, narration, characters, sceneId, sceneIndex, totalScenes }
+   * @param {object} openai - OpenAI client instance
+   * @param {object} crossSceneContext - { previousSceneEndState, previousSceneId, nextSceneHint } for continuity
+   * @returns {Promise<Array>} Array of shot beats with start/action/end
+   */
+  async decomposeWithAI(sceneAction, shotCount, clipDuration, sceneContext, openai, crossSceneContext = null) {
+    // Validate sceneAction is rich enough for AI decomposition
+    if (!sceneAction || sceneAction.trim().length < 50) {
+      console.log('[STORY_BEAT_DECOMPOSER] sceneAction too brief, using rule-based fallback');
+      return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
+    }
+
+    // Determine scene type for action library (Upgrade 4)
+    const sceneType = this.detectSceneType(sceneAction);
+    const actionLibraryReference = ACTION_LIBRARY.formatForPrompt(sceneType, sceneAction, shotCount);
+    console.log(`[STORY_BEAT_DECOMPOSER] Scene type detected: ${sceneType}, using action library template`);
+
+    // Build cross-scene continuity section if available
+    const crossSceneSection = crossSceneContext?.previousSceneEndState ? `
+CROSS-SCENE CONTINUITY (Upgrade 3):
+This is Scene ${sceneContext.sceneIndex || '?'} of ${sceneContext.totalScenes || '?'}.
+PREVIOUS SCENE ended with: "${crossSceneContext.previousSceneEndState}"
+
+The FIRST SHOT of this scene should:
+1. Acknowledge the transition from the previous scene
+2. Start in a way that flows naturally from the previous scene's end
+3. Consider if a match cut, dissolve, or continuation works best
+${crossSceneContext.transitionType ? `Intended transition type: ${crossSceneContext.transitionType}` : ''}
+` : '';
+
+    const prompt = `You are a professional film editor decomposing a scene into shots for AI video generation.
+
+SCENE ACTION (what happens in this ~${shotCount * clipDuration} second scene):
+"${sceneAction}"
+
+VISUAL CONTEXT:
+${sceneContext.visualPrompt ? sceneContext.visualPrompt.substring(0, 500) : 'No visual context provided'}
+${actionLibraryReference}
+${crossSceneSection}
+
+REQUIREMENTS:
+- Divide this action into exactly ${shotCount} shots
+- Each shot is ${clipDuration} seconds of video
+- Each shot must have DENSE action (${clipDuration}s is substantial - include multiple beats per shot)
+- Each shot MUST end with a clear CAPTURE POINT (a moment that works as a freeze frame)
+- Shot N's end state becomes Shot N+1's starting point (frame-chain continuity)
+
+For each shot, provide:
+1. shotAction: The complete action sequence for this ${clipDuration}-second shot (be specific and detailed)
+2. endState: The exact position/pose at the end (this frame will be captured for next shot)
+3. captureDescription: What the captured frame looks like (for seamless transition)
+4. suggestedCaptureTime: When to capture the frame (e.g., "${clipDuration - 2}-${clipDuration} seconds" for end, or specific moment)
+5. captureReason: Why this moment is ideal for capture (stability, pose clarity, transition smoothness)
+6. captureStability: How stable/clear the capture moment is ("high" = still pose, "medium" = slow motion, "low" = mid-action)
+
+CAPTURE TIMING GUIDANCE:
+- "high" stability: Character paused, clear pose, no motion blur - capture at exact end (${clipDuration}s)
+- "medium" stability: Slow deliberate motion - capture at ${clipDuration - 1}-${clipDuration}s
+- "low" stability: Fast action - plan the shot so action resolves to stable moment at end
+
+Return ONLY valid JSON:
+{
+  "shots": [
+    {
+      "shotIndex": 0,
+      "shotAction": "Detailed action for this ${clipDuration}-second shot...",
+      "endState": "Specific position/pose at shot end",
+      "captureDescription": "What the freeze frame shows",
+      "suggestedCaptureTime": "${clipDuration - 1}-${clipDuration} seconds",
+      "captureReason": "Character in stable pose after turning, clear silhouette against city lights",
+      "captureStability": "high",
+      "crossSceneTransition": "Only for first shot if previous scene exists - how this shot connects from previous scene"
+    }
+  ],
+  "chainLogic": "Brief explanation of how shots connect",
+  "sceneEndState": "The final state of the LAST shot - this will be passed to the NEXT scene for continuity",
+  "suggestedNextSceneTransition": "Recommended transition type to next scene (cut/dissolve/match_cut/fade)"
+}`;
+
+    try {
+      console.log(`[STORY_BEAT_DECOMPOSER] Using AI decomposition for ${shotCount} shots`);
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini', // Fast and cost-effective for structured decomposition
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional film editor specializing in AI video generation. You decompose scenes into shots that chain together seamlessly via frame capture. Always return valid JSON.'
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      });
+
+      const responseText = completion.choices[0].message.content.trim();
+
+      // Parse JSON response
+      let parsed;
+      try {
+        // Handle markdown code blocks
+        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+        const jsonStr = jsonMatch ? jsonMatch[1].trim() : responseText;
+        parsed = JSON.parse(jsonStr);
+      } catch (parseError) {
+        console.error('[STORY_BEAT_DECOMPOSER] Failed to parse AI response, using fallback');
+        return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
+      }
+
+      if (!parsed.shots || !Array.isArray(parsed.shots) || parsed.shots.length === 0) {
+        console.error('[STORY_BEAT_DECOMPOSER] AI returned invalid structure, using fallback');
+        return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
+      }
+
+      // Convert AI response to standard shot format
+      const shots = parsed.shots.map((shot, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === parsed.shots.length - 1;
+
+        // Build START state (from previous shot's end or scene opening)
+        const startState = isFirst
+          ? this.extractOpeningState(sceneContext.visualPrompt, shot.shotAction)
+          : `Continuing from: ${parsed.shots[idx - 1].captureDescription || parsed.shots[idx - 1].endState}`;
+
+        // Build END state
+        const endState = isLast
+          ? `Scene concludes: ${shot.endState}. Hold for final frame.`
+          : `CAPTURE POINT: ${shot.endState}. ${shot.captureDescription || 'This frame transitions to next shot.'}`;
+
+        // Build video prompt with START → ACTION → END structure
+        const videoPrompt = this.buildVideoPromptFromAI(
+          startState,
+          shot.shotAction,
+          endState,
+          { isFirst, isLast }
+        );
+
+        return {
+          shotIndex: idx,
+          isFirst,
+          isLast,
+          segments: [shot.shotAction],
+          actionText: shot.shotAction,
+          startState,
+          endState,
+          captureDescription: shot.captureDescription || shot.endState,
+          videoPrompt,
+          motionDescription: `Shot ${idx + 1}: ${this.extractKeyVerbs(shot.shotAction)}`,
+          aiGenerated: true,
+          // Capture point suggestions (Upgrade 2)
+          captureSuggestion: {
+            timing: shot.suggestedCaptureTime || `${clipDuration - 1}-${clipDuration} seconds`,
+            reason: shot.captureReason || 'End of shot action sequence',
+            stability: shot.captureStability || 'medium',
+            timingSeconds: this.parseCaptureTiming(shot.suggestedCaptureTime, clipDuration),
+            stabilityColor: shot.captureStability === 'high' ? '#10b981' :
+                           shot.captureStability === 'low' ? '#f59e0b' : '#3b82f6'
+          },
+          // Cross-scene transition (Upgrade 3) - only for first shot
+          crossSceneTransition: isFirst && crossSceneContext?.previousSceneEndState ? {
+            fromPreviousScene: true,
+            previousSceneEndState: crossSceneContext.previousSceneEndState,
+            transitionDescription: shot.crossSceneTransition || 'Continues from previous scene',
+            transitionType: crossSceneContext.transitionType || 'cut'
+          } : null
+        };
+      });
+
+      // Extract scene-level continuity data for passing to next scene
+      const lastShot = parsed.shots[parsed.shots.length - 1];
+      const sceneEndState = parsed.sceneEndState || lastShot?.endState || lastShot?.captureDescription;
+      const suggestedNextSceneTransition = parsed.suggestedNextSceneTransition || 'cut';
+
+      console.log(`[STORY_BEAT_DECOMPOSER] AI decomposition successful: ${shots.length} shots`);
+      console.log(`[STORY_BEAT_DECOMPOSER] Chain logic: ${parsed.chainLogic || 'Not provided'}`);
+      console.log(`[STORY_BEAT_DECOMPOSER] Scene end state for next scene: ${sceneEndState?.substring(0, 50)}...`);
+
+      // Log capture suggestions
+      shots.forEach((shot, idx) => {
+        if (!shot.isLast) {
+          console.log(`[STORY_BEAT_DECOMPOSER] Shot ${idx + 1} capture: ${shot.captureSuggestion.timing} (${shot.captureSuggestion.stability} stability)`);
+        }
+      });
+
+      // Return shots with scene-level continuity metadata
+      return {
+        shots,
+        sceneEndState,
+        suggestedNextSceneTransition,
+        chainLogic: parsed.chainLogic
+      };
+
+    } catch (error) {
+      console.error('[STORY_BEAT_DECOMPOSER] AI decomposition failed:', error.message);
+      // Fallback to rule-based decomposition
+      return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
+    }
+  },
+
+  /**
+   * Build video prompt from AI-generated content
+   */
+  buildVideoPromptFromAI(startState, action, endState, meta) {
+    const parts = [];
+
+    // 1. START STATE
+    if (meta.isFirst) {
+      parts.push(`OPENING: ${startState}`);
+    } else {
+      parts.push(startState);
+    }
+
+    // 2. ACTION (the main content)
+    parts.push(`ACTION: ${action}`);
+
+    // 3. END STATE
+    parts.push(endState);
+
+    // 4. Animation guidance
+    const guidance = meta.isLast
+      ? 'Animate to final resting pose, hold for conclusion.'
+      : 'Animate smoothly toward capture point. End in stable, capturable position.';
+    parts.push(guidance);
+
+    return parts.join(' ');
+  },
+
+  /**
+   * Parse capture timing string to get start/end seconds
+   * @param {string} timingStr - e.g., "8-10 seconds" or "9-10 seconds"
+   * @param {number} clipDuration - Shot duration (6 or 10)
+   * @returns {object} { start, end, recommended }
+   */
+  parseCaptureTiming(timingStr, clipDuration) {
+    if (!timingStr) {
+      return { start: clipDuration - 2, end: clipDuration, recommended: clipDuration - 1 };
+    }
+
+    // Extract numbers from timing string
+    const numbers = timingStr.match(/(\d+)/g);
+    if (numbers && numbers.length >= 2) {
+      const start = parseInt(numbers[0], 10);
+      const end = parseInt(numbers[1], 10);
+      return {
+        start: Math.min(start, clipDuration),
+        end: Math.min(end, clipDuration),
+        recommended: Math.min(Math.round((start + end) / 2), clipDuration)
+      };
+    } else if (numbers && numbers.length === 1) {
+      const time = parseInt(numbers[0], 10);
+      return {
+        start: Math.max(0, time - 1),
+        end: Math.min(time, clipDuration),
+        recommended: Math.min(time, clipDuration)
+      };
+    }
+
+    // Default to last 2 seconds
+    return { start: clipDuration - 2, end: clipDuration, recommended: clipDuration - 1 };
+  },
+
+  /**
+   * Extract key verbs for motion summary
+   */
+  extractKeyVerbs(text) {
+    const verbMatch = text.match(/\b(walks?|runs?|leaps?|jumps?|turns?|speaks?|reaches?|grabs?|stands?|sits?|looks?|moves?|steps?|enters?|exits?|falls?|rises?|opens?|closes?)\b/gi);
+    if (verbMatch && verbMatch.length > 0) {
+      const uniqueVerbs = [...new Set(verbMatch.map(v => v.toLowerCase()))];
+      return uniqueVerbs.slice(0, 3).join(', ');
+    }
+    return 'progressive action';
+  },
+
+  /**
+   * Detect scene type from sceneAction text (Upgrade 4)
+   * Used to select appropriate action library templates
+   * @param {string} sceneAction - The scene action text
+   * @returns {string} Scene type: action, dialogue, emotional, establishing, revelation, contemplative, montage
+   */
+  detectSceneType(sceneAction) {
+    if (!sceneAction) return 'dialogue';
+    const text = sceneAction.toLowerCase();
+
+    // Action keywords - fights, chases, physical action
+    if (text.match(/fight|combat|battle|chase|run|sprint|dodge|attack|defend|punch|kick|strike|leap|jump|vault/)) {
+      return 'action';
+    }
+    // Emotional keywords - feelings, reactions
+    if (text.match(/cry|tear|grief|mourn|sob|embrace|hug|kiss|love|joy|celebrate|laugh|smile|heartbreak|tender/)) {
+      return 'emotional';
+    }
+    // Revelation keywords - discovery, realization
+    if (text.match(/discover|find|realize|reveal|uncover|truth|secret|evidence|understand|recognize|piece together/)) {
+      return 'revelation';
+    }
+    // Establishing keywords - locations, arrivals
+    if (text.match(/arrive|enter|approach|survey|vista|landscape|morning|sunset|establishing|location|city|building/)) {
+      return 'establishing';
+    }
+    // Contemplative keywords - thinking, reflecting
+    if (text.match(/think|ponder|contemplate|reflect|gaze|stare|decide|consider|weight|alone|silent|quiet/)) {
+      return 'contemplative';
+    }
+    // Montage keywords - training, preparation, progression
+    if (text.match(/train|practice|prepare|assemble|build|create|improve|progress|montage|sequence of/)) {
+      return 'montage';
+    }
+    // Dialogue keywords (default) - conversation, speaking
+    if (text.match(/speak|talk|say|tell|explain|discuss|argue|negotiate|convince|respond|reply/)) {
+      return 'dialogue';
+    }
+
+    // Default to dialogue for unknown
+    return 'dialogue';
+  },
+
+  /**
+   * Decompose sceneAction into shot beats with END STATES (RULE-BASED FALLBACK)
    * @param {string} sceneAction - Rich action sequence for the scene
    * @param {number} shotCount - Number of shots to create
    * @param {object} sceneContext - { visualPrompt, narration, characters }
@@ -41812,17 +42409,16 @@ const SHOT_DECOMPOSITION_ENGINE = {
 /**
  * creationWizardDecomposeSceneToShots - Decomposes a scene into multiple cinematic shots
  *
- * Uses LOCAL mathematical decomposition for reliability.
- * Intelligently breaks scene into shots using cinematographic formulas:
- * - Duration-based shot count calculation
- * - Scene type analysis for shot selection
- * - Prompt element extraction and recombination
- * - Consistent visual anchors across all shots
+ * Uses AI-POWERED decomposition when sceneAction is rich enough, with rule-based fallback.
+ * - AI mode: GPT intelligently divides sceneAction into shots with capture points
+ * - Fallback mode: Mathematical decomposition using cinematographic formulas
+ *
+ * Each shot has: START → ACTION → END structure for frame-chain continuity
  */
 exports.creationWizardDecomposeSceneToShots = functions
   .runWith({
-    timeoutSeconds: 30,
-    memory: '256MB'
+    timeoutSeconds: 60, // Increased for AI decomposition
+    memory: '512MB'
   })
   .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
@@ -41833,7 +42429,11 @@ exports.creationWizardDecomposeSceneToShots = functions
     genre,
     productionMode,
     styleBible,      // For visual consistency
-    characterBible   // For character consistency
+    characterBible,  // For character consistency
+    // NEW: Cross-scene continuity (Upgrade 3)
+    previousSceneContext, // { endState, sceneId, transitionType } from previous scene
+    sceneIndex,      // Current scene index (0-based)
+    totalScenes      // Total number of scenes in video
   } = data;
 
   if (!scene || !scene.visualPrompt) {
@@ -41884,18 +42484,96 @@ exports.creationWizardDecomposeSceneToShots = functions
 
     console.log(`[creationWizardDecomposeSceneToShots] Scene ${scene.id}: ${sceneType} type, ${shotCount} shots, ${sceneDuration}s duration`);
 
-    // STEP 4: Generate LOCAL prompts using mathematical decomposition
-    // NEW: Generates separate imagePrompt and videoPrompt for each shot
-    // - imagePrompt: Visual composition for Imagen
-    // - videoPrompt: ACTION-focused prompt for Minimax (motion, progression, transitions)
-    const shotsWithPrompts = SHOT_DECOMPOSITION_ENGINE.generateLocalShotPrompts(
-      sceneDescription,
-      narration,
-      baseSequence,
-      styleBible,
-      characterBible,
-      sceneActionData  // NEW: Pass action data for video prompt generation
-    );
+    // ================================================================
+    // STEP 4: AI-POWERED or RULE-BASED decomposition
+    // Use AI when sceneAction is rich enough (> 50 chars)
+    // ================================================================
+    const sceneAction = sceneActionData.sceneAction;
+    const useAI = sceneAction && sceneAction.trim().length >= 50;
+    let storyBeats = null;
+    let decompositionMethod = 'rule-based';
+
+    // Track scene-level continuity data for return
+    let sceneEndState = null;
+    let suggestedNextSceneTransition = 'cut';
+
+    if (useAI) {
+      console.log(`[creationWizardDecomposeSceneToShots] Using AI decomposition for rich sceneAction (${sceneAction.length} chars)`);
+      try {
+        // Build cross-scene context for AI (Upgrade 3)
+        const crossSceneContext = previousSceneContext?.endState ? {
+          previousSceneEndState: previousSceneContext.endState,
+          previousSceneId: previousSceneContext.sceneId,
+          transitionType: previousSceneContext.transitionType || scene.transition?.type || 'cut'
+        } : null;
+
+        if (crossSceneContext) {
+          console.log(`[creationWizardDecomposeSceneToShots] Cross-scene context: transitioning from scene ${crossSceneContext.previousSceneId}`);
+        }
+
+        const aiResult = await STORY_BEAT_DECOMPOSER.decomposeWithAI(
+          sceneAction,
+          shotCount,
+          clipDuration,
+          {
+            visualPrompt: sceneDescription,
+            narration: narration,
+            characters: characterBible,
+            sceneId: scene.id,
+            sceneIndex: sceneIndex,
+            totalScenes: totalScenes
+          },
+          openai,
+          crossSceneContext  // Pass cross-scene context (Upgrade 3)
+        );
+
+        // Handle new return format (object with shots array)
+        if (aiResult && aiResult.shots) {
+          storyBeats = aiResult.shots;
+          sceneEndState = aiResult.sceneEndState;
+          suggestedNextSceneTransition = aiResult.suggestedNextSceneTransition || 'cut';
+          decompositionMethod = storyBeats[0]?.aiGenerated ? 'ai-powered' : 'rule-based-fallback';
+        } else if (Array.isArray(aiResult)) {
+          // Backward compatibility: if it returns just an array
+          storyBeats = aiResult;
+          decompositionMethod = storyBeats[0]?.aiGenerated ? 'ai-powered' : 'rule-based-fallback';
+        }
+
+        console.log(`[creationWizardDecomposeSceneToShots] AI decomposition result: ${storyBeats?.length || 0} shots (method: ${decompositionMethod})`);
+      } catch (aiError) {
+        console.error(`[creationWizardDecomposeSceneToShots] AI decomposition failed:`, aiError.message);
+        storyBeats = null; // Will trigger fallback below
+      }
+    }
+
+    // FALLBACK: Generate LOCAL prompts using rule-based decomposition
+    const shotsWithPrompts = storyBeats
+      ? baseSequence.map((shot, idx) => {
+          // Merge base shot data with AI-generated story beats
+          const beat = storyBeats[idx] || {};
+          return {
+            ...shot,
+            videoPrompt: beat.videoPrompt || shot.videoPrompt,
+            narrativeBeat: {
+              action: beat.actionText,
+              startState: beat.startState,
+              endState: beat.endState,
+              captureDescription: beat.captureDescription,
+              motionDescription: beat.motionDescription,
+              aiGenerated: beat.aiGenerated || false
+            }
+          };
+        })
+      : SHOT_DECOMPOSITION_ENGINE.generateLocalShotPrompts(
+          sceneDescription,
+          narration,
+          baseSequence,
+          styleBible,
+          characterBible,
+          sceneActionData
+        );
+
+    console.log(`[creationWizardDecomposeSceneToShots] Final decomposition method: ${decompositionMethod}`);
 
     // STEP 5: Extract consistency anchors from original prompt
     const extractedElements = SHOT_DECOMPOSITION_ENGINE.extractSceneElements(sceneDescription);
@@ -41908,41 +42586,64 @@ exports.creationWizardDecomposeSceneToShots = functions
     };
 
     // STEP 6: Normalize shots with all required fields
-    // NEW: Include separate imagePrompt, videoPrompt, and narrativeBeat
-    const normalizedShots = shotsWithPrompts.map((shot, idx) => ({
-      id: `${scene.id}_shot_${idx + 1}`,
-      sceneId: scene.id,
-      shotIndex: shot.shotIndex || idx + 1,
-      shotType: shot.shotType,
-      shotTypeName: shot.shotTypeName,
-      duration: shot.duration,
-      cameraMovement: shot.cameraMovement,
-      // NEW: Separate prompts for image and video generation
-      imagePrompt: shot.imagePrompt,    // For Imagen - visual composition
-      videoPrompt: shot.videoPrompt,    // For Minimax - ACTION focused
-      prompt: shot.prompt,              // Legacy - backward compatibility
-      // NEW: Narrative beat info for progressive action
-      narrativeBeat: shot.narrativeBeat || null,
-      purpose: shot.purpose,
-      focusElement: shot.focusElement,
-      transition: shot.transition || 'cut',
-      // Generation status
-      imageUrl: null,
-      videoUrl: null,
-      status: 'pending'
-    }));
+    // Includes imagePrompt, videoPrompt, narrativeBeat, and captureSuggestion
+    const normalizedShots = shotsWithPrompts.map((shot, idx) => {
+      const isLast = idx === shotsWithPrompts.length - 1;
+      const beatData = storyBeats ? storyBeats[idx] : null;
 
-    // Log usage (no tokens used - local processing)
+      return {
+        id: `${scene.id}_shot_${idx + 1}`,
+        sceneId: scene.id,
+        shotIndex: shot.shotIndex || idx + 1,
+        shotType: shot.shotType,
+        shotTypeName: shot.shotTypeName,
+        duration: shot.duration,
+        cameraMovement: shot.cameraMovement,
+        // Separate prompts for image and video generation
+        imagePrompt: shot.imagePrompt,    // For Imagen - visual composition
+        videoPrompt: shot.videoPrompt,    // For Minimax - ACTION focused
+        prompt: shot.prompt,              // Legacy - backward compatibility
+        // Narrative beat info for progressive action
+        narrativeBeat: shot.narrativeBeat || null,
+        purpose: shot.purpose,
+        focusElement: shot.focusElement,
+        transition: shot.transition || 'cut',
+        // NEW: Capture point suggestions (Upgrade 2)
+        captureSuggestion: isLast ? null : (beatData?.captureSuggestion || {
+          timing: `${clipDuration - 2}-${clipDuration} seconds`,
+          reason: 'End of shot action sequence',
+          stability: 'medium',
+          timingSeconds: { start: clipDuration - 2, end: clipDuration, recommended: clipDuration - 1 },
+          stabilityColor: '#3b82f6'
+        }),
+        // Generation status
+        imageUrl: null,
+        videoUrl: null,
+        status: 'pending'
+      };
+    });
+
+    // Log usage with decomposition method
     await db.collection('apiUsage').add({
       userId: uid,
-      type: 'shot_decomposition_local',
-      model: 'local_engine',
+      type: 'shot_decomposition',
+      model: decompositionMethod === 'ai-powered' ? 'gpt-4o-mini' : 'local_engine',
+      method: decompositionMethod,
       sceneId: scene.id,
       shotCount: normalizedShots.length,
-      inputTokens: 0,
-      outputTokens: 0,
+      sceneActionLength: sceneAction?.length || 0,
+      inputTokens: decompositionMethod === 'ai-powered' ? 500 : 0, // Estimated
+      outputTokens: decompositionMethod === 'ai-powered' ? 1000 : 0, // Estimated
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
+
+    // Compute scene end state from last shot if not from AI
+    if (!sceneEndState && normalizedShots.length > 0) {
+      const lastShot = normalizedShots[normalizedShots.length - 1];
+      sceneEndState = lastShot.narrativeBeat?.endState ||
+                      lastShot.captureSuggestion?.captureDescription ||
+                      'Scene concluded';
+    }
 
     return {
       success: true,
@@ -41952,10 +42653,22 @@ exports.creationWizardDecomposeSceneToShots = functions
       shotCount: normalizedShots.length,
       shots: normalizedShots,
       consistencyAnchors: consistencyAnchors,
+      decompositionMethod: decompositionMethod,
+      // Cross-scene continuity data (Upgrade 3)
+      crossSceneContinuity: {
+        sceneEndState: sceneEndState,
+        suggestedNextSceneTransition: suggestedNextSceneTransition,
+        // This data should be passed as previousSceneContext to the next scene
+        forNextScene: {
+          endState: sceneEndState,
+          sceneId: scene.id,
+          transitionType: suggestedNextSceneTransition
+        }
+      },
       usage: {
-        promptTokens: 0,
-        completionTokens: 0,
-        method: 'local_mathematical_decomposition'
+        promptTokens: decompositionMethod === 'ai-powered' ? 500 : 0,
+        completionTokens: decompositionMethod === 'ai-powered' ? 1000 : 0,
+        method: decompositionMethod
       }
     };
 
@@ -43081,6 +43794,11 @@ Return JSON:
     const results = [];
     const defaultShots = targetShotCount || 3;
 
+    // Cross-scene continuity tracking (Upgrade 3)
+    let previousSceneEndState = null;
+    let previousSceneId = null;
+    let previousSceneTransition = null;
+
     for (let i = 0; i < scenes.length; i++) {
       const scene = scenes[i];
       const sceneDescription = scene.visualPrompt || scene.visual || '';
@@ -43089,6 +43807,17 @@ Return JSON:
       try {
         // Analyze scene type
         const sceneType = SHOT_DECOMPOSITION_ENGINE.analyzeSceneType(sceneDescription);
+
+        // Build cross-scene context from previous scene (Upgrade 3)
+        const crossSceneContext = previousSceneEndState ? {
+          previousSceneEndState,
+          previousSceneId,
+          transitionType: previousSceneTransition || scene.transition?.type || 'cut'
+        } : null;
+
+        if (crossSceneContext) {
+          console.log(`[creationWizardBatchDecomposeScenes] Scene ${i + 1} cross-scene: continuing from "${previousSceneEndState?.substring(0, 50)}..."`);
+        }
 
         // Calculate shot count using Hollywood formula: ceil(sceneDuration / clipDuration)
         const hollywoodShotCount = Math.ceil(sceneDuration / clipDuration);
@@ -43118,6 +43847,18 @@ Output JSON with shots array containing detailed prompts that EXPLICITLY include
 
 Each shot prompt must be 150+ words and include these visual DNA elements.`;
 
+        // Build cross-scene section for prompt (Upgrade 3)
+        const crossScenePromptSection = crossSceneContext ? `
+CROSS-SCENE CONTINUITY (IMPORTANT):
+Previous scene (Scene ${i}) ended with: "${crossSceneContext.previousSceneEndState}"
+Transition type to this scene: ${crossSceneContext.transitionType}
+
+The FIRST SHOT of this scene should:
+- Flow naturally from the previous scene's end state
+- Create visual continuity (match cut, dissolve, or continuation as appropriate)
+- The first shot's opening should acknowledge where we came from
+` : '';
+
         const userPrompt = `Decompose Scene ${i + 1} into ${actualShotCount} shots:
 
 SCENE DESCRIPTION:
@@ -43125,11 +43866,12 @@ ${sceneDescription}
 
 DURATION: ${sceneDuration}s
 SCENE TYPE: ${sceneType}
-
+${crossScenePromptSection}
 SHOT SEQUENCE TEMPLATE:
 ${JSON.stringify(baseSequence, null, 2)}
 
 ${scene.narration ? `NARRATION: "${scene.narration}"` : ''}
+${scene.sceneAction ? `SCENE ACTION: "${scene.sceneAction}"` : ''}
 
 Return JSON:
 {
@@ -43139,10 +43881,12 @@ Return JSON:
       "shotType": "wide|medium|closeup|etc",
       "cameraMovement": "movement type",
       "prompt": "DETAILED prompt (150+ words) including global visual DNA...",
-      "purpose": "narrative purpose"
+      "purpose": "narrative purpose",
+      "endState": "How this shot ends (position/pose) - for frame-chain capture"
     }
   ],
-  "sceneConsistencyNotes": "How this scene connects to others visually"
+  "sceneConsistencyNotes": "How this scene connects to others visually",
+  "sceneEndState": "How the FINAL shot of this scene ends - will be passed to next scene for continuity"
 }
 
 IMPORTANT: Do NOT include duration in your response - durations are fixed at ${clipDuration || 10} seconds per shot.`;
@@ -43164,6 +43908,7 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
         const validClipDuration = clipDuration === 6 ? 6 : 10;
 
         // Normalize shots - FORCE duration to be exactly clipDuration
+        // Include endState for frame-chain capture (Upgrade 3)
         const normalizedShots = (shotData.shots || []).map((shot, idx) => ({
           id: `${scene.id}_shot_${idx + 1}`,
           sceneId: scene.id,
@@ -43173,10 +43918,15 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
           cameraMovement: shot.cameraMovement || baseSequence[idx]?.cameraMovement || 'static',
           prompt: shot.prompt,
           purpose: shot.purpose || 'scene coverage',
+          endState: shot.endState || null, // For frame-chain capture
           status: 'pending',
           imageUrl: null,
           videoUrl: null
         }));
+
+        // Extract scene end state for cross-scene continuity (Upgrade 3)
+        const sceneEndState = shotData.sceneEndState ||
+          (normalizedShots.length > 0 ? normalizedShots[normalizedShots.length - 1].endState : null);
 
         results.push({
           sceneId: scene.id,
@@ -43186,10 +43936,25 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
           totalDuration: sceneDuration,
           shotCount: normalizedShots.length,
           shots: normalizedShots,
-          consistencyNotes: shotData.sceneConsistencyNotes || null
+          consistencyNotes: shotData.sceneConsistencyNotes || null,
+          // Cross-scene continuity data (Upgrade 3)
+          crossSceneContinuity: {
+            previousSceneId: crossSceneContext?.previousSceneId || null,
+            transitionFromPrevious: crossSceneContext?.transitionType || null,
+            sceneEndState: sceneEndState,
+            suggestedNextTransition: shotData.suggestedNextTransition || 'cut'
+          }
         });
 
+        // Update cross-scene tracking for next iteration (Upgrade 3)
+        previousSceneEndState = sceneEndState;
+        previousSceneId = scene.id;
+        previousSceneTransition = shotData.suggestedNextTransition || scene.transition?.type || 'cut';
+
         console.log(`[creationWizardBatchDecomposeScenes] Scene ${i + 1}/${scenes.length} decomposed: ${normalizedShots.length} shots`);
+        if (sceneEndState) {
+          console.log(`[creationWizardBatchDecomposeScenes] Scene ${i + 1} ends with: "${sceneEndState.substring(0, 60)}..."`);
+        }
 
         // Small delay between scenes
         if (i < scenes.length - 1) {
@@ -43221,6 +43986,16 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
 
+    // Build cross-scene continuity chain summary (Upgrade 3)
+    const continuityChain = results
+      .filter(r => r.status === 'ready' && r.crossSceneContinuity?.sceneEndState)
+      .map(r => ({
+        sceneId: r.sceneId,
+        sceneIndex: r.sceneIndex,
+        endState: r.crossSceneContinuity.sceneEndState,
+        nextTransition: r.crossSceneContinuity.suggestedNextTransition
+      }));
+
     return {
       success: successCount > 0,
       totalScenes: scenes.length,
@@ -43228,7 +44003,14 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
       failedCount: scenes.length - successCount,
       totalShots,
       globalVisualProfile,
-      scenes: results
+      scenes: results,
+      // Cross-scene continuity summary (Upgrade 3)
+      crossSceneContinuity: {
+        enabled: true,
+        chainComplete: continuityChain.length === successCount,
+        chain: continuityChain,
+        description: 'Each scene ends in a capturable state that flows into the next scene'
+      }
     };
 
   } catch (error) {
