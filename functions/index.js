@@ -46813,6 +46813,7 @@ exports.creationWizardBatchGenerateShotImages = functions
     aspectRatio,
     characterReference, // Optional character reference image (base64) for face consistency
     characterBible,     // Optional character bible with names/descriptions for prompt building
+    locationBible,      // Optional location bible with location references for background consistency
     globalVisualProfile // From batch decomposition
   } = data;
 
@@ -46829,9 +46830,10 @@ exports.creationWizardBatchGenerateShotImages = functions
   const storage = admin.storage().bucket();
   const timestamp = Date.now();
 
-  // Log character consistency parameters
+  // Log character and location consistency parameters
   console.log(`[creationWizardBatchGenerateShotImages] Character Reference: ${characterReference?.base64 ? 'YES (base64 present)' : 'NO'}`);
   console.log(`[creationWizardBatchGenerateShotImages] Character Bible: ${characterBible?.enabled ? `${characterBible.characters?.length || 0} characters` : 'disabled'}`);
+  console.log(`[creationWizardBatchGenerateShotImages] Location Bible: ${locationBible?.enabled ? `${locationBible.locations?.length || 0} locations` : 'disabled'}`);
 
   // Flatten all shots
   const allShots = [];
@@ -46902,9 +46904,53 @@ exports.creationWizardBatchGenerateShotImages = functions
       // Build content parts for Gemini API
       const contentParts = [];
 
-      // Add character reference image FIRST if available (for face/appearance consistency)
-      // Gemini will use this as a visual reference when generating the new image
+      // =========================================================
+      // LOCATION REFERENCE FIRST (establishes the background/environment)
+      // This ensures consistent environments across shots
+      // =========================================================
+      let locationRef = null;
+      if (locationBible?.enabled && locationBible.locations?.length > 0) {
+        // Find location for this scene
+        locationRef = locationBible.locations.find(loc => {
+          const includeInAll = !loc.appliedToScenes || loc.appliedToScenes.length === 0;
+          const includeInScene = loc.appliedToScenes && loc.appliedToScenes.includes(shot.sceneId);
+          return (includeInAll || includeInScene) &&
+                 loc.referenceImageBase64 &&
+                 loc.referenceImageStatus === 'ready';
+        });
+
+        if (locationRef && locationRef.referenceImageBase64) {
+          contentParts.push({
+            inlineData: {
+              mimeType: locationRef.referenceImageMimeType || 'image/png',
+              data: locationRef.referenceImageBase64
+            }
+          });
+          // Build location instruction with all metadata
+          const locationInstruction = [
+            `LOCATION/ENVIRONMENT REFERENCE (Image 1):`,
+            `Use this exact environment as the background setting.`,
+            `Location: ${locationRef.name}`,
+            locationRef.description ? `Description: ${locationRef.description}` : '',
+            `Time: ${locationRef.timeOfDay || 'day'}`,
+            locationRef.weather && locationRef.weather !== 'clear' ? `Weather: ${locationRef.weather}` : '',
+            locationRef.mood ? `Mood: ${locationRef.mood}` : '',
+            locationRef.lightingStyle ? `Lighting: ${locationRef.lightingStyle}` : '',
+            `Match the exact colors, textures, and atmosphere from this reference image.`,
+            ``
+          ].filter(line => line).join('\n');
+
+          contentParts.push({ text: locationInstruction });
+          console.log(`[creationWizardBatchGenerateShotImages] Added location reference: "${locationRef.name}" for Scene ${shot.sceneId}`);
+        }
+      }
+
+      // =========================================================
+      // CHARACTER REFERENCE SECOND (subjects placed in the environment)
+      // Gemini uses this for face/appearance consistency
+      // =========================================================
       if (characterReference?.base64) {
+        const charImageNum = locationRef ? '(Image 2)' : '(Image 1)';
         contentParts.push({
           inlineData: {
             mimeType: characterReference.mimeType || 'image/png',
@@ -46913,14 +46959,18 @@ exports.creationWizardBatchGenerateShotImages = functions
         });
         // Add instruction to use the reference
         contentParts.push({
-          text: `REFERENCE IMAGE ABOVE: Use this character's face, features, and appearance as reference for the main character in the generated image. Maintain facial consistency.\n\n`
+          text: `CHARACTER REFERENCE ${charImageNum}: Use this character's face, features, skin tone, and appearance for the main character. ${locationRef ? 'Place them naturally within the environment above. ' : ''}Maintain facial consistency and match the lighting conditions.\n\n`
         });
         console.log(`[creationWizardBatchGenerateShotImages] Added character reference image for face consistency`);
       }
 
-      // Add the main prompt text
+      // Add the main prompt text (combined with location context if available)
+      let finalPrompt = enhancedPrompt;
+      if (locationRef) {
+        finalPrompt = `[Generate scene using the location environment reference above]\n\n${enhancedPrompt}`;
+      }
       contentParts.push({
-        text: enhancedPrompt
+        text: finalPrompt
       });
 
       // Generate image - Use correct NanoBanana models

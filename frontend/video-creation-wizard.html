@@ -10666,6 +10666,27 @@
                 console.log('[Batch Image Gen] Character reference:', characterReference ? 'YES (base64 ready)' : 'NO');
                 console.log('[Batch Image Gen] Character bible:', characterBible ? `${characterBible.characters.length} characters` : 'disabled');
 
+                // Build location bible data for backend
+                const locationBible = state.storyboard.locationBible?.enabled ? {
+                    enabled: true,
+                    locations: (state.storyboard.locationBible.locations || []).filter(l => l.referenceImageBase64 && l.referenceImageStatus === 'ready').map(l => ({
+                        id: l.id,
+                        name: l.name,
+                        description: l.description,
+                        type: l.type,
+                        timeOfDay: l.timeOfDay,
+                        weather: l.weather,
+                        mood: l.mood,
+                        lightingStyle: l.lightingStyle,
+                        keyElements: l.keyElements,
+                        referenceImageBase64: l.referenceImageBase64,
+                        referenceImageMimeType: l.referenceImageMimeType || 'image/png',
+                        referenceImageStatus: l.referenceImageStatus,
+                        appliedToScenes: l.appliedToScenes || []
+                    }))
+                } : null;
+                console.log('[Batch Image Gen] Location bible:', locationBible ? `${locationBible.locations.length} locations with references` : 'disabled');
+
                 const batchGenerateFn = functions.httpsCallable('creationWizardBatchGenerateShotImages', { timeout: 540000 });
                 const result = await batchGenerateFn({
                     projectId: state.projectId,
@@ -10673,9 +10694,11 @@
                     globalVisualProfile: state.storyboard.multiShotMode.globalVisualProfile || {},
                     model: state.storyboard.imageModel || 'nanobanana-pro',
                     aspectRatio: state.platform.aspectRatio || '16:9',
-                    // NEW: Character consistency parameters
+                    // Character consistency parameters
                     characterReference: characterReference,
-                    characterBible: characterBible
+                    characterBible: characterBible,
+                    // Location consistency parameters
+                    locationBible: locationBible
                 });
 
                 if (result.data.success) {
