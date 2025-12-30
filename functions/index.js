@@ -33272,7 +33272,8 @@ const MINIMAX_VIDEO_MODELS = {
       '10s': ['768p']
     },
     pricing: { '6s-768p': 0.28, '6s-1080p': 0.49, '10s-768p': 0.40 },
-    features: ['camera_control', 'prompt_optimizer']
+    features: ['camera_control', 'prompt_optimizer'],
+    description: 'Standard quality video generation'
   },
   'hailuo-2.3-fast': {
     name: 'Hailuo 2.3 Fast',
@@ -33283,7 +33284,8 @@ const MINIMAX_VIDEO_MODELS = {
       '10s': ['768p']
     },
     pricing: { '6s-768p': 0.14, '6s-1080p': 0.25, '10s-768p': 0.20 },
-    features: ['camera_control', 'fast_generation']
+    features: ['camera_control', 'fast_generation'],
+    description: 'Faster generation, image-to-video only'
   },
   'hailuo-02': {
     name: 'Hailuo 02',
@@ -33294,7 +33296,21 @@ const MINIMAX_VIDEO_MODELS = {
       '10s': ['512p', '768p']
     },
     pricing: { '6s-768p': 0.28, '6s-1080p': 0.49, '10s-768p': 0.40 },
-    features: ['camera_control', 'last_frame_conditioning']
+    features: ['camera_control', 'last_frame_conditioning'],
+    description: 'Advanced model with last frame conditioning'
+  },
+  // S2V-01: Subject-to-Video for CHARACTER CONSISTENCY
+  'hailuo-s2v': {
+    name: 'Hailuo S2V-01 (Character)',
+    modelId: 'S2V-01',
+    inputTypes: ['text', 'image', 'subject_reference'],
+    durations: {
+      '6s': ['768p', '1080p']
+    },
+    pricing: { '6s-768p': 0.50, '6s-1080p': 0.70 },
+    features: ['camera_control', 'subject_reference', 'character_consistency'],
+    description: 'Character-consistent video - maintains face/identity from reference image',
+    requiresSubjectReference: true
   }
 };
 
@@ -41274,6 +41290,11 @@ exports.SHOT_DECOMPOSITION_ENGINE = SHOT_DECOMPOSITION_ENGINE;
  * creationWizardGenerateShotVideo - Generate video for a single shot using Minimax
  *
  * Uses the shot's image as first frame (Image-to-Video) for consistency
+ * Supports S2V-01 model for character-consistent video when characterReference is provided
+ *
+ * SMART MODEL SELECTION:
+ * - If hasCharacters=true AND characterReference provided → S2V-01 (character consistent)
+ * - If hasCharacters=false OR no characterReference → video-01/T2V-01 (standard)
  */
 exports.creationWizardGenerateShotVideo = functions
   .runWith({
@@ -41290,7 +41311,13 @@ exports.creationWizardGenerateShotVideo = functions
     prompt,             // Video motion prompt
     duration = '6s',    // Shot duration
     cameraMovement,     // Camera movement for this shot
-    model = 'hailuo-2.3'
+    model = 'hailuo-2.3',
+    // NEW: Character consistency parameters
+    hasCharacters = false,              // Does this shot contain characters?
+    characterReference = null,          // Character portrait URL from Character Bible
+    primaryCharacterName = null,        // Name of primary character for logging
+    // NEW: Style enforcement
+    styleSettings = null                // { style: 'photorealistic', colorGrade: '...', etc. }
   } = data;
 
   if (!imageUrl) {
@@ -41307,8 +41334,40 @@ exports.creationWizardGenerateShotVideo = functions
   }
 
   try {
+    // ==========================================
+    // SMART MODEL SELECTION
+    // ==========================================
+    // Determine whether to use S2V-01 (character-consistent) or standard model
+    const useCharacterConsistency = hasCharacters && characterReference;
+    const selectedModel = useCharacterConsistency ? 'S2V-01' : 'video-01';
+
+    console.log(`[creationWizardGenerateShotVideo] Model Selection: ${selectedModel}`);
+    console.log(`[creationWizardGenerateShotVideo] Has Characters: ${hasCharacters}, Character Reference: ${characterReference ? 'YES' : 'NO'}`);
+    if (primaryCharacterName) {
+      console.log(`[creationWizardGenerateShotVideo] Primary Character: ${primaryCharacterName}`);
+    }
+
     // Build video prompt with camera movement
     let videoPrompt = prompt.trim();
+
+    // ==========================================
+    // STYLE ENFORCEMENT
+    // ==========================================
+    // If style is photorealistic, enforce it strongly in the prompt
+    if (styleSettings?.style) {
+      const isPhotorealistic = styleSettings.style.toLowerCase().includes('photorealistic') ||
+                               styleSettings.style.toLowerCase().includes('realistic') ||
+                               styleSettings.style.toLowerCase().includes('live-action');
+
+      if (isPhotorealistic) {
+        // Prepend strong style enforcement for photorealistic content
+        videoPrompt = `[STYLE: Photorealistic, live-action cinematography, real human faces and bodies, NOT animated, NOT cartoon, NOT CGI characters] ${videoPrompt}`;
+        console.log(`[creationWizardGenerateShotVideo] Style Enforcement: PHOTOREALISTIC`);
+      } else if (styleSettings.style) {
+        videoPrompt = `[STYLE: ${styleSettings.style}] ${videoPrompt}`;
+        console.log(`[creationWizardGenerateShotVideo] Style Enforcement: ${styleSettings.style}`);
+      }
+    }
 
     // Map shot camera movement to Minimax format
     const cameraMovementMap = {
@@ -41329,18 +41388,25 @@ exports.creationWizardGenerateShotVideo = functions
 
     console.log(`[creationWizardGenerateShotVideo] Scene ${sceneId}, Shot ${shotIndex}: Starting video generation`);
     console.log(`[creationWizardGenerateShotVideo] Image URL: ${imageUrl}`);
-    console.log(`[creationWizardGenerateShotVideo] Prompt: ${videoPrompt.substring(0, 100)}...`);
+    console.log(`[creationWizardGenerateShotVideo] Prompt: ${videoPrompt.substring(0, 150)}...`);
 
-    // Call Minimax API for Image-to-Video
-    // Using video-01 model for image-to-video generation
+    // ==========================================
+    // BUILD API PAYLOAD
+    // ==========================================
     const payload = {
-      model: 'video-01',
+      model: selectedModel,
       prompt: videoPrompt,
       first_frame_image: imageUrl,
-      prompt_optimizer: true
+      prompt_optimizer: !useCharacterConsistency // Disable optimizer for S2V-01 for stricter adherence
     };
 
-    console.log(`[creationWizardGenerateShotVideo] Sending to Minimax API...`);
+    // Add subject_reference for S2V-01 character consistency
+    if (useCharacterConsistency) {
+      payload.subject_reference = characterReference;
+      console.log(`[creationWizardGenerateShotVideo] Added subject_reference for character consistency`);
+    }
+
+    console.log(`[creationWizardGenerateShotVideo] Sending to Minimax API with model: ${selectedModel}...`);
 
     const minimaxResponse = await axios.post(
       'https://api.minimax.io/v1/video_generation',
@@ -41369,13 +41435,15 @@ exports.creationWizardGenerateShotVideo = functions
       throw new Error(`Minimax API error: ${baseResp.status_msg || 'Unknown error'} (code: ${baseResp.status_code})`);
     }
 
-    console.log(`[creationWizardGenerateShotVideo] Task started successfully: ${taskId}`);
+    console.log(`[creationWizardGenerateShotVideo] Task started successfully: ${taskId} (Model: ${selectedModel})`);
 
-    // Log usage
+    // Log usage with model info
     await db.collection('apiUsage').add({
       userId: uid,
       type: 'shot_video_generation',
-      model: model,
+      model: selectedModel,
+      usedCharacterConsistency: useCharacterConsistency,
+      primaryCharacter: primaryCharacterName || null,
       sceneId,
       shotId,
       shotIndex,
@@ -41390,7 +41458,11 @@ exports.creationWizardGenerateShotVideo = functions
       shotId,
       shotIndex,
       status: 'processing',
-      provider: 'minimax'
+      provider: 'minimax',
+      // Return model info for UI display
+      modelUsed: selectedModel,
+      usedCharacterConsistency: useCharacterConsistency,
+      characterName: primaryCharacterName || null
     };
 
   } catch (error) {
