@@ -7875,6 +7875,20 @@
                                                         ${shot.shotType || 'shot'}
                                                     </div>
 
+                                                    <!-- Video Model Badge (shows which AI model will be used) -->
+                                                    ${(() => {
+                                                        const modelInfo = getVideoModelForShot(shot);
+                                                        const isCharacterMode = modelInfo.model === 'S2V-01';
+                                                        const bgColor = isCharacterMode ? 'rgba(16, 185, 129, 0.9)' : 'rgba(59, 130, 246, 0.8)';
+                                                        const icon = isCharacterMode ? '👤' : '🎬';
+                                                        const label = isCharacterMode ? 'Character' : 'Standard';
+                                                        return hasImage && !hasVideo ? `
+                                                            <div style="position: absolute; bottom: 0.25rem; right: 0.25rem; background: ${bgColor}; color: white; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.5rem; z-index: 2; display: flex; align-items: center; gap: 0.15rem;" title="${modelInfo.reason}">
+                                                                ${icon} ${label}
+                                                            </div>
+                                                        ` : '';
+                                                    })()}
+
                                                     <!-- Transferred Badge -->
                                                     ${wasTransferred ? `
                                                         <div style="position: absolute; top: 0.25rem; left: 50%; transform: translateX(-50%); background: rgba(16, 185, 129, 0.9); color: white; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.5rem; z-index: 2;">
@@ -8308,6 +8322,136 @@
             scheduleAutoSave();
         }
 
+        // ==========================================
+        // SMART MODEL SELECTION HELPERS
+        // ==========================================
+
+        /**
+         * Detect if a shot likely contains characters based on shot type and prompt
+         */
+        function detectShotHasCharacters(shot) {
+            // Shot types that typically contain characters
+            const characterShotTypes = [
+                'close_up', 'closeup', 'medium', 'medium_wide', 'wide',
+                'over_shoulder', 'two_shot', 'group', 'reaction',
+                'portrait', 'full_body', 'character'
+            ];
+
+            // Check shot type
+            const shotType = (shot.shotType || '').toLowerCase().replace(/[_-]/g, '');
+            const hasCharacterShotType = characterShotTypes.some(type =>
+                shotType.includes(type.replace(/[_-]/g, ''))
+            );
+
+            // Check prompt for character-related keywords
+            const prompt = (shot.prompt || '').toLowerCase();
+            const characterKeywords = [
+                'character', 'person', 'man', 'woman', 'he ', 'she ', 'they ',
+                'face', 'looking', 'standing', 'walking', 'sitting',
+                'protagonist', 'hero', 'villain', 'actor'
+            ];
+            const hasCharacterInPrompt = characterKeywords.some(kw => prompt.includes(kw));
+
+            // Check if shot references specific characters from Character Bible
+            const characterBible = state.storyboard?.characterBible?.characters || [];
+            const hasNamedCharacter = characterBible.some(char =>
+                prompt.toLowerCase().includes(char.name?.toLowerCase())
+            );
+
+            // Determine if shot has characters
+            return hasCharacterShotType || hasCharacterInPrompt || hasNamedCharacter;
+        }
+
+        /**
+         * Get the primary character reference for a shot
+         * Returns the first character with a portrait that appears in the shot
+         */
+        function getCharacterReferenceForShot(shot) {
+            const characterBible = state.storyboard?.characterBible?.characters || [];
+            if (characterBible.length === 0) return null;
+
+            const prompt = (shot.prompt || '').toLowerCase();
+
+            // Find character mentioned in prompt that has a portrait
+            for (const char of characterBible) {
+                if (char.referenceImageUrl && char.referenceImageStatus === 'ready') {
+                    // Check if this character is mentioned in the prompt
+                    if (char.name && prompt.includes(char.name.toLowerCase())) {
+                        return {
+                            url: char.referenceImageUrl,
+                            name: char.name,
+                            id: char.id
+                        };
+                    }
+                }
+            }
+
+            // If no specific character found but shot has characters, use first available portrait
+            if (detectShotHasCharacters(shot)) {
+                const charWithPortrait = characterBible.find(c =>
+                    c.referenceImageUrl && c.referenceImageStatus === 'ready'
+                );
+                if (charWithPortrait) {
+                    return {
+                        url: charWithPortrait.referenceImageUrl,
+                        name: charWithPortrait.name,
+                        id: charWithPortrait.id
+                    };
+                }
+            }
+
+            return null;
+        }
+
+        /**
+         * Get current style settings from Style Bible
+         */
+        function getStyleSettingsForVideo() {
+            const styleBible = state.storyboard?.styleBible;
+            if (!styleBible?.enabled) return null;
+
+            return {
+                style: styleBible.style || styleBible.visualStyle || null,
+                colorGrade: styleBible.colorGrade || null,
+                lighting: styleBible.lighting || null,
+                atmosphere: styleBible.atmosphere || null
+            };
+        }
+
+        /**
+         * Determine which video model will be used for a shot
+         * Returns { model: 'S2V-01'|'video-01', reason: string, characterName?: string }
+         */
+        function getVideoModelForShot(shot) {
+            const hasCharacters = detectShotHasCharacters(shot);
+            const charRef = getCharacterReferenceForShot(shot);
+
+            if (hasCharacters && charRef) {
+                return {
+                    model: 'S2V-01',
+                    modelName: 'Character Mode',
+                    reason: `Using character reference (${charRef.name})`,
+                    characterName: charRef.name,
+                    characterUrl: charRef.url,
+                    hasCharacters: true
+                };
+            } else if (hasCharacters && !charRef) {
+                return {
+                    model: 'video-01',
+                    modelName: 'Standard Mode',
+                    reason: 'Characters detected but no portrait available',
+                    hasCharacters: true
+                };
+            } else {
+                return {
+                    model: 'video-01',
+                    modelName: 'Standard Mode',
+                    reason: 'No characters in shot',
+                    hasCharacters: false
+                };
+            }
+        }
+
         /**
          * Generate video for a single shot
          */
@@ -8324,9 +8468,21 @@
                 return;
             }
 
+            // ==========================================
+            // SMART MODEL SELECTION
+            // ==========================================
+            const modelInfo = getVideoModelForShot(shot);
+            const styleSettings = getStyleSettingsForVideo();
+
+            console.log(`[Video Generation] Shot ${shotIndex + 1}: Model=${modelInfo.model}, Reason=${modelInfo.reason}`);
+
             shot.videoStatus = 'generating';
+            shot.videoModel = modelInfo.model; // Store for UI display
+            shot.videoModelReason = modelInfo.reason;
             render();
-            showToast(`🎬 Starting video for shot ${shotIndex + 1}...`, 'info');
+
+            const modelLabel = modelInfo.model === 'S2V-01' ? '👤 Character Mode' : '🎬 Standard Mode';
+            showToast(`${modelLabel}: Starting video for shot ${shotIndex + 1}...`, 'info');
 
             try {
                 const generateVideoFn = functions.httpsCallable('creationWizardGenerateShotVideo', { timeout: 120000 });
@@ -8341,13 +8497,23 @@
                     imageUrl: shot.imageUrl,
                     prompt: shot.prompt,
                     cameraMovement: shot.cameraMovement,
-                    duration: shotDuration
+                    duration: shotDuration,
+                    // NEW: Character consistency parameters
+                    hasCharacters: modelInfo.hasCharacters,
+                    characterReference: modelInfo.characterUrl || null,
+                    primaryCharacterName: modelInfo.characterName || null,
+                    // NEW: Style enforcement
+                    styleSettings: styleSettings
                 });
 
                 if (result.data.success) {
                     shot.videoTaskId = result.data.taskId;
                     shot.videoStatus = 'processing';
-                    showToast(`Shot ${shotIndex + 1} video started! Polling...`, 'success');
+                    shot.videoModelUsed = result.data.modelUsed;
+                    shot.usedCharacterConsistency = result.data.usedCharacterConsistency;
+
+                    const modeLabel = result.data.usedCharacterConsistency ? '👤' : '🎬';
+                    showToast(`${modeLabel} Shot ${shotIndex + 1} video started! Polling...`, 'success');
 
                     // Start polling for this shot
                     startSingleShotVideoPolling(sceneId, shotIndex, result.data.taskId);
