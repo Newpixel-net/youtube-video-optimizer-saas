@@ -40426,7 +40426,182 @@ exports.PROMPT_CHAIN_ARCHITECTURE = {
  */
 const STORY_BEAT_DECOMPOSER = {
   /**
-   * Decompose sceneAction into shot beats with END STATES
+   * AI-Powered Action Decomposition using GPT
+   * Intelligently divides sceneAction into shots with proper capture points
+   * @param {string} sceneAction - Rich action sequence for the scene
+   * @param {number} shotCount - Number of shots to create
+   * @param {number} clipDuration - Duration per shot (6 or 10 seconds)
+   * @param {object} sceneContext - { visualPrompt, narration, characters, sceneId }
+   * @param {object} openai - OpenAI client instance
+   * @returns {Promise<Array>} Array of shot beats with start/action/end
+   */
+  async decomposeWithAI(sceneAction, shotCount, clipDuration, sceneContext, openai) {
+    // Validate sceneAction is rich enough for AI decomposition
+    if (!sceneAction || sceneAction.trim().length < 50) {
+      console.log('[STORY_BEAT_DECOMPOSER] sceneAction too brief, using rule-based fallback');
+      return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
+    }
+
+    const prompt = `You are a professional film editor decomposing a scene into shots for AI video generation.
+
+SCENE ACTION (what happens in this ~${shotCount * clipDuration} second scene):
+"${sceneAction}"
+
+VISUAL CONTEXT:
+${sceneContext.visualPrompt ? sceneContext.visualPrompt.substring(0, 500) : 'No visual context provided'}
+
+REQUIREMENTS:
+- Divide this action into exactly ${shotCount} shots
+- Each shot is ${clipDuration} seconds of video
+- Each shot must have DENSE action (${clipDuration}s is substantial - include multiple beats per shot)
+- Each shot MUST end with a clear CAPTURE POINT (a moment that works as a freeze frame)
+- Shot N's end state becomes Shot N+1's starting point (frame-chain continuity)
+
+For each shot, provide:
+1. shotAction: The complete action sequence for this ${clipDuration}-second shot (be specific and detailed)
+2. endState: The exact position/pose at the end (this frame will be captured for next shot)
+3. captureDescription: What the captured frame looks like (for seamless transition)
+
+Return ONLY valid JSON:
+{
+  "shots": [
+    {
+      "shotIndex": 0,
+      "shotAction": "Detailed action for this ${clipDuration}-second shot...",
+      "endState": "Specific position/pose at shot end",
+      "captureDescription": "What the freeze frame shows"
+    }
+  ],
+  "chainLogic": "Brief explanation of how shots connect"
+}`;
+
+    try {
+      console.log(`[STORY_BEAT_DECOMPOSER] Using AI decomposition for ${shotCount} shots`);
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini', // Fast and cost-effective for structured decomposition
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional film editor specializing in AI video generation. You decompose scenes into shots that chain together seamlessly via frame capture. Always return valid JSON.'
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      });
+
+      const responseText = completion.choices[0].message.content.trim();
+
+      // Parse JSON response
+      let parsed;
+      try {
+        // Handle markdown code blocks
+        const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+        const jsonStr = jsonMatch ? jsonMatch[1].trim() : responseText;
+        parsed = JSON.parse(jsonStr);
+      } catch (parseError) {
+        console.error('[STORY_BEAT_DECOMPOSER] Failed to parse AI response, using fallback');
+        return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
+      }
+
+      if (!parsed.shots || !Array.isArray(parsed.shots) || parsed.shots.length === 0) {
+        console.error('[STORY_BEAT_DECOMPOSER] AI returned invalid structure, using fallback');
+        return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
+      }
+
+      // Convert AI response to standard shot format
+      const shots = parsed.shots.map((shot, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === parsed.shots.length - 1;
+
+        // Build START state (from previous shot's end or scene opening)
+        const startState = isFirst
+          ? this.extractOpeningState(sceneContext.visualPrompt, shot.shotAction)
+          : `Continuing from: ${parsed.shots[idx - 1].captureDescription || parsed.shots[idx - 1].endState}`;
+
+        // Build END state
+        const endState = isLast
+          ? `Scene concludes: ${shot.endState}. Hold for final frame.`
+          : `CAPTURE POINT: ${shot.endState}. ${shot.captureDescription || 'This frame transitions to next shot.'}`;
+
+        // Build video prompt with START → ACTION → END structure
+        const videoPrompt = this.buildVideoPromptFromAI(
+          startState,
+          shot.shotAction,
+          endState,
+          { isFirst, isLast }
+        );
+
+        return {
+          shotIndex: idx,
+          isFirst,
+          isLast,
+          segments: [shot.shotAction],
+          actionText: shot.shotAction,
+          startState,
+          endState,
+          captureDescription: shot.captureDescription || shot.endState,
+          videoPrompt,
+          motionDescription: `Shot ${idx + 1}: ${this.extractKeyVerbs(shot.shotAction)}`,
+          aiGenerated: true
+        };
+      });
+
+      console.log(`[STORY_BEAT_DECOMPOSER] AI decomposition successful: ${shots.length} shots`);
+      console.log(`[STORY_BEAT_DECOMPOSER] Chain logic: ${parsed.chainLogic || 'Not provided'}`);
+
+      return shots;
+
+    } catch (error) {
+      console.error('[STORY_BEAT_DECOMPOSER] AI decomposition failed:', error.message);
+      // Fallback to rule-based decomposition
+      return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
+    }
+  },
+
+  /**
+   * Build video prompt from AI-generated content
+   */
+  buildVideoPromptFromAI(startState, action, endState, meta) {
+    const parts = [];
+
+    // 1. START STATE
+    if (meta.isFirst) {
+      parts.push(`OPENING: ${startState}`);
+    } else {
+      parts.push(startState);
+    }
+
+    // 2. ACTION (the main content)
+    parts.push(`ACTION: ${action}`);
+
+    // 3. END STATE
+    parts.push(endState);
+
+    // 4. Animation guidance
+    const guidance = meta.isLast
+      ? 'Animate to final resting pose, hold for conclusion.'
+      : 'Animate smoothly toward capture point. End in stable, capturable position.';
+    parts.push(guidance);
+
+    return parts.join(' ');
+  },
+
+  /**
+   * Extract key verbs for motion summary
+   */
+  extractKeyVerbs(text) {
+    const verbMatch = text.match(/\b(walks?|runs?|leaps?|jumps?|turns?|speaks?|reaches?|grabs?|stands?|sits?|looks?|moves?|steps?|enters?|exits?|falls?|rises?|opens?|closes?)\b/gi);
+    if (verbMatch && verbMatch.length > 0) {
+      const uniqueVerbs = [...new Set(verbMatch.map(v => v.toLowerCase()))];
+      return uniqueVerbs.slice(0, 3).join(', ');
+    }
+    return 'progressive action';
+  },
+
+  /**
+   * Decompose sceneAction into shot beats with END STATES (RULE-BASED FALLBACK)
    * @param {string} sceneAction - Rich action sequence for the scene
    * @param {number} shotCount - Number of shots to create
    * @param {object} sceneContext - { visualPrompt, narration, characters }
@@ -41812,17 +41987,16 @@ const SHOT_DECOMPOSITION_ENGINE = {
 /**
  * creationWizardDecomposeSceneToShots - Decomposes a scene into multiple cinematic shots
  *
- * Uses LOCAL mathematical decomposition for reliability.
- * Intelligently breaks scene into shots using cinematographic formulas:
- * - Duration-based shot count calculation
- * - Scene type analysis for shot selection
- * - Prompt element extraction and recombination
- * - Consistent visual anchors across all shots
+ * Uses AI-POWERED decomposition when sceneAction is rich enough, with rule-based fallback.
+ * - AI mode: GPT intelligently divides sceneAction into shots with capture points
+ * - Fallback mode: Mathematical decomposition using cinematographic formulas
+ *
+ * Each shot has: START → ACTION → END structure for frame-chain continuity
  */
 exports.creationWizardDecomposeSceneToShots = functions
   .runWith({
-    timeoutSeconds: 30,
-    memory: '256MB'
+    timeoutSeconds: 60, // Increased for AI decomposition
+    memory: '512MB'
   })
   .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
@@ -41884,18 +42058,66 @@ exports.creationWizardDecomposeSceneToShots = functions
 
     console.log(`[creationWizardDecomposeSceneToShots] Scene ${scene.id}: ${sceneType} type, ${shotCount} shots, ${sceneDuration}s duration`);
 
-    // STEP 4: Generate LOCAL prompts using mathematical decomposition
-    // NEW: Generates separate imagePrompt and videoPrompt for each shot
-    // - imagePrompt: Visual composition for Imagen
-    // - videoPrompt: ACTION-focused prompt for Minimax (motion, progression, transitions)
-    const shotsWithPrompts = SHOT_DECOMPOSITION_ENGINE.generateLocalShotPrompts(
-      sceneDescription,
-      narration,
-      baseSequence,
-      styleBible,
-      characterBible,
-      sceneActionData  // NEW: Pass action data for video prompt generation
-    );
+    // ================================================================
+    // STEP 4: AI-POWERED or RULE-BASED decomposition
+    // Use AI when sceneAction is rich enough (> 50 chars)
+    // ================================================================
+    const sceneAction = sceneActionData.sceneAction;
+    const useAI = sceneAction && sceneAction.trim().length >= 50;
+    let storyBeats = null;
+    let decompositionMethod = 'rule-based';
+
+    if (useAI) {
+      console.log(`[creationWizardDecomposeSceneToShots] Using AI decomposition for rich sceneAction (${sceneAction.length} chars)`);
+      try {
+        storyBeats = await STORY_BEAT_DECOMPOSER.decomposeWithAI(
+          sceneAction,
+          shotCount,
+          clipDuration,
+          {
+            visualPrompt: sceneDescription,
+            narration: narration,
+            characters: characterBible,
+            sceneId: scene.id
+          },
+          openai  // Pass the global OpenAI client
+        );
+        decompositionMethod = storyBeats[0]?.aiGenerated ? 'ai-powered' : 'rule-based-fallback';
+        console.log(`[creationWizardDecomposeSceneToShots] AI decomposition result: ${storyBeats.length} shots (method: ${decompositionMethod})`);
+      } catch (aiError) {
+        console.error(`[creationWizardDecomposeSceneToShots] AI decomposition failed:`, aiError.message);
+        storyBeats = null; // Will trigger fallback below
+      }
+    }
+
+    // FALLBACK: Generate LOCAL prompts using rule-based decomposition
+    const shotsWithPrompts = storyBeats
+      ? baseSequence.map((shot, idx) => {
+          // Merge base shot data with AI-generated story beats
+          const beat = storyBeats[idx] || {};
+          return {
+            ...shot,
+            videoPrompt: beat.videoPrompt || shot.videoPrompt,
+            narrativeBeat: {
+              action: beat.actionText,
+              startState: beat.startState,
+              endState: beat.endState,
+              captureDescription: beat.captureDescription,
+              motionDescription: beat.motionDescription,
+              aiGenerated: beat.aiGenerated || false
+            }
+          };
+        })
+      : SHOT_DECOMPOSITION_ENGINE.generateLocalShotPrompts(
+          sceneDescription,
+          narration,
+          baseSequence,
+          styleBible,
+          characterBible,
+          sceneActionData
+        );
+
+    console.log(`[creationWizardDecomposeSceneToShots] Final decomposition method: ${decompositionMethod}`);
 
     // STEP 5: Extract consistency anchors from original prompt
     const extractedElements = SHOT_DECOMPOSITION_ENGINE.extractSceneElements(sceneDescription);
@@ -41932,15 +42154,17 @@ exports.creationWizardDecomposeSceneToShots = functions
       status: 'pending'
     }));
 
-    // Log usage (no tokens used - local processing)
+    // Log usage with decomposition method
     await db.collection('apiUsage').add({
       userId: uid,
-      type: 'shot_decomposition_local',
-      model: 'local_engine',
+      type: 'shot_decomposition',
+      model: decompositionMethod === 'ai-powered' ? 'gpt-4o-mini' : 'local_engine',
+      method: decompositionMethod,
       sceneId: scene.id,
       shotCount: normalizedShots.length,
-      inputTokens: 0,
-      outputTokens: 0,
+      sceneActionLength: sceneAction?.length || 0,
+      inputTokens: decompositionMethod === 'ai-powered' ? 500 : 0, // Estimated
+      outputTokens: decompositionMethod === 'ai-powered' ? 1000 : 0, // Estimated
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
 
@@ -41952,10 +42176,12 @@ exports.creationWizardDecomposeSceneToShots = functions
       shotCount: normalizedShots.length,
       shots: normalizedShots,
       consistencyAnchors: consistencyAnchors,
+      // NEW: Expose decomposition method to frontend
+      decompositionMethod: decompositionMethod,
       usage: {
-        promptTokens: 0,
-        completionTokens: 0,
-        method: 'local_mathematical_decomposition'
+        promptTokens: decompositionMethod === 'ai-powered' ? 500 : 0,
+        completionTokens: decompositionMethod === 'ai-powered' ? 1000 : 0,
+        method: decompositionMethod
       }
     };
 
