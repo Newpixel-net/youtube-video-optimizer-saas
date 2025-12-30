@@ -33485,6 +33485,272 @@ const MINIMAX_CAMERA_MOVEMENTS = [
 ];
 
 /**
+ * NANOBANANA_PROMPT_BUILDER
+ *
+ * Builds optimized prompts for Google's NanoBanana (Gemini Image) models.
+ * Based on research from:
+ * - Google's official prompting guide
+ * - Max Woolf's engineering analysis
+ * - Community best practices
+ *
+ * Key principles:
+ * 1. NARRATIVE over keywords - describe scenes like a cinematographer
+ * 2. Use CAPS for critical requirements (proven to improve adherence)
+ * 3. Include technical camera specs for photorealism
+ * 4. Add "physicality constraints" to avoid AI illustration look
+ * 5. Use composition buzzwords that trigger professional framing
+ */
+const NANOBANANA_PROMPT_BUILDER = {
+  // Camera/lens specifications that improve photorealism
+  cameraSpecs: {
+    portrait: 'Shot with Canon EOS R5, 85mm f/1.4 lens, shallow depth of field',
+    wide: 'Shot with Sony A7IV, 24mm wide-angle lens, deep focus',
+    closeup: 'Shot with Canon 100mm macro lens, f/2.8, precise focus on subject',
+    medium: 'Shot with 50mm prime lens, f/2.0, natural perspective',
+    cinematic: 'Shot with ARRI Alexa, anamorphic lens, 2.39:1 cinematic aspect'
+  },
+
+  // Lighting setups that work well
+  lightingSetups: {
+    dramatic: 'dramatic chiaroscuro lighting with deep shadows and bright highlights',
+    soft: 'soft diffused natural lighting, gentle shadows, even illumination',
+    golden: 'warm golden hour sunlight casting long shadows, backlit with lens flare',
+    studio: 'professional three-point studio lighting, clean separation from background',
+    moody: 'low-key atmospheric lighting with volumetric haze, single source',
+    neon: 'neon-lit urban night scene, cyan and magenta reflections on wet surfaces'
+  },
+
+  // Composition buzzwords proven to improve framing
+  compositionBuzzwords: [
+    'Pulitzer-prize-winning photograph',
+    'Vanity Fair cover portrait',
+    'National Geographic documentary still',
+    'professional cinematography',
+    'rule of thirds composition',
+    'masterful negative space'
+  ],
+
+  // Physicality constraints to avoid AI illustration look
+  realismConstraints: [
+    'natural skin texture with visible pores and fine lines',
+    'film grain texture',
+    'real-world physics',
+    'authentic fabric texture and wrinkles',
+    'natural hair strands with flyaways',
+    'subtle subsurface skin scattering'
+  ],
+
+  // Shot type framing requirements (using CAPS for emphasis)
+  framingRules: {
+    wide: 'FULL BODY MUST be visible from head to feet. Characters occupy 30-40% of frame height. Generous margins on ALL sides. Environment context clearly visible.',
+    medium: 'Waist-up framing with head FULLY VISIBLE. 15% headroom above head. Shoulders and hands in frame. Character centered with proper negative space.',
+    closeup: 'Face and upper chest fills frame. Eyes positioned in upper third. Head MUST have 10% margin above. Sharp focus on facial features.',
+    extreme_closeup: 'Face detail only. Eyes prominent and sharp. Dramatic intentional tight framing. Skin texture visible.'
+  },
+
+  /**
+   * Build a narrative prompt for shot image generation
+   * @param {Object} shot - Shot data with shotType, prompt, etc.
+   * @param {Object} context - Scene context with environment, lighting, mood
+   * @param {Object} characterBible - Character information
+   * @param {Object} styleBible - Style/visual guidelines
+   * @returns {string} Optimized narrative prompt
+   */
+  buildShotPrompt(shot, context = {}, characterBible = null, styleBible = null) {
+    const shotType = (shot.shotType || 'medium').toLowerCase();
+    const parts = [];
+
+    // 1. COMPOSITION BUZZWORD (proven to improve framing)
+    const buzzword = this.compositionBuzzwords[Math.floor(Math.random() * 3)]; // Use top 3
+    parts.push(buzzword + '.');
+
+    // 2. SHOT TYPE with NARRATIVE description
+    const shotTypeDesc = this._getShotTypeNarrative(shotType, shot, context);
+    parts.push(shotTypeDesc);
+
+    // 3. SUBJECT description (if character present)
+    if (characterBible && characterBible.length > 0) {
+      const charDesc = this._buildCharacterDescription(characterBible, shot);
+      if (charDesc) parts.push(charDesc);
+    }
+
+    // 4. ENVIRONMENT and ATMOSPHERE
+    if (context.visualPrompt || context.environment) {
+      const envDesc = this._buildEnvironmentDescription(context);
+      parts.push(envDesc);
+    }
+
+    // 5. LIGHTING (critical for photorealism)
+    const lighting = this._selectLighting(context, styleBible);
+    parts.push(`The scene is illuminated by ${lighting}.`);
+
+    // 6. MOOD and ATMOSPHERE
+    if (context.mood || shot.mood) {
+      parts.push(`The atmosphere feels ${context.mood || shot.mood}.`);
+    }
+
+    // 7. CAMERA SPECIFICATIONS (for photorealism)
+    const cameraSpec = this.cameraSpecs[this._mapShotTypeToCamera(shotType)];
+    parts.push(cameraSpec + '.');
+
+    // 8. FRAMING RULES with CAPS emphasis
+    const framingRule = this.framingRules[this._mapToFramingCategory(shotType)];
+    parts.push(framingRule);
+
+    // 9. REALISM CONSTRAINTS
+    parts.push('Natural skin texture with visible pores, film grain, authentic fabric textures.');
+
+    // 10. STYLE BIBLE elements
+    if (styleBible && styleBible.enabled) {
+      const styleElements = [];
+      if (styleBible.colorGrade) styleElements.push(styleBible.colorGrade);
+      if (styleBible.atmosphere) styleElements.push(styleBible.atmosphere);
+      if (styleElements.length > 0) {
+        parts.push(`Visual style: ${styleElements.join(', ')}.`);
+      }
+    }
+
+    // 11. NEGATIVE instructions (what to avoid)
+    parts.push('AVOID: blurry, distorted anatomy, cropped heads, AI-generated artifacts, plastic skin, unnatural poses.');
+
+    return parts.join(' ');
+  },
+
+  /**
+   * Build narrative description based on shot type
+   */
+  _getShotTypeNarrative(shotType, shot, context) {
+    const subject = shot.subject || context.subject || 'the subject';
+    const action = shot.action || context.action || '';
+
+    if (shotType.includes('wide') || shotType.includes('establishing')) {
+      return `A sweeping wide shot establishes the scene. ${subject} is visible in full, standing confidently within the expansive environment. ${action}`;
+    } else if (shotType.includes('closeup') || shotType.includes('close-up')) {
+      return `An intimate close-up captures ${subject}'s expression with striking clarity. Every subtle emotion is visible in their eyes and features. ${action}`;
+    } else if (shotType.includes('extreme')) {
+      return `An intense extreme close-up focuses on ${subject}'s face, revealing every nuance of emotion. ${action}`;
+    } else {
+      return `A balanced medium shot frames ${subject} from the waist up, capturing both their expression and body language. ${action}`;
+    }
+  },
+
+  /**
+   * Build character description from Character Bible
+   */
+  _buildCharacterDescription(characterBible, shot) {
+    if (!characterBible || characterBible.length === 0) return null;
+
+    // Find matching character or use first
+    const char = characterBible[0];
+    const parts = [];
+
+    if (char.name) parts.push(char.name);
+    if (char.physicalDescription) {
+      // Extract key visual elements
+      const desc = char.physicalDescription;
+      if (desc.length > 100) {
+        parts.push(desc.substring(0, 100) + '...');
+      } else {
+        parts.push(desc);
+      }
+    }
+    if (char.attire) parts.push(`wearing ${char.attire}`);
+
+    return parts.length > 0 ? parts.join(', ') + '.' : null;
+  },
+
+  /**
+   * Build environment description
+   */
+  _buildEnvironmentDescription(context) {
+    const env = context.environment || context.visualPrompt || '';
+    if (!env) return '';
+
+    // Clean and enhance environment description
+    let enhanced = env;
+
+    // Add atmosphere if present
+    if (context.atmosphere) {
+      enhanced += `, ${context.atmosphere}`;
+    }
+
+    return `Set within ${enhanced}.`;
+  },
+
+  /**
+   * Select appropriate lighting based on context and style
+   */
+  _selectLighting(context, styleBible) {
+    // Use style bible lighting if available
+    if (styleBible && styleBible.lighting) {
+      return styleBible.lighting;
+    }
+
+    // Infer from mood/atmosphere
+    const mood = (context.mood || '').toLowerCase();
+    const visual = (context.visualPrompt || '').toLowerCase();
+
+    if (mood.includes('tense') || mood.includes('dramatic') || mood.includes('dark')) {
+      return this.lightingSetups.dramatic;
+    } else if (mood.includes('warm') || mood.includes('hopeful') || visual.includes('sunset') || visual.includes('golden')) {
+      return this.lightingSetups.golden;
+    } else if (visual.includes('neon') || visual.includes('city') || visual.includes('night') || visual.includes('cyber')) {
+      return this.lightingSetups.neon;
+    } else if (visual.includes('studio') || visual.includes('interview') || visual.includes('portrait')) {
+      return this.lightingSetups.studio;
+    } else if (mood.includes('mysterious') || mood.includes('moody')) {
+      return this.lightingSetups.moody;
+    }
+
+    return this.lightingSetups.soft;
+  },
+
+  /**
+   * Map shot type to camera spec category
+   */
+  _mapShotTypeToCamera(shotType) {
+    if (shotType.includes('wide') || shotType.includes('establishing')) return 'wide';
+    if (shotType.includes('closeup') || shotType.includes('close-up')) return 'closeup';
+    if (shotType.includes('extreme')) return 'closeup';
+    if (shotType.includes('portrait') || shotType.includes('face')) return 'portrait';
+    return 'medium';
+  },
+
+  /**
+   * Map shot type to framing category
+   */
+  _mapToFramingCategory(shotType) {
+    if (shotType.includes('wide') || shotType.includes('establishing')) return 'wide';
+    if (shotType.includes('extreme')) return 'extreme_closeup';
+    if (shotType.includes('closeup') || shotType.includes('close-up')) return 'closeup';
+    return 'medium';
+  },
+
+  /**
+   * Quick enhance for existing prompts - adds quality markers
+   * Use when you have a basic prompt and want to improve it
+   */
+  enhanceExistingPrompt(prompt, shotType = 'medium') {
+    const parts = [];
+
+    // Add composition buzzword
+    parts.push('Professional cinematography, Pulitzer-prize-winning quality.');
+
+    // Add the original prompt
+    parts.push(prompt);
+
+    // Add framing rules
+    const framingRule = this.framingRules[this._mapToFramingCategory(shotType)];
+    parts.push(framingRule);
+
+    // Add realism constraints
+    parts.push('Natural skin texture with visible pores, film grain, authentic details. AVOID: blurry, distorted, cropped heads, AI artifacts.');
+
+    return parts.join(' ');
+  }
+};
+
+/**
  * MINIMAX_PROMPT_OPTIMIZER (Fix 4)
  * Optimizes video prompts for Minimax's AI video generation capabilities
  * Adds motion quality keywords and cinematic descriptors that Minimax responds well to
@@ -43008,40 +43274,51 @@ exports.creationWizardGenerateAllShotsForScene = functions
       const shot = shots[i];
 
       try {
-        // FRAMING INSTRUCTIONS based on shot type (Fix 2: Composition)
-        const shotType = (shot.shotType || 'medium').toLowerCase();
-        let framingGuide = '';
+        // =========================================================
+        // USE NANOBANANA_PROMPT_BUILDER for narrative-style prompts
+        // This creates photorealistic, well-composed images
+        // =========================================================
 
-        if (shotType.includes('wide') || shotType.includes('establishing')) {
-          framingGuide = 'FRAMING: Wide shot - full bodies visible with environment context, generous margins on all sides, characters occupy 30-40% of frame height';
-        } else if (shotType.includes('closeup') || shotType.includes('close-up')) {
-          framingGuide = 'FRAMING: Close-up shot - face/upper body fills frame, maintain headroom (10% margin above head), eyes in upper third of frame';
-        } else if (shotType.includes('extreme')) {
-          framingGuide = 'FRAMING: Extreme close-up - face detail only, eyes prominent, dramatic framing with intentional tight crop';
-        } else {
-          // Medium shot default
-          framingGuide = 'FRAMING: Medium shot - waist-up or full body visible, character centered with proper headroom, never crop heads or hands';
+        // Build context from shot data and consistency anchors
+        const promptContext = {
+          visualPrompt: shot.prompt || shot.imagePrompt || '',
+          environment: consistencyAnchors?.environmentKey || '',
+          mood: shot.mood || shot.narrativeBeat?.mood || '',
+          atmosphere: consistencyAnchors?.atmosphere || '',
+          subject: consistencyAnchors?.characterAppearance || 'the subject',
+          action: shot.narrativeBeat?.action || shot.action || ''
+        };
+
+        // Extract character bible from shot data if available
+        const shotCharacterBible = shot.characterBible || null;
+
+        // Extract style bible from consistency anchors
+        const shotStyleBible = consistencyAnchors ? {
+          enabled: true,
+          lighting: consistencyAnchors.lighting,
+          colorGrade: consistencyAnchors.colorPalette,
+          atmosphere: consistencyAnchors.atmosphere
+        } : null;
+
+        // Build the enhanced narrative prompt using NANOBANANA_PROMPT_BUILDER
+        let enhancedPrompt = NANOBANANA_PROMPT_BUILDER.buildShotPrompt(
+          {
+            shotType: shot.shotType || 'medium',
+            subject: promptContext.subject,
+            action: promptContext.action,
+            mood: promptContext.mood
+          },
+          promptContext,
+          shotCharacterBible,
+          shotStyleBible
+        );
+
+        // Append the original prompt content for specifics
+        if (shot.prompt && shot.prompt.trim()) {
+          enhancedPrompt += `\n\nSPECIFIC SCENE DETAILS: ${shot.prompt}`;
         }
 
-        // Build enhanced prompt with FRAMING FIRST, then content
-        let enhancedPrompt = `CRITICAL COMPOSITION RULES:
-${framingGuide}
-- Ensure all character heads are FULLY VISIBLE with space above
-- Never crop limbs at joints (wrists, ankles, knees)
-- Clear focal point with professional cinematography
-- Safe margins on all edges of frame
-
-${shot.prompt}`;
-
-        // Add consistency anchors to prompt
-        if (consistencyAnchors) {
-          const consistencyAddition = `\n\nCONSISTENCY REQUIREMENTS (match exactly):
-- Lighting: ${consistencyAnchors.lighting}
-- Colors: ${consistencyAnchors.colorPalette}
-- Atmosphere: ${consistencyAnchors.atmosphere}
-${consistencyAnchors.characterAppearance ? `- Character: ${consistencyAnchors.characterAppearance}` : ''}`;
-          enhancedPrompt += consistencyAddition;
-        }
+        console.log(`[creationWizardGenerateAllShotsForScene] Shot ${i + 1} prompt (first 200 chars): ${enhancedPrompt.substring(0, 200)}...`);
 
         // Call image generation
         const generateFn = exports.generateCreativeImage;
@@ -43166,12 +43443,14 @@ async function generateCreativeImageInternal(uid, requestData) {
   const timestamp = Date.now();
   const generatedImages = [];
 
-  // Determine model
+  // Determine model - Updated to use correct NanoBanana models
+  // gemini-3-pro-image-preview = Nano Banana Pro (best quality, face preservation)
+  // gemini-2.5-flash-image = Nano Banana (faster, good quality)
   const geminiImageModelMap = {
-    'nanobanana-pro': 'gemini-2.0-flash-exp',
-    'nanobanana': 'gemini-2.0-flash-exp'
+    'nanobanana-pro': 'gemini-3-pro-image-preview',
+    'nanobanana': 'gemini-2.5-flash-image'
   };
-  const geminiModelId = geminiImageModelMap[model] || 'gemini-2.0-flash-exp';
+  const geminiModelId = geminiImageModelMap[model] || 'gemini-3-pro-image-preview';
 
   // Build content parts
   const contentParts = [];
@@ -43186,16 +43465,31 @@ async function generateCreativeImageInternal(uid, requestData) {
     });
   }
 
-  // Build enhanced prompt
-  const aspectInstruction = `[Generate in ${aspectRatio} aspect ratio, high quality, detailed, cinematic]\n\n`;
-  contentParts.push({ text: aspectInstruction + prompt });
+  // Build enhanced prompt - No need for aspect ratio in text, use imageConfig instead
+  contentParts.push({ text: prompt });
+
+  // Map aspect ratio string to Gemini format
+  const aspectRatioMap = {
+    '16:9': '16:9',
+    '9:16': '9:16',
+    '1:1': '1:1',
+    '4:3': '4:3',
+    '3:4': '3:4',
+    '21:9': '21:9'
+  };
+  const geminiAspectRatio = aspectRatioMap[aspectRatio] || '16:9';
 
   try {
+    console.log(`[generateCreativeImageInternal] Model: ${geminiModelId}, Aspect: ${geminiAspectRatio}`);
+
     const result = await ai.models.generateContent({
       model: geminiModelId,
       contents: [{ role: 'user', parts: contentParts }],
       config: {
-        responseModalities: ['image', 'text']
+        responseModalities: ['IMAGE', 'TEXT'],
+        imageConfig: {
+          aspectRatio: geminiAspectRatio
+        }
       }
     });
 
@@ -44417,42 +44711,49 @@ exports.creationWizardBatchGenerateShotImages = functions
     const shot = allShots[i];
 
     try {
-      // FRAMING INSTRUCTIONS based on shot type (Fix 2: Composition)
-      const shotType = (shot.shotType || 'medium').toLowerCase();
-      let framingGuide = '';
+      // =========================================================
+      // USE NANOBANANA_PROMPT_BUILDER for narrative-style prompts
+      // This creates photorealistic, well-composed images
+      // =========================================================
 
-      if (shotType.includes('wide') || shotType.includes('establishing')) {
-        framingGuide = 'FRAMING: Wide shot - full bodies visible with environment context, generous margins on all sides, characters occupy 30-40% of frame height';
-      } else if (shotType.includes('closeup') || shotType.includes('close-up')) {
-        framingGuide = 'FRAMING: Close-up shot - face/upper body fills frame, maintain headroom (10% margin above head), eyes in upper third of frame';
-      } else if (shotType.includes('extreme')) {
-        framingGuide = 'FRAMING: Extreme close-up - face detail only, eyes prominent, dramatic framing with intentional tight crop';
-      } else {
-        framingGuide = 'FRAMING: Medium shot - waist-up or full body visible, character centered with proper headroom, never crop heads or hands';
+      // Build context from shot data and global visual profile
+      const promptContext = {
+        visualPrompt: shot.prompt || shot.imagePrompt || '',
+        environment: shot.environment || '',
+        mood: shot.mood || globalVisualProfile?.visualDNA?.atmosphere?.mood || '',
+        atmosphere: globalVisualProfile?.visualDNA?.atmosphere?.mood || '',
+        subject: shot.subject || 'the subject',
+        action: shot.narrativeBeat?.action || shot.action || ''
+      };
+
+      // Build style bible from global visual profile
+      const batchStyleBible = globalVisualProfile?.visualDNA ? {
+        enabled: true,
+        style: globalVisualProfile.visualDNA.cinematicStyle || 'cinematic',
+        lighting: globalVisualProfile.visualDNA.lighting?.style || 'professional cinematic lighting',
+        colorGrade: globalVisualProfile.visualDNA.colorPalette?.primary || 'cinematic color grade',
+        atmosphere: globalVisualProfile.visualDNA.atmosphere?.mood || 'engaging'
+      } : null;
+
+      // Build the enhanced narrative prompt using NANOBANANA_PROMPT_BUILDER
+      let enhancedPrompt = NANOBANANA_PROMPT_BUILDER.buildShotPrompt(
+        {
+          shotType: shot.shotType || 'medium',
+          subject: promptContext.subject,
+          action: promptContext.action,
+          mood: promptContext.mood
+        },
+        promptContext,
+        null, // Character bible handled via reference image
+        batchStyleBible
+      );
+
+      // Append original prompt content for scene-specific details
+      if (shot.prompt && shot.prompt.trim()) {
+        enhancedPrompt += `\n\nSPECIFIC SCENE DETAILS: ${shot.prompt}`;
       }
 
-      // Build enhanced prompt with FRAMING FIRST
-      let enhancedPrompt = `CRITICAL COMPOSITION RULES:
-${framingGuide}
-- Ensure all character heads are FULLY VISIBLE with space above
-- Never crop limbs at joints (wrists, ankles, knees)
-- Clear focal point with professional cinematography
-- Safe margins on all edges of frame
-
-${shot.prompt || ''}`;
-
-      if (globalVisualProfile?.visualDNA) {
-        const dna = globalVisualProfile.visualDNA;
-        enhancedPrompt += `\n\nVISUAL REQUIREMENTS:
-- Style: ${dna.cinematicStyle || 'cinematic'}
-- Colors: ${dna.colorPalette?.primary || 'cinematic'} with ${dna.colorPalette?.secondary || 'balanced'} accents
-- Lighting: ${dna.lighting?.style || 'professional'}
-- Mood: ${dna.atmosphere?.mood || 'engaging'}
-- Camera: ${dna.cameraLanguage?.lensChoice || 'cinematic lens'}`;
-      }
-
-      // Add aspect ratio and quality hints
-      const aspectInstruction = `[Generate in ${aspectRatio || '16:9'} aspect ratio, high quality, detailed, sharp focus, cinematic]\n\n`;
+      console.log(`[creationWizardBatchGenerateShotImages] Shot ${i + 1}/${allShots.length} prompt (first 200 chars): ${enhancedPrompt.substring(0, 200)}...`);
 
       // Build content parts
       const contentParts = [];
@@ -44467,18 +44768,20 @@ ${shot.prompt || ''}`;
         });
       }
 
-      contentParts.push({ text: aspectInstruction + enhancedPrompt });
-
-      // Generate image
-      const geminiModelId = model === 'nanobanana' ? 'gemini-2.0-flash-exp' : 'gemini-2.0-flash-exp';
+      // Generate image - Use correct NanoBanana models
+      const geminiModelId = model === 'nanobanana' ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
 
       console.log(`[creationWizardBatchGenerateShotImages] Generating shot ${i + 1}/${allShots.length} (Scene ${shot.sceneId}, Shot ${shot.shotIndex})`);
+      console.log(`[creationWizardBatchGenerateShotImages] Using model: ${geminiModelId}, aspect ratio: 16:9`);
 
       const result = await ai.models.generateContent({
         model: geminiModelId,
         contents: [{ role: 'user', parts: contentParts }],
         config: {
-          responseModalities: ['image', 'text']
+          responseModalities: ['IMAGE', 'TEXT'],
+          imageConfig: {
+            aspectRatio: '16:9'  // Proper 16:9 for video frames
+          }
         }
       });
 
