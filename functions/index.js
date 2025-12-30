@@ -41917,13 +41917,14 @@ exports.creationWizardGenerateShotVideo = functions
 
   try {
     // ==========================================
-    // SMART MODEL SELECTION
+    // MODEL SELECTION
     // ==========================================
-    // Determine whether to use S2V-01 (character-consistent) or standard model
-    const useCharacterConsistency = hasCharacters && characterReference;
-    const selectedModel = useCharacterConsistency ? 'S2V-01' : 'video-01';
+    // NOTE: S2V-01 (character consistency) is currently disabled due to API issues
+    // Using video-01 for all video generation until S2V-01 is properly tested
+    const useCharacterConsistency = false; // Disabled: hasCharacters && characterReference;
+    const selectedModel = 'video-01'; // Always use video-01 for now
 
-    console.log(`[creationWizardGenerateShotVideo] Model Selection: ${selectedModel}`);
+    console.log(`[creationWizardGenerateShotVideo] Model: ${selectedModel} (S2V-01 disabled)`);
     console.log(`[creationWizardGenerateShotVideo] Has Characters: ${hasCharacters}, Character Reference: ${characterReference ? 'YES' : 'NO'}`);
     if (primaryCharacterName) {
       console.log(`[creationWizardGenerateShotVideo] Primary Character: ${primaryCharacterName}`);
@@ -41979,70 +41980,28 @@ exports.creationWizardGenerateShotVideo = functions
       model: selectedModel,
       prompt: videoPrompt,
       first_frame_image: imageUrl,
-      prompt_optimizer: !useCharacterConsistency // Disable optimizer for S2V-01 for stricter adherence
+      prompt_optimizer: true // Enable prompt optimization for video-01
     };
 
-    // Add subject_reference for S2V-01 character consistency
-    // NOTE: Minimax S2V-01 expects subject_reference as an array of image URLs
-    if (useCharacterConsistency) {
-      // Ensure subject_reference is an array
-      payload.subject_reference = Array.isArray(characterReference)
-        ? characterReference
-        : [characterReference];
-      console.log(`[creationWizardGenerateShotVideo] Added subject_reference for character consistency:`, payload.subject_reference);
-    }
+    // NOTE: S2V-01 subject_reference is disabled until properly tested
+    // if (useCharacterConsistency) {
+    //   payload.subject_reference = [characterReference];
+    // }
 
     console.log(`[creationWizardGenerateShotVideo] Sending to Minimax API with model: ${selectedModel}...`);
-    console.log(`[creationWizardGenerateShotVideo] Payload:`, JSON.stringify(payload, null, 2));
+    console.log(`[creationWizardGenerateShotVideo] Payload keys:`, Object.keys(payload));
 
-    let minimaxResponse;
-    try {
-      minimaxResponse = await axios.post(
-        'https://api.minimax.io/v1/video_generation',
-        payload,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${minimaxKey}`
-          },
-          timeout: 60000
-        }
-      );
-    } catch (apiError) {
-      // Log the full API error for debugging
-      console.error(`[creationWizardGenerateShotVideo] Minimax API Error:`, {
-        status: apiError.response?.status,
-        statusText: apiError.response?.statusText,
-        data: apiError.response?.data,
-        message: apiError.message
-      });
-
-      // If S2V-01 fails, try falling back to standard model
-      if (useCharacterConsistency && apiError.response?.status >= 400) {
-        console.log(`[creationWizardGenerateShotVideo] S2V-01 failed, falling back to video-01...`);
-
-        // Remove subject_reference and use standard model
-        delete payload.subject_reference;
-        payload.model = 'video-01';
-        payload.prompt_optimizer = true;
-
-        minimaxResponse = await axios.post(
-          'https://api.minimax.io/v1/video_generation',
-          payload,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${minimaxKey}`
-            },
-            timeout: 60000
-          }
-        );
-
-        console.log(`[creationWizardGenerateShotVideo] Fallback to video-01 successful`);
-      } else {
-        throw apiError;
+    const minimaxResponse = await axios.post(
+      'https://api.minimax.io/v1/video_generation',
+      payload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${minimaxKey}`
+        },
+        timeout: 60000
       }
-    }
+    );
 
     console.log(`[creationWizardGenerateShotVideo] Minimax response:`, JSON.stringify(minimaxResponse.data, null, 2));
 
