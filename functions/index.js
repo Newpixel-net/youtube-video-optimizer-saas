@@ -40914,15 +40914,16 @@ Adapt this structure to your scene's specific action. Match the energy and pacin
 
 const STORY_BEAT_DECOMPOSER = {
   /**
-   * AI-Powered Action Decomposition using GPT
-   * Intelligently divides sceneAction into shots with proper capture points
+   * AI-Powered Motion-Dense Decomposition
+   * Creates rich 10-second motion sequences from scene action
+   * Each shot describes CONTINUOUS MOVEMENT over time, not static frames
    * @param {string} sceneAction - Rich action sequence for the scene
    * @param {number} shotCount - Number of shots to create
    * @param {number} clipDuration - Duration per shot (6 or 10 seconds)
    * @param {object} sceneContext - { visualPrompt, narration, characters, sceneId, sceneIndex, totalScenes }
    * @param {object} openai - OpenAI client instance
    * @param {object} crossSceneContext - { previousSceneEndState, previousSceneId, nextSceneHint } for continuity
-   * @returns {Promise<Array>} Array of shot beats with start/action/end
+   * @returns {Promise<Array>} Array of motion-dense shot prompts
    */
   async decomposeWithAI(sceneAction, shotCount, clipDuration, sceneContext, openai, crossSceneContext = null) {
     // Validate sceneAction is rich enough for AI decomposition
@@ -40938,80 +40939,108 @@ const STORY_BEAT_DECOMPOSER = {
 
     // Build cross-scene continuity section if available
     const crossSceneSection = crossSceneContext?.previousSceneEndState ? `
-CROSS-SCENE CONTINUITY (Upgrade 3):
+CROSS-SCENE CONTINUITY:
 This is Scene ${sceneContext.sceneIndex || '?'} of ${sceneContext.totalScenes || '?'}.
 PREVIOUS SCENE ended with: "${crossSceneContext.previousSceneEndState}"
-
-The FIRST SHOT of this scene should:
-1. Acknowledge the transition from the previous scene
-2. Start in a way that flows naturally from the previous scene's end
-3. Consider if a match cut, dissolve, or continuation works best
-${crossSceneContext.transitionType ? `Intended transition type: ${crossSceneContext.transitionType}` : ''}
+The FIRST SHOT must flow naturally from this ending.
 ` : '';
 
-    const prompt = `You are a professional film editor decomposing a scene into shots for AI video generation.
+    // Extract characters and environment from visual context
+    const visualContext = sceneContext.visualPrompt || '';
+    const narration = sceneContext.narration || '';
 
-SCENE ACTION (what happens in this ~${shotCount * clipDuration} second scene):
-"${sceneAction}"
+    const prompt = `You are a cinematic AI video director creating MOTION-DENSE shot sequences for Minimax AI video generation.
 
-VISUAL CONTEXT:
-${sceneContext.visualPrompt ? sceneContext.visualPrompt.substring(0, 500) : 'No visual context provided'}
-${actionLibraryReference}
+CRITICAL: Each shot is ${clipDuration} SECONDS of continuous motion - NOT a static frame!
+${clipDuration} seconds is substantial. Characters breathe, shift, gesture. Environment moves. Camera flows.
+
+=== SCENE DATA ===
+SCENE ACTION: "${sceneAction}"
+
+VISUAL CONTEXT: ${visualContext.substring(0, 400)}
+
+NARRATION: "${narration.substring(0, 300)}"
 ${crossSceneSection}
+${actionLibraryReference}
 
-REQUIREMENTS:
-- Divide this action into exactly ${shotCount} shots
-- Each shot is ${clipDuration} seconds of video
-- Each shot must have DENSE action (${clipDuration}s is substantial - include multiple beats per shot)
-- Each shot MUST end with a clear CAPTURE POINT (a moment that works as a freeze frame)
-- Shot N's end state becomes Shot N+1's starting point (frame-chain continuity)
+=== YOUR TASK ===
+Create ${shotCount} MOTION-DENSE video prompts. Each prompt describes ${clipDuration} seconds of CONTINUOUS ACTION.
 
-For each shot, provide:
-1. shotAction: The complete action sequence for this ${clipDuration}-second shot (be specific and detailed)
-2. endState: The exact position/pose at the end (this frame will be captured for next shot)
-3. captureDescription: What the captured frame looks like (for seamless transition)
-4. suggestedCaptureTime: When to capture the frame (e.g., "${clipDuration - 2}-${clipDuration} seconds" for end, or specific moment)
-5. captureReason: Why this moment is ideal for capture (stability, pose clarity, transition smoothness)
-6. captureStability: How stable/clear the capture moment is ("high" = still pose, "medium" = slow motion, "low" = mid-action)
+=== MOTION-DENSE REQUIREMENTS ===
 
-CAPTURE TIMING GUIDANCE:
-- "high" stability: Character paused, clear pose, no motion blur - capture at exact end (${clipDuration}s)
-- "medium" stability: Slow deliberate motion - capture at ${clipDuration - 1}-${clipDuration}s
-- "low" stability: Fast action - plan the shot so action resolves to stable moment at end
+1. CHARACTER MOTION (required in every shot):
+   - Breathing patterns (slow/quickening/deep)
+   - Body shifts (weight transfer, posture changes)
+   - Micro-gestures (fingers, shoulders, head tilts)
+   - Facial progression (expressions evolving)
+   - Eye movement (scanning, focusing, meeting)
+   Example: "Kai breathes slowly, tension visible in shoulders. His eyes scan the room, brow furrowing with concentration."
 
+2. ENVIRONMENT ANIMATION (required in every shot):
+   - Light changes (flickering, pulsing, shifting)
+   - Atmospheric motion (smoke drifting, rain falling, dust floating)
+   - Tech elements (displays scrolling, holograms rotating)
+   - Natural elements (flames dancing, water rippling, leaves rustling)
+   Example: "Holographic displays pulse and rotate around them. Rain streaks down windows, city lights blurring."
+
+3. CAMERA MOVEMENT (choose appropriate):
+   - "Slow push in" - building intensity/focus
+   - "Smooth tracking" - following action
+   - "Gradual pull back" - revealing/concluding
+   - "Static with subtle drift" - contemplative
+   Include the camera direction at START of each prompt.
+
+4. EMOTIONAL PROGRESSION (each shot has an arc):
+   - Beginning state → development → end state
+   - Tension builds OR releases within each shot
+   Example: Shot moves from "concentration" through "realization" to "shock"
+
+5. CONTINUITY PHRASES (shots 2+ must include):
+   - "Continuing seamlessly from previous frame"
+   - References to previous shot's end position
+   - Smooth transitions in action and camera
+
+=== OUTPUT FORMAT ===
 Return ONLY valid JSON:
 {
   "shots": [
     {
       "shotIndex": 0,
-      "shotAction": "Detailed action for this ${clipDuration}-second shot...",
-      "endState": "Specific position/pose at shot end",
-      "captureDescription": "What the freeze frame shows",
-      "suggestedCaptureTime": "${clipDuration - 1}-${clipDuration} seconds",
-      "captureReason": "Character in stable pose after turning, clear silhouette against city lights",
-      "captureStability": "high",
-      "crossSceneTransition": "Only for first shot if previous scene exists - how this shot connects from previous scene"
+      "cameraMovement": "Slow push in",
+      "motionPrompt": "Full motion-dense prompt for Minimax. Include camera, character actions, environment animation, quality keywords. ${clipDuration} seconds of continuous motion.",
+      "characterActions": "Brief: what characters physically do",
+      "environmentAnimation": "Brief: what moves in environment",
+      "emotionalArc": "starting emotion → ending emotion",
+      "endState": "Exact pose/position for frame capture",
+      "captureStability": "high/medium/low"
     }
   ],
-  "chainLogic": "Brief explanation of how shots connect",
-  "sceneEndState": "The final state of the LAST shot - this will be passed to the NEXT scene for continuity",
-  "suggestedNextSceneTransition": "Recommended transition type to next scene (cut/dissolve/match_cut/fade)"
-}`;
+  "sceneEndState": "Final state of last shot - passed to next scene",
+  "chainLogic": "How the shots connect narratively"
+}
+
+=== EXAMPLE MOTION PROMPT ===
+"Slow push in. Kai's eyes scan left to right across holographic data, brow furrowing with concentration. His breathing becomes visible, quickening slightly. Fingers tap against thigh in unconscious rhythm. Holographic displays rotate and pulse around him, data streams flowing. Rain streaks down windows in background, city lights blurring. His posture gradually stiffens as realization begins. Expression shifts from focus to dawning recognition. Cinematic, photorealistic, smooth fluid motion, natural lifelike movement."
+
+=== QUALITY KEYWORDS (append to each prompt) ===
+"Cinematic, photorealistic, smooth fluid motion, natural lifelike movement, seamless animation, professional cinematography quality."
+
+Create ${shotCount} shots now:`;
 
     try {
-      console.log(`[STORY_BEAT_DECOMPOSER] Using AI decomposition for ${shotCount} shots`);
+      console.log(`[STORY_BEAT_DECOMPOSER] Using AI decomposition for ${shotCount} motion-dense shots`);
 
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', // Fast and cost-effective for structured decomposition
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: 'You are a professional film editor specializing in AI video generation. You decompose scenes into shots that chain together seamlessly via frame capture. Always return valid JSON.'
+            content: 'You are a cinematic AI video director. You create MOTION-DENSE shot sequences where every second is filled with character movement, environmental animation, and camera flow. Never describe static frames - describe continuous action over time. Always return valid JSON.'
           },
           { role: 'user', content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: 2000
+        max_tokens: 3000
       });
 
       const responseText = completion.choices[0].message.content.trim();
@@ -41019,7 +41048,6 @@ Return ONLY valid JSON:
       // Parse JSON response
       let parsed;
       try {
-        // Handle markdown code blocks
         const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
         const jsonStr = jsonMatch ? jsonMatch[1].trim() : responseText;
         parsed = JSON.parse(jsonStr);
@@ -41033,77 +41061,58 @@ Return ONLY valid JSON:
         return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
       }
 
-      // Convert AI response to standard shot format
+      // Convert AI response to standard shot format with motion-dense prompts
       const shots = parsed.shots.map((shot, idx) => {
         const isFirst = idx === 0;
         const isLast = idx === parsed.shots.length - 1;
 
-        // Build START state (from previous shot's end or scene opening)
-        const startState = isFirst
-          ? this.extractOpeningState(sceneContext.visualPrompt, shot.shotAction)
-          : `Continuing from: ${parsed.shots[idx - 1].captureDescription || parsed.shots[idx - 1].endState}`;
+        // Build the final video prompt for Minimax
+        let videoPrompt = shot.motionPrompt || '';
 
-        // Build END state
-        const endState = isLast
-          ? `Scene concludes: ${shot.endState}. Hold for final frame.`
-          : `CAPTURE POINT: ${shot.endState}. ${shot.captureDescription || 'This frame transitions to next shot.'}`;
+        // Ensure continuity phrase for shots after first
+        if (!isFirst && !videoPrompt.toLowerCase().includes('continuing')) {
+          videoPrompt = `Continuing seamlessly from previous frame. ${videoPrompt}`;
+        }
 
-        // Build video prompt with START → ACTION → END structure
-        const videoPrompt = this.buildVideoPromptFromAI(
-          startState,
-          shot.shotAction,
-          endState,
-          { isFirst, isLast }
-        );
+        // Ensure quality keywords are present
+        if (!videoPrompt.toLowerCase().includes('cinematic')) {
+          videoPrompt += ' Cinematic, photorealistic, smooth fluid motion, natural lifelike movement.';
+        }
 
         return {
           shotIndex: idx,
           isFirst,
           isLast,
-          segments: [shot.shotAction],
-          actionText: shot.shotAction,
-          startState,
-          endState,
-          captureDescription: shot.captureDescription || shot.endState,
+          cameraMovement: shot.cameraMovement || 'Smooth tracking',
           videoPrompt,
-          motionDescription: `Shot ${idx + 1}: ${this.extractKeyVerbs(shot.shotAction)}`,
+          characterActions: shot.characterActions || '',
+          environmentAnimation: shot.environmentAnimation || '',
+          emotionalArc: shot.emotionalArc || '',
+          endState: shot.endState || '',
+          captureDescription: shot.endState,
           aiGenerated: true,
-          // Capture point suggestions (Upgrade 2)
+          motionDense: true,
           captureSuggestion: {
-            timing: shot.suggestedCaptureTime || `${clipDuration - 1}-${clipDuration} seconds`,
-            reason: shot.captureReason || 'End of shot action sequence',
+            timing: `${clipDuration - 2}-${clipDuration} seconds`,
+            reason: 'End of motion sequence at stable pose',
             stability: shot.captureStability || 'medium',
-            timingSeconds: this.parseCaptureTiming(shot.suggestedCaptureTime, clipDuration),
-            stabilityColor: shot.captureStability === 'high' ? '#10b981' :
-                           shot.captureStability === 'low' ? '#f59e0b' : '#3b82f6'
+            timingSeconds: { start: clipDuration - 2, end: clipDuration, recommended: clipDuration - 1 }
           },
-          // Cross-scene transition (Upgrade 3) - only for first shot
           crossSceneTransition: isFirst && crossSceneContext?.previousSceneEndState ? {
             fromPreviousScene: true,
             previousSceneEndState: crossSceneContext.previousSceneEndState,
-            transitionDescription: shot.crossSceneTransition || 'Continues from previous scene',
             transitionType: crossSceneContext.transitionType || 'cut'
           } : null
         };
       });
 
-      // Extract scene-level continuity data for passing to next scene
       const lastShot = parsed.shots[parsed.shots.length - 1];
-      const sceneEndState = parsed.sceneEndState || lastShot?.endState || lastShot?.captureDescription;
+      const sceneEndState = parsed.sceneEndState || lastShot?.endState;
       const suggestedNextSceneTransition = parsed.suggestedNextSceneTransition || 'cut';
 
-      console.log(`[STORY_BEAT_DECOMPOSER] AI decomposition successful: ${shots.length} shots`);
+      console.log(`[STORY_BEAT_DECOMPOSER] Motion-dense decomposition successful: ${shots.length} shots`);
       console.log(`[STORY_BEAT_DECOMPOSER] Chain logic: ${parsed.chainLogic || 'Not provided'}`);
-      console.log(`[STORY_BEAT_DECOMPOSER] Scene end state for next scene: ${sceneEndState?.substring(0, 50)}...`);
 
-      // Log capture suggestions
-      shots.forEach((shot, idx) => {
-        if (!shot.isLast) {
-          console.log(`[STORY_BEAT_DECOMPOSER] Shot ${idx + 1} capture: ${shot.captureSuggestion.timing} (${shot.captureSuggestion.stability} stability)`);
-        }
-      });
-
-      // Return shots with scene-level continuity metadata
       return {
         shots,
         sceneEndState,
@@ -41113,28 +41122,23 @@ Return ONLY valid JSON:
 
     } catch (error) {
       console.error('[STORY_BEAT_DECOMPOSER] AI decomposition failed:', error.message);
-      // Fallback to rule-based decomposition
       return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
     }
   },
 
   /**
-   * Build video prompt from AI-generated content
+   * Build video prompt from AI-generated content (legacy support)
    */
   buildVideoPromptFromAI(startState, action, endState, meta) {
     const parts = [];
 
-    // 1. START STATE
     if (meta.isFirst) {
       parts.push(`OPENING: ${startState}`);
     } else {
       parts.push(startState);
     }
 
-    // 2. ACTION (the main content)
     parts.push(`ACTION: ${action}`);
-
-    // 3. END STATE
     parts.push(endState);
 
     // 4. Animation guidance
@@ -41435,34 +41439,107 @@ Return ONLY valid JSON:
   },
 
   /**
-   * Build the video prompt with START → ACTION → END structure
+   * Build MOTION-DENSE video prompt
+   * Each prompt describes continuous action over the full shot duration
    */
   buildVideoPrompt(shot, sceneContext) {
     const parts = [];
 
-    // 1. START STATE (where we begin)
-    if (shot.isFirst) {
-      parts.push(`OPENING: ${shot.startState}`);
-    } else {
-      parts.push(`${shot.startState}`);
-    }
+    // 1. CAMERA MOVEMENT (choose based on shot position)
+    const cameraMovement = shot.isFirst
+      ? 'Slow push in to establish the scene.'
+      : shot.isLast
+        ? 'Gradual pull back for the closing moment.'
+        : 'Smooth tracking.';
+    parts.push(cameraMovement);
 
-    // 2. ACTION (what happens over 10 seconds)
+    // 2. CHARACTER MOTION (extract and enhance with micro-actions)
     const actionContent = shot.actionText || shot.segments.join('. ');
     if (actionContent) {
-      parts.push(`ACTION: ${actionContent}`);
+      // Add breathing and subtle motion indicators
+      const enhancedAction = this.enhanceWithMotion(actionContent, shot.isFirst, shot.isLast);
+      parts.push(enhancedAction);
     }
 
-    // 3. END STATE (where we land - capture point)
-    parts.push(`${shot.endState}`);
+    // 3. ENVIRONMENT ANIMATION (add based on context)
+    const envAnimation = this.getEnvironmentAnimation(sceneContext.visualPrompt, shot.isLast);
+    if (envAnimation) {
+      parts.push(envAnimation);
+    }
 
-    // 4. Animation guidance
-    const animationGuidance = shot.isLast
-      ? 'Smooth motion leading to final resting pose.'
-      : 'Animate smoothly toward the capture point for seamless transition to next shot.';
-    parts.push(animationGuidance);
+    // 4. CONTINUITY PHRASE (for shots after first)
+    if (!shot.isFirst) {
+      parts.push('Continuing seamlessly from previous frame.');
+    }
+
+    // 5. QUALITY KEYWORDS
+    parts.push('Cinematic, photorealistic, smooth fluid motion, natural lifelike movement.');
 
     return parts.join(' ');
+  },
+
+  /**
+   * Enhance action text with motion-dense details
+   */
+  enhanceWithMotion(actionText, isFirst, isLast) {
+    let enhanced = actionText;
+
+    // Add breathing cues if character actions are present
+    if (/\b(stands?|sits?|waits?|watches?|looks?)\b/i.test(actionText)) {
+      if (isFirst) {
+        enhanced = enhanced.replace(/^(\w+)/, '$1 breathes slowly, tension visible.');
+      } else if (isLast) {
+        enhanced += ', breath deepening as the moment settles.';
+      } else {
+        enhanced += ', subtle shifts in posture.';
+      }
+    }
+
+    // Add eye movement cues
+    if (/\b(notices?|sees?|observes?|watches?)\b/i.test(actionText)) {
+      enhanced = enhanced.replace(/\b(notices?|sees?|observes?|watches?)\b/gi, (match) => {
+        return `eyes ${match.toLowerCase()}, attention focusing`;
+      });
+    }
+
+    return enhanced;
+  },
+
+  /**
+   * Get environment animation based on visual context
+   */
+  getEnvironmentAnimation(visualPrompt, isLast) {
+    if (!visualPrompt) return '';
+
+    const prompt = visualPrompt.toLowerCase();
+    const animations = [];
+
+    // Detect environment types and add appropriate animation
+    if (/tech|lab|digital|hologram|display|screen/i.test(prompt)) {
+      animations.push('Displays pulse and flicker with data');
+    }
+    if (/fire|flame|torch|candle/i.test(prompt)) {
+      animations.push(isLast ? 'Softly flames flicker' : 'Steadily flames flicker and dance');
+    }
+    if (/rain|storm|weather/i.test(prompt)) {
+      animations.push('Rain streaks down windows, lights blurring');
+    }
+    if (/city|urban|street|neon/i.test(prompt)) {
+      animations.push('City lights pulse in the background');
+    }
+    if (/nature|forest|trees|leaves/i.test(prompt)) {
+      animations.push('Leaves rustle gently, light filtering through');
+    }
+    if (/water|ocean|river|waves/i.test(prompt)) {
+      animations.push('Water ripples and reflects light');
+    }
+
+    // Default atmospheric motion if nothing specific found
+    if (animations.length === 0) {
+      animations.push('Ambient light shifts subtly in the environment');
+    }
+
+    return animations.slice(0, 2).join('. ') + '.';
   },
 
   /**
