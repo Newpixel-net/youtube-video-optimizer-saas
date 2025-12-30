@@ -42616,6 +42616,428 @@ const ENHANCED_VIDEO_PROMPT_BUILDER = {
 };
 
 // =============================================================================
+// SCENE_CLOSURE_ENGINE - Hollywood-Quality Scene Endings
+// =============================================================================
+/**
+ * SCENE_CLOSURE_ENGINE
+ *
+ * Ensures every scene ends with meaningful narrative resolution, not abrupt cuts.
+ * Based on Hollywood principles of scene closure:
+ *
+ * 1. EMOTIONAL RESOLUTION - Character reaches a moment of clarity/change
+ * 2. VISUAL FINALITY - Camera and framing signal conclusion
+ * 3. TEMPORAL DECELERATION - Motion slows to a satisfying end
+ * 4. NARRATIVE COMPLETION - The scene's "question" is answered
+ *
+ * Closure Types:
+ * - RESOLUTION: Conflict resolved, peace found (most common)
+ * - CLIFFHANGER: Tension held for next scene (dramatic beats)
+ * - TRANSITION: Smooth handoff to next scene
+ * - FINALITY: Chapter/act conclusion with full closure
+ */
+const SCENE_CLOSURE_ENGINE = {
+
+  // =========================================================================
+  // CLOSURE TYPE PATTERNS - Hollywood scene ending archetypes
+  // =========================================================================
+  closureTypes: {
+    resolution: {
+      name: 'Resolution',
+      description: 'Conflict or tension resolves, character finds peace/understanding',
+      cameraMovements: [
+        'Camera slowly pulls back, widening to capture the moment of resolution',
+        'Gentle crane up provides closure, rising to show the completed tableau',
+        'Slow dolly out, settling into a wide shot that frames the resolution',
+        'Camera holds steady as the moment breathes, then subtly pulls back'
+      ],
+      emotionalBeats: [
+        'tension releases from the body, posture softening',
+        'expression transforms from conflict to acceptance',
+        'breathing deepens, shoulders drop with release',
+        'eyes close briefly in acknowledgment, then open with clarity',
+        'a small but meaningful smile emerges'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Movement gradually slows, finding stillness',
+        '[Final 3s] Action decelerates to a moment of quiet peace',
+        '[Final 3s] Motion settles like water becoming still'
+      ],
+      qualityKeywords: 'Peaceful resolution, satisfying conclusion, moment of clarity, emotional release.'
+    },
+
+    cliffhanger: {
+      name: 'Cliffhanger',
+      description: 'Tension maintained or amplified for continuation',
+      cameraMovements: [
+        'Camera pushes in slowly on the unresolved moment, holding tension',
+        'Slow zoom into eyes or key element that holds the suspense',
+        'Camera freezes on the pivotal instant, future uncertain',
+        'Tracking shot halts abruptly, capturing the suspended moment'
+      ],
+      emotionalBeats: [
+        'expression freezes in realization or shock',
+        'body tenses, caught in the moment before action',
+        'eyes widen as understanding dawns',
+        'breath catches, held in anticipation',
+        'hand reaches but does not complete the gesture'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Motion slows to near-stillness, tension palpable',
+        '[Final 3s] Action suspends at the critical moment',
+        '[Final 3s] Time seems to stretch as the moment hangs'
+      ],
+      qualityKeywords: 'Suspended tension, pivotal moment, unresolved anticipation, dramatic pause.'
+    },
+
+    transition: {
+      name: 'Transition',
+      description: 'Scene flows naturally into the next, maintaining momentum',
+      cameraMovements: [
+        'Camera continues its movement, preparing to hand off to next scene',
+        'Smooth dolly that could seamlessly connect to following shot',
+        'Camera arcs toward the direction of the next narrative beat',
+        'Pull back that reveals the path to what comes next'
+      ],
+      emotionalBeats: [
+        'movement continues with purpose toward next objective',
+        'attention shifts toward what awaits',
+        'body orients toward the next challenge or destination',
+        'expression holds determination for what comes',
+        'first steps toward the next scene begin'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Motion maintains momentum, flowing forward',
+        '[Final 3s] Action continues seamlessly, energy preserved',
+        '[Final 3s] Movement carries through to the transition point'
+      ],
+      qualityKeywords: 'Flowing transition, continuous momentum, narrative bridge, seamless handoff.'
+    },
+
+    finality: {
+      name: 'Finality',
+      description: 'Complete conclusion, chapter/act ending, definitive closure',
+      cameraMovements: [
+        'Grand pull back to extreme wide, showing the completed story moment',
+        'Slow crane up and back, rising above the scene in conclusion',
+        'Camera gradually retreats, framing becomes symmetrical and balanced',
+        'Majestic wide shot settles into perfect compositional balance'
+      ],
+      emotionalBeats: [
+        'complete stillness achieved, journey concluded',
+        'final pose held with dignity and completion',
+        'ultimate expression of resolution and acceptance',
+        'body language signals "the end" of this chapter',
+        'eyes look toward the horizon or close in final peace'
+      ],
+      temporalPatterns: [
+        '[Final 3s] All motion comes to complete rest, perfect stillness',
+        '[Final 3s] The world settles into its final configuration',
+        '[Final 3s] Time seems to pause in acknowledgment of completion'
+      ],
+      qualityKeywords: 'Definitive ending, complete closure, final moment, epic conclusion.'
+    },
+
+    contemplative: {
+      name: 'Contemplative',
+      description: 'Reflective ending, character processing what occurred',
+      cameraMovements: [
+        'Camera holds in intimate framing as character reflects',
+        'Slow, almost imperceptible push in on thoughtful expression',
+        'Static shot with world moving around the still, contemplating figure',
+        'Gentle orbit around the figure lost in thought'
+      ],
+      emotionalBeats: [
+        'eyes gaze into middle distance, processing',
+        'subtle expressions cross the face like passing clouds',
+        'breathing becomes deep and measured in reflection',
+        'hand rises to touch face or object of significance',
+        'posture settles into contemplative stillness'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Internal processing visible in subtle facial changes',
+        '[Final 3s] Stillness of body, activity of mind visible in eyes',
+        '[Final 3s] The moment stretches as understanding deepens'
+      ],
+      qualityKeywords: 'Deep reflection, internal processing, meaningful pause, contemplative stillness.'
+    },
+
+    emotional_peak: {
+      name: 'Emotional Peak',
+      description: 'Scene ends at height of emotion, impact before resolution',
+      cameraMovements: [
+        'Camera holds tight on the emotional apex, not retreating',
+        'Push in reaches its closest point at peak emotion',
+        'Multiple angle suggestion through slight camera drift at climax',
+        'Intimate framing captures every nuance of the peak moment'
+      ],
+      emotionalBeats: [
+        'tears fall or are bravely held back',
+        'embrace tightens at fullest expression',
+        'voice would crack if speaking, emotion visible in throat',
+        'the kiss, the touch, the connection at its deepest',
+        'joy or sorrow expressed without restraint'
+      ],
+      temporalPatterns: [
+        '[Final 3s] Emotion reaches its fullest expression',
+        '[Final 3s] The peak is held, savored, fully experienced',
+        '[Final 3s] Maximum emotional impact sustained through the end'
+      ],
+      qualityKeywords: 'Emotional climax, peak intensity, raw feeling, powerful conclusion.'
+    }
+  },
+
+  // =========================================================================
+  // CLOSURE DETECTION - Analyze scene to determine appropriate ending
+  // =========================================================================
+
+  /**
+   * Detect the appropriate closure type based on scene context
+   * @param {Object} sceneContext - Scene information
+   * @param {Object} scenePosition - Position in overall story (sceneIndex, totalScenes)
+   * @returns {string} Closure type key
+   */
+  detectClosureType(sceneContext, scenePosition = {}) {
+    const visualPrompt = (sceneContext?.visualPrompt || '').toLowerCase();
+    const narration = (sceneContext?.narration || '').toLowerCase();
+    const sceneAction = (sceneContext?.sceneAction || '').toLowerCase();
+    const combined = `${visualPrompt} ${narration} ${sceneAction}`;
+
+    const { sceneIndex = 0, totalScenes = 1 } = scenePosition;
+    const isLastScene = sceneIndex === totalScenes - 1;
+    const isNearEnd = sceneIndex >= totalScenes - 2;
+
+    // Check for explicit finality indicators (last scene, ending words)
+    if (isLastScene || /\b(finally|ultimate|last|ending|conclusion|the end)\b/.test(combined)) {
+      return 'finality';
+    }
+
+    // Check for cliffhanger indicators
+    if (/\b(suddenly|shock|reveal|discover|realize|but then|however|twist)\b/.test(combined)) {
+      return 'cliffhanger';
+    }
+
+    // Check for emotional peak indicators
+    if (/\b(tears|crying|embrace|kiss|love|grief|joy|overwhelming|burst)\b/.test(combined)) {
+      return 'emotional_peak';
+    }
+
+    // Check for contemplative indicators
+    if (/\b(think|ponder|reflect|remember|consider|gaze|stare|wonder|meditate)\b/.test(combined)) {
+      return 'contemplative';
+    }
+
+    // Check for resolution indicators
+    if (/\b(peace|calm|accept|understand|resolve|forgive|release|let go|relief)\b/.test(combined)) {
+      return 'resolution';
+    }
+
+    // Check for transition indicators
+    if (/\b(next|continue|move|toward|begin|start|then|after)\b/.test(combined)) {
+      return 'transition';
+    }
+
+    // Default based on position
+    if (isNearEnd) {
+      return 'resolution';
+    }
+
+    return 'transition'; // Default for mid-story scenes
+  },
+
+  // =========================================================================
+  // CLOSURE PROMPT GENERATION
+  // =========================================================================
+
+  /**
+   * Generate closure-enhanced prompt for the final shot
+   * @param {Object} shotData - Final shot information
+   * @param {Object} sceneContext - Scene context
+   * @param {Object} scenePosition - Position in story
+   * @param {number} videoDuration - Video duration (6 or 10)
+   * @returns {string} Enhanced closure prompt
+   */
+  generateClosurePrompt(shotData, sceneContext, scenePosition = {}, videoDuration = 10) {
+    const closureType = this.detectClosureType(sceneContext, scenePosition);
+    const closure = this.closureTypes[closureType];
+
+    if (!closure) {
+      console.warn(`[SCENE_CLOSURE_ENGINE] Unknown closure type: ${closureType}, using resolution`);
+      return this.generateClosurePrompt(shotData, sceneContext, scenePosition, videoDuration);
+    }
+
+    console.log(`[SCENE_CLOSURE_ENGINE] Detected closure type: ${closureType}`);
+
+    const parts = [];
+
+    // 1. CLOSURE CAMERA - Specific to ending type
+    const cameraMove = closure.cameraMovements[Math.floor(Math.random() * closure.cameraMovements.length)];
+    parts.push(cameraMove);
+
+    // 2. CHARACTER CLOSURE - Emotional beat for the ending
+    const character = this.extractPrimaryCharacter(sceneContext);
+    if (character) {
+      const emotionalBeat = closure.emotionalBeats[Math.floor(Math.random() * closure.emotionalBeats.length)];
+      parts.push(`${character}'s ${emotionalBeat}.`);
+    }
+
+    // 3. TEMPORAL PATTERN - How time should feel at the end
+    if (videoDuration >= 10) {
+      const temporalPattern = closure.temporalPatterns[Math.floor(Math.random() * closure.temporalPatterns.length)];
+      parts.push(temporalPattern);
+    }
+
+    // 4. EXISTING ACTION - Preserve what was in the shot
+    const existingAction = shotData.actionText || shotData.narrativeBeat?.action || '';
+    if (existingAction) {
+      parts.push(existingAction);
+    }
+
+    // 5. CLOSURE ENVIRONMENT - World responds to the ending
+    const envClosure = this.generateEnvironmentClosure(sceneContext, closureType);
+    if (envClosure) {
+      parts.push(envClosure);
+    }
+
+    // 6. QUALITY KEYWORDS - Closure-specific
+    parts.push(closure.qualityKeywords);
+    parts.push('Cinematic scene conclusion, photorealistic, smooth deceleration to stillness.');
+
+    return parts.join(' ');
+  },
+
+  /**
+   * Extract primary character name from context
+   */
+  extractPrimaryCharacter(sceneContext) {
+    const prompt = sceneContext?.visualPrompt || '';
+    const match = prompt.match(/([A-Z][a-z]+)\s+(?:sits?|stands?|walks?|looks?|gazes?)/);
+    return match ? match[1] : 'The subject';
+  },
+
+  /**
+   * Generate environment closure description
+   */
+  generateEnvironmentClosure(sceneContext, closureType) {
+    const envType = this.detectEnvironmentType(sceneContext);
+
+    const environmentClosures = {
+      urban: {
+        resolution: 'City lights seem to soften, the urban pulse settling into evening calm.',
+        cliffhanger: 'City sounds cut to silence, the metropolis holding its breath.',
+        transition: 'The city continues its rhythm as the focus shifts to what comes next.',
+        finality: 'The cityscape becomes a backdrop to the completed moment, lights twinkling like stars.',
+        contemplative: 'Urban noise fades to white noise, the city becoming mere backdrop to inner reflection.',
+        emotional_peak: 'Even the city seems to pause, honoring the emotional moment.'
+      },
+      nature: {
+        resolution: 'A gentle breeze stirs the leaves one last time, then settles into peace.',
+        cliffhanger: 'Nature falls silent, as if waiting for what comes next.',
+        transition: 'The wind picks up slightly, carrying toward the next moment.',
+        finality: 'The sun breaks through clouds, bathing the scene in golden completion.',
+        contemplative: 'Nature breathes softly around the still figure, patient and eternal.',
+        emotional_peak: 'Even the wind seems to hold its breath for this moment.'
+      },
+      interior: {
+        resolution: 'The room settles into comfortable stillness, dust motes drifting lazily.',
+        cliffhanger: 'Shadows deepen in the corners, the room thick with unresolved tension.',
+        transition: 'Light shifts toward the door, suggesting the path forward.',
+        finality: 'The space achieves perfect balance, every element in its final place.',
+        contemplative: 'The room becomes a sanctuary of quiet reflection.',
+        emotional_peak: 'The intimate space amplifies every emotion in the silence.'
+      },
+      scifi: {
+        resolution: 'Holographic displays fade to standby, technology yielding to the human moment.',
+        cliffhanger: 'Screens flash with unread data, the future hanging in digital suspension.',
+        transition: 'Systems hum with preparation for what comes next.',
+        finality: 'All displays show completion, the mission concluded in synchronized stillness.',
+        contemplative: 'Technology dims respectfully, allowing space for human reflection.',
+        emotional_peak: 'Even the machines seem to acknowledge the weight of the moment.'
+      },
+      dojo: {
+        resolution: 'Incense smoke rises in a straight line, inner and outer peace aligned.',
+        cliffhanger: 'Candle flames freeze mid-flicker, the ancient space suspended in time.',
+        transition: 'Energy flows toward the next practice, the path continuing.',
+        finality: 'Perfect stillness achieved, the space resonating with completed purpose.',
+        contemplative: 'The sacred space holds the moment in eternal meditation.',
+        emotional_peak: 'The spiritual atmosphere intensifies, honoring the emotional truth.'
+      }
+    };
+
+    const envClosures = environmentClosures[envType] || environmentClosures.interior;
+    return envClosures[closureType] || envClosures.resolution;
+  },
+
+  /**
+   * Detect environment type from context
+   */
+  detectEnvironmentType(sceneContext) {
+    const prompt = (sceneContext?.visualPrompt || '').toLowerCase();
+
+    if (/city|urban|street|neon|building|metropolis/.test(prompt)) return 'urban';
+    if (/forest|nature|outdoor|garden|tree|field|mountain/.test(prompt)) return 'nature';
+    if (/dojo|temple|shrine|meditation|spiritual/.test(prompt)) return 'dojo';
+    if (/space|ship|station|futuristic|tech|cyber|hologram/.test(prompt)) return 'scifi';
+    return 'interior';
+  },
+
+  // =========================================================================
+  // INTEGRATION - Apply closure to final shot
+  // =========================================================================
+
+  /**
+   * Enhance the final shot with proper closure
+   * Called during shot processing to ensure meaningful scene endings
+   */
+  enhanceFinalShot(finalShot, sceneContext, scenePosition, videoDuration) {
+    if (!finalShot.isLast) {
+      console.warn('[SCENE_CLOSURE_ENGINE] enhanceFinalShot called on non-final shot');
+      return finalShot;
+    }
+
+    const closurePrompt = this.generateClosurePrompt(
+      finalShot,
+      sceneContext,
+      scenePosition,
+      videoDuration
+    );
+
+    // Merge closure with existing prompt
+    const existingPrompt = finalShot.videoPrompt || '';
+
+    // If existing prompt is basic, replace entirely
+    if (existingPrompt.length < 100) {
+      finalShot.videoPrompt = closurePrompt;
+    } else {
+      // Enhance existing prompt with closure elements
+      finalShot.videoPrompt = `${existingPrompt} [SCENE CLOSURE] ${closurePrompt}`;
+    }
+
+    // Add closure metadata
+    finalShot.closureType = this.detectClosureType(sceneContext, scenePosition);
+    finalShot.hasHollywoodClosure = true;
+
+    console.log(`[SCENE_CLOSURE_ENGINE] Enhanced final shot with ${finalShot.closureType} closure`);
+
+    return finalShot;
+  },
+
+  /**
+   * Get a human-readable summary of the closure for UI display
+   */
+  getClosureSummary(closureType) {
+    const summaries = {
+      resolution: 'Scene resolves with emotional release and peace',
+      cliffhanger: 'Scene ends with suspended tension, anticipation for what comes',
+      transition: 'Scene flows naturally toward the next narrative beat',
+      finality: 'Scene concludes with complete, definitive closure',
+      contemplative: 'Scene ends in reflective stillness and inner processing',
+      emotional_peak: 'Scene ends at the height of emotional intensity'
+    };
+    return summaries[closureType] || 'Scene ends with cinematic closure';
+  }
+};
+
+// =============================================================================
 // NARRATIVE_BEAT_GENERATOR - Legacy compatibility wrapper
 // =============================================================================
 /**
@@ -43856,6 +44278,39 @@ exports.creationWizardDecomposeSceneToShots = functions
       });
     }
 
+    // STEP 5.6: HOLLYWOOD SCENE CLOSURE for final shot
+    // Use SCENE_CLOSURE_ENGINE to ensure meaningful narrative resolution
+    if (shotsWithPrompts.length > 0) {
+      const finalShotIndex = shotsWithPrompts.length - 1;
+      const finalShot = shotsWithPrompts[finalShotIndex];
+
+      // Build scene context for closure detection
+      const closureSceneContext = {
+        visualPrompt: sceneDescription,
+        narration: narration,
+        sceneAction: sceneActionData.sceneAction || ''
+      };
+
+      // Build scene position info
+      const scenePosition = {
+        sceneIndex: sceneIndex || 0,
+        totalScenes: totalScenes || 1
+      };
+
+      // Mark the shot as final
+      finalShot.isLast = true;
+
+      // Apply Hollywood closure enhancement
+      SCENE_CLOSURE_ENGINE.enhanceFinalShot(
+        finalShot,
+        closureSceneContext,
+        scenePosition,
+        clipDuration
+      );
+
+      console.log(`[creationWizardDecomposeSceneToShots] Applied ${finalShot.closureType || 'default'} closure to final shot`);
+    }
+
     // STEP 6: Normalize shots with all required fields
     // Includes imagePrompt, videoPrompt, narrativeBeat, and captureSuggestion
     const normalizedShots = shotsWithPrompts.map((shot, idx) => {
@@ -43887,6 +44342,11 @@ exports.creationWizardDecomposeSceneToShots = functions
           timingSeconds: { start: clipDuration - 2, end: clipDuration, recommended: clipDuration - 1 },
           stabilityColor: '#3b82f6'
         }),
+        // NEW: Hollywood scene closure (Phase 3)
+        closureType: isLast ? (shot.closureType || null) : null,
+        hasHollywoodClosure: isLast ? (shot.hasHollywoodClosure || false) : false,
+        closureSummary: isLast && shot.closureType ?
+          SCENE_CLOSURE_ENGINE.getClosureSummary(shot.closureType) : null,
         // Generation status
         imageUrl: null,
         videoUrl: null,
