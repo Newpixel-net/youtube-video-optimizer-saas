@@ -11868,14 +11868,22 @@ exports.generateCreativeImage = functions
                 return part;
               });
 
-              console.log(`[generateCreativeImage] Calling Gemini model: ${geminiImageModelId}, image ${imgIdx + 1}/${imageCount}`);
+              // Determine output resolution - gemini-3-pro-image-preview supports 2K and 4K
+              const isProModel = geminiImageModelId.includes('gemini-3-pro');
+              const outputImageSize = isProModel ? '2K' : undefined;
+
+              console.log(`[generateCreativeImage] Calling Gemini model: ${geminiImageModelId}, image ${imgIdx + 1}/${imageCount}, image_size: ${outputImageSize || 'default'}`);
               const startTime = Date.now();
 
               const result = await ai.models.generateContent({
                 model: geminiImageModelId,
                 contents: [{ role: 'user', parts: enhancedParts }],
                 config: {
-                  responseModalities: ['image', 'text']
+                  responseModalities: ['IMAGE', 'TEXT'],
+                  imageConfig: {
+                    aspectRatio: geminiAspectRatio,
+                    ...(outputImageSize && { image_size: outputImageSize })  // HD resolution
+                  }
                 }
               });
 
@@ -33542,11 +33550,13 @@ const NANOBANANA_PROMPT_BUILDER = {
   ],
 
   // Shot type framing requirements (using CAPS for emphasis)
+  // CRITICAL: These rules ensure character is properly visible and not cut off
   framingRules: {
-    wide: 'FULL BODY MUST be visible from head to feet. Characters occupy 30-40% of frame height. Generous margins on ALL sides. Environment context clearly visible.',
-    medium: 'Waist-up framing with head FULLY VISIBLE. 15% headroom above head. Shoulders and hands in frame. Character centered with proper negative space.',
-    closeup: 'Face and upper chest fills frame. Eyes positioned in upper third. Head MUST have 10% margin above. Sharp focus on facial features.',
-    extreme_closeup: 'Face detail only. Eyes prominent and sharp. Dramatic intentional tight framing. Skin texture visible.'
+    wide: 'CRITICAL FRAMING: FULL BODY MUST be visible from head to feet. Character FACING CAMERA. Characters occupy 30-40% of frame height. Generous margins on ALL sides. Environment context clearly visible. DO NOT cut off any body parts.',
+    medium: 'CRITICAL FRAMING: Waist-up framing with head FULLY VISIBLE and FACING CAMERA. 15% headroom above head. Shoulders and hands in frame. Character centered with proper negative space. Face MUST be clearly visible.',
+    closeup: 'CRITICAL FRAMING: Face and upper chest fills frame. Character FACING CAMERA. Eyes positioned in upper third. Head MUST have 10% margin above. Sharp focus on facial features. Face identity clearly recognizable.',
+    extreme_closeup: 'CRITICAL FRAMING: Face detail only. Character FACING CAMERA. Eyes prominent and sharp. Dramatic intentional tight framing. Skin texture visible.',
+    establishing: 'CRITICAL FRAMING: If characters present, they MUST be clearly visible and FACING CAMERA. Wide establishing shot showing environment but characters as clear focal point.'
   },
 
   /**
@@ -33612,7 +33622,10 @@ const NANOBANANA_PROMPT_BUILDER = {
     }
 
     // 11. NEGATIVE instructions (what to avoid)
-    parts.push('AVOID: blurry, distorted anatomy, cropped heads, AI-generated artifacts, plastic skin, unnatural poses.');
+    parts.push('STRICTLY AVOID: blurry, distorted anatomy, cropped heads, cut-off faces, characters facing away, back-of-head shots, AI-generated artifacts, plastic skin, unnatural poses, low resolution, JPEG artifacts.');
+
+    // 12. FINAL CHARACTER EMPHASIS (critical for proper output)
+    parts.push('FINAL REQUIREMENT: Character MUST be the hero of this shot - clearly visible, properly framed, and FACING THE CAMERA with face clearly recognizable. The character is the main subject, environment is secondary.');
 
     return parts.join(' ');
   },
@@ -46967,17 +46980,30 @@ exports.creationWizardBatchGenerateShotImages = functions
       // Add the main prompt text (combined with location context if available)
       let finalPrompt = enhancedPrompt;
       if (locationRef) {
-        finalPrompt = `[Generate scene using the location environment reference above]\n\n${enhancedPrompt}`;
+        // Add explicit framing instructions when using location reference
+        finalPrompt = `[IMPORTANT: Generate the CHARACTER as the main subject - FULL BODY or at minimum WAIST-UP visible, FACING THE CAMERA. Use the location reference as the background environment only.]\n\n${enhancedPrompt}`;
       }
+
+      // Add character visibility instructions if we have both location and character
+      if (locationRef && characterReference?.base64) {
+        finalPrompt += `\n\n[CRITICAL FRAMING: The CHARACTER must be the HERO of the shot - clearly visible, well-lit, and properly framed. DO NOT cut off the head or face. The character should be prominent in the composition, not hidden or obscured by the environment.]`;
+      }
+
       contentParts.push({
         text: finalPrompt
       });
 
       // Generate image - Use correct NanoBanana models
+      // gemini-3-pro-image-preview supports up to 4K resolution
       const geminiModelId = model === 'nanobanana' ? 'gemini-2.5-flash-image' : 'gemini-3-pro-image-preview';
 
+      // Determine output resolution based on model
+      // gemini-3-pro-image-preview supports 1K, 2K, 4K
+      // gemini-2.5-flash-image supports up to 1K only
+      const outputImageSize = model === 'nanobanana' ? undefined : '2K';
+
       console.log(`[creationWizardBatchGenerateShotImages] Generating shot ${i + 1}/${allShots.length} (Scene ${shot.sceneId}, Shot ${shot.shotIndex})`);
-      console.log(`[creationWizardBatchGenerateShotImages] Using model: ${geminiModelId}, aspect ratio: 16:9, parts: ${contentParts.length}`);
+      console.log(`[creationWizardBatchGenerateShotImages] Using model: ${geminiModelId}, aspect ratio: 16:9, image_size: ${outputImageSize || 'default'}, parts: ${contentParts.length}`);
 
       const result = await ai.models.generateContent({
         model: geminiModelId,
@@ -46985,7 +47011,8 @@ exports.creationWizardBatchGenerateShotImages = functions
         config: {
           responseModalities: ['IMAGE', 'TEXT'],
           imageConfig: {
-            aspectRatio: '16:9'  // Proper 16:9 for video frames
+            aspectRatio: '16:9',  // Proper 16:9 for video frames
+            ...(outputImageSize && { image_size: outputImageSize })  // HD resolution for Pro model
           }
         }
       });
@@ -48252,14 +48279,23 @@ Output a single corrected image with the fixed character faces.
             return part;
           });
 
-          console.log(`[creationWizardFixCharacterFaces] Calling Gemini model: ${geminiModelId}`);
+          // Determine aspect ratio format for Gemini
+          const geminiAspectRatio = aspectRatio === '16:9' ? '16:9' :
+                                     aspectRatio === '9:16' ? '9:16' :
+                                     aspectRatio === '1:1' ? '1:1' : '16:9';
+
+          console.log(`[creationWizardFixCharacterFaces] Calling Gemini model: ${geminiModelId}, image_size: 2K`);
           const startTime = Date.now();
 
           const result = await ai.models.generateContent({
             model: geminiModelId,
             contents: [{ role: 'user', parts: enhancedParts }],
             config: {
-              responseModalities: ['image', 'text']
+              responseModalities: ['IMAGE', 'TEXT'],
+              imageConfig: {
+                aspectRatio: geminiAspectRatio,
+                image_size: '2K'  // HD resolution for quality face correction
+              }
             }
           });
 
