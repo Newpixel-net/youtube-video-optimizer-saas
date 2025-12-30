@@ -40461,6 +40461,14 @@ For each shot, provide:
 1. shotAction: The complete action sequence for this ${clipDuration}-second shot (be specific and detailed)
 2. endState: The exact position/pose at the end (this frame will be captured for next shot)
 3. captureDescription: What the captured frame looks like (for seamless transition)
+4. suggestedCaptureTime: When to capture the frame (e.g., "${clipDuration - 2}-${clipDuration} seconds" for end, or specific moment)
+5. captureReason: Why this moment is ideal for capture (stability, pose clarity, transition smoothness)
+6. captureStability: How stable/clear the capture moment is ("high" = still pose, "medium" = slow motion, "low" = mid-action)
+
+CAPTURE TIMING GUIDANCE:
+- "high" stability: Character paused, clear pose, no motion blur - capture at exact end (${clipDuration}s)
+- "medium" stability: Slow deliberate motion - capture at ${clipDuration - 1}-${clipDuration}s
+- "low" stability: Fast action - plan the shot so action resolves to stable moment at end
 
 Return ONLY valid JSON:
 {
@@ -40469,7 +40477,10 @@ Return ONLY valid JSON:
       "shotIndex": 0,
       "shotAction": "Detailed action for this ${clipDuration}-second shot...",
       "endState": "Specific position/pose at shot end",
-      "captureDescription": "What the freeze frame shows"
+      "captureDescription": "What the freeze frame shows",
+      "suggestedCaptureTime": "${clipDuration - 1}-${clipDuration} seconds",
+      "captureReason": "Character in stable pose after turning, clear silhouette against city lights",
+      "captureStability": "high"
     }
   ],
   "chainLogic": "Brief explanation of how shots connect"
@@ -40544,12 +40555,29 @@ Return ONLY valid JSON:
           captureDescription: shot.captureDescription || shot.endState,
           videoPrompt,
           motionDescription: `Shot ${idx + 1}: ${this.extractKeyVerbs(shot.shotAction)}`,
-          aiGenerated: true
+          aiGenerated: true,
+          // NEW: Capture point suggestions (Upgrade 2)
+          captureSuggestion: {
+            timing: shot.suggestedCaptureTime || `${clipDuration - 1}-${clipDuration} seconds`,
+            reason: shot.captureReason || 'End of shot action sequence',
+            stability: shot.captureStability || 'medium',
+            // Computed helpers for UI
+            timingSeconds: this.parseCaptureTiming(shot.suggestedCaptureTime, clipDuration),
+            stabilityColor: shot.captureStability === 'high' ? '#10b981' :
+                           shot.captureStability === 'low' ? '#f59e0b' : '#3b82f6'
+          }
         };
       });
 
       console.log(`[STORY_BEAT_DECOMPOSER] AI decomposition successful: ${shots.length} shots`);
       console.log(`[STORY_BEAT_DECOMPOSER] Chain logic: ${parsed.chainLogic || 'Not provided'}`);
+
+      // Log capture suggestions
+      shots.forEach((shot, idx) => {
+        if (!shot.isLast) {
+          console.log(`[STORY_BEAT_DECOMPOSER] Shot ${idx + 1} capture: ${shot.captureSuggestion.timing} (${shot.captureSuggestion.stability} stability)`);
+        }
+      });
 
       return shots;
 
@@ -40586,6 +40614,40 @@ Return ONLY valid JSON:
     parts.push(guidance);
 
     return parts.join(' ');
+  },
+
+  /**
+   * Parse capture timing string to get start/end seconds
+   * @param {string} timingStr - e.g., "8-10 seconds" or "9-10 seconds"
+   * @param {number} clipDuration - Shot duration (6 or 10)
+   * @returns {object} { start, end, recommended }
+   */
+  parseCaptureTiming(timingStr, clipDuration) {
+    if (!timingStr) {
+      return { start: clipDuration - 2, end: clipDuration, recommended: clipDuration - 1 };
+    }
+
+    // Extract numbers from timing string
+    const numbers = timingStr.match(/(\d+)/g);
+    if (numbers && numbers.length >= 2) {
+      const start = parseInt(numbers[0], 10);
+      const end = parseInt(numbers[1], 10);
+      return {
+        start: Math.min(start, clipDuration),
+        end: Math.min(end, clipDuration),
+        recommended: Math.min(Math.round((start + end) / 2), clipDuration)
+      };
+    } else if (numbers && numbers.length === 1) {
+      const time = parseInt(numbers[0], 10);
+      return {
+        start: Math.max(0, time - 1),
+        end: Math.min(time, clipDuration),
+        recommended: Math.min(time, clipDuration)
+      };
+    }
+
+    // Default to last 2 seconds
+    return { start: clipDuration - 2, end: clipDuration, recommended: clipDuration - 1 };
   },
 
   /**
@@ -42130,29 +42192,42 @@ exports.creationWizardDecomposeSceneToShots = functions
     };
 
     // STEP 6: Normalize shots with all required fields
-    // NEW: Include separate imagePrompt, videoPrompt, and narrativeBeat
-    const normalizedShots = shotsWithPrompts.map((shot, idx) => ({
-      id: `${scene.id}_shot_${idx + 1}`,
-      sceneId: scene.id,
-      shotIndex: shot.shotIndex || idx + 1,
-      shotType: shot.shotType,
-      shotTypeName: shot.shotTypeName,
-      duration: shot.duration,
-      cameraMovement: shot.cameraMovement,
-      // NEW: Separate prompts for image and video generation
-      imagePrompt: shot.imagePrompt,    // For Imagen - visual composition
-      videoPrompt: shot.videoPrompt,    // For Minimax - ACTION focused
-      prompt: shot.prompt,              // Legacy - backward compatibility
-      // NEW: Narrative beat info for progressive action
-      narrativeBeat: shot.narrativeBeat || null,
-      purpose: shot.purpose,
-      focusElement: shot.focusElement,
-      transition: shot.transition || 'cut',
-      // Generation status
-      imageUrl: null,
-      videoUrl: null,
-      status: 'pending'
-    }));
+    // Includes imagePrompt, videoPrompt, narrativeBeat, and captureSuggestion
+    const normalizedShots = shotsWithPrompts.map((shot, idx) => {
+      const isLast = idx === shotsWithPrompts.length - 1;
+      const beatData = storyBeats ? storyBeats[idx] : null;
+
+      return {
+        id: `${scene.id}_shot_${idx + 1}`,
+        sceneId: scene.id,
+        shotIndex: shot.shotIndex || idx + 1,
+        shotType: shot.shotType,
+        shotTypeName: shot.shotTypeName,
+        duration: shot.duration,
+        cameraMovement: shot.cameraMovement,
+        // Separate prompts for image and video generation
+        imagePrompt: shot.imagePrompt,    // For Imagen - visual composition
+        videoPrompt: shot.videoPrompt,    // For Minimax - ACTION focused
+        prompt: shot.prompt,              // Legacy - backward compatibility
+        // Narrative beat info for progressive action
+        narrativeBeat: shot.narrativeBeat || null,
+        purpose: shot.purpose,
+        focusElement: shot.focusElement,
+        transition: shot.transition || 'cut',
+        // NEW: Capture point suggestions (Upgrade 2)
+        captureSuggestion: isLast ? null : (beatData?.captureSuggestion || {
+          timing: `${clipDuration - 2}-${clipDuration} seconds`,
+          reason: 'End of shot action sequence',
+          stability: 'medium',
+          timingSeconds: { start: clipDuration - 2, end: clipDuration, recommended: clipDuration - 1 },
+          stabilityColor: '#3b82f6'
+        }),
+        // Generation status
+        imageUrl: null,
+        videoUrl: null,
+        status: 'pending'
+      };
+    });
 
     // Log usage with decomposition method
     await db.collection('apiUsage').add({
