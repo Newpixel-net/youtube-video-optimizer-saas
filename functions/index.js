@@ -11515,7 +11515,7 @@ exports.generateCreativeImage = functions
   const uid = await verifyAuth(context);
   checkRateLimit(uid, 'generateImage', 10);
 
-  const { prompt, model, quantity, aspectRatio, quality, templateId, templateVariables, negativePrompt, seed, styleReference, characterReference } = data;
+  const { prompt, model, quantity, aspectRatio, quality, templateId, templateVariables, negativePrompt, seed, styleReference, characterReference, locationReference } = data;
 
   if (!prompt || prompt.trim().length === 0) {
     throw new functions.https.HttpsError('invalid-argument', 'Prompt is required');
@@ -11813,6 +11813,17 @@ exports.generateCreativeImage = functions
         console.log('Adding character reference image as input');
       }
 
+      // LOCATION BIBLE: Add location reference image for environment consistency
+      if (locationReference && locationReference.base64) {
+        contentParts.push({
+          inlineData: {
+            mimeType: locationReference.mimeType || 'image/png',
+            data: locationReference.base64
+          }
+        });
+        console.log(`Adding location reference image as input: "${locationReference.name || 'unnamed location'}"`);
+      }
+
       // Build the prompt with reference instructions if needed
       let imagePrompt = finalPrompt;
       if (styleReference && styleReference.base64) {
@@ -11821,8 +11832,15 @@ exports.generateCreativeImage = functions
       if (characterReference && characterReference.base64) {
         imagePrompt = `Using the provided image as a character/face reference to maintain consistency, generate a new image: ${finalPrompt}`;
       }
+      if (locationReference && locationReference.base64 && !characterReference && !styleReference) {
+        imagePrompt = `Using the provided image as a LOCATION/ENVIRONMENT reference (maintain the same setting, architecture, and atmosphere), generate a new image showing: ${finalPrompt}`;
+      }
       if (styleReference && characterReference) {
         imagePrompt = `Using the first image as style reference and the second image as character reference, generate: ${finalPrompt}`;
+      }
+      // Handle location + character reference combination
+      if (locationReference && locationReference.base64 && characterReference && characterReference.base64) {
+        imagePrompt = `Using the provided images as references (one for CHARACTER/FACE consistency, one for LOCATION/ENVIRONMENT consistency), generate a new image that places the character in this setting: ${finalPrompt}`;
       }
 
       // Add negative prompt instruction if provided
