@@ -27040,28 +27040,73 @@ REQUIREMENTS for sceneAction:
 === CRITICAL: HOLLYWOOD NARRATIVE STRUCTURE BY SCENE POSITION ===
 Each scene's content MUST match its position in the story arc. Do NOT write generic content - write POSITION-AWARE content.
 
-📍 SCENE 1 - THE OPENING (World-First Structure):
+📍 SCENE 1 - THE OPENING (World-First Structure) - CRITICAL FOR CINEMATIC QUALITY:
 The opening scene MUST follow this exact structure - this is how Hollywood films begin:
 
-OPENING sceneAction STRUCTURE (3-4 shots):
-- Shot 1: WORLD ESTABLISHMENT - Show the ENVIRONMENT first. No character OR character as tiny distant figure.
-  "The camera glides over the neon-drenched skyline of Neo-Shaolin at dusk, hover-cars streaming between towering megastructures..."
-- Shot 2: CHARACTER REVEAL - Introduce the protagonist. They ENTER or are DISCOVERED.
-  "Among the rooftop gardens, a solitary figure emerges from the shadows - Kai, his weathered coat catching the wind..."
-- Shot 3+: CONTEXT & HOOK - Establish what draws them, hint at the journey ahead.
-  "He pauses at the edge, eyes fixed on a distant tower pulsing with forbidden energy. His hand moves to the artifact at his chest..."
+⚠️ WORLD-FIRST RULE (NON-NEGOTIABLE):
+Hollywood films ALWAYS establish the WORLD before the CHARACTER. Think:
+- Blade Runner: Los Angeles cityscape → then finds Deckard
+- Lord of the Rings: The Shire → then finds Frodo
+- Avatar: Pandora's forests → then finds Jake
+- The Matrix: Green code → digital world → then finds Neo
 
-OPENING visualPrompt STRUCTURE:
-- MUST start with [Crane/Drone/Sweeping] camera movement showing ENVIRONMENT
-- First describe the WORLD, then find/reveal the CHARACTER within it
-- Character should feel like part of the world, not the sole focus initially
+OPENING sceneAction STRUCTURE (designed for 3-4 shots):
+- Shot 1 (0-10s): WORLD ESTABLISHMENT - Show ONLY the ENVIRONMENT. NO character visible at all.
+  Camera: Drone/Crane/Sweeping movement across the world
+  "The camera soars over the ancient peaks of the Jade Mountains at dawn, mist cascading through valleys below, ancient temples clinging to impossible cliffsides..."
 
-❌ WRONG OPENING (Do NOT write this):
+- Shot 2 (10-20s): WORLD DETAIL - Continue exploring the world. Character may appear as TINY distant figure (less than 5% of frame).
+  Camera: Still wide, descending toward a specific location
+  "Descending through prayer flags and cloud layers, the camera finds a hidden monastery courtyard. Smoke rises from incense burners. In the far corner, barely visible, a small figure moves in meditation..."
+
+- Shot 3 (20-30s): CHARACTER REVEAL - The MOMENT we meet the protagonist. This is their introduction to the audience.
+  Camera: Arrives at character, medium-wide to medium shot
+  "The camera lands on Mei - her eyes closed, her breath visible in the cold air, her movements precise as she flows through ancient forms. This is our hero."
+
+- Shot 4+ (30s+): CHARACTER CONTEXT - Establish what drives them, plant the story hook.
+  Camera: Medium shot, character with world context
+  "Mei's eyes snap open. She gazes toward a distant tower glowing with forbidden energy. Her hand moves unconsciously to an amulet at her chest. Something calls to her..."
+
+OPENING visualPrompt STRUCTURE (MANDATORY FORMAT):
+- MUST begin with environment description (at least 40% of the prompt)
+- Camera movement MUST be sweeping/crane/drone (establishing movement)
+- Character appears LATER in the description, not at the start
+- First 1-2 sentences: Pure environment and atmosphere
+- Middle sentences: Camera finds/lands on character
+- Final sentences: Character purpose and hint of journey
+
+OPENING CHOREOGRAPHY (sceneArc MUST be "steady_build"):
+- intensityProgression: [0.2, 0.4, 0.6, 0.5] - gradual introduction, not explosive
+- Beat 1: Pure world (no character)
+- Beat 2: World with tiny figure (if any)
+- Beat 3: Character reveal moment
+- Beat 4: Character context and story hook
+
+❌ WRONG OPENING (ABSOLUTELY DO NOT WRITE THIS):
 "Kai stands at the heart of the nexus, channeling ancient energy..."
-- This is MID-STORY content. Character is already doing something significant.
+- WRONG: Character is prominent from the start
+- WRONG: Character is already doing something significant
+- WRONG: No world establishment
+- This is MID-STORY content forced into an opening
 
-✅ CORRECT OPENING (Write this):
-"[Sweeping crane shot] Dawn breaks over the mist-shrouded peaks of the Jade Mountains, ancient temples dotting the cliffsides like scattered jewels. Prayer flags flutter in the morning breeze as the camera descends through clouds to find a lone monastery courtyard. There, amid the swirling fog, a young woman in simple training robes moves through fluid martial forms - this is Mei, her breath visible in the cold air, her movements precise yet graceful..."
+❌ ALSO WRONG:
+"A lone warrior named Kai surveys the battlefield..."
+- WRONG: Character is immediately the focus
+- WRONG: No environment established first
+- WRONG: Sounds like a generic character introduction
+
+✅ CORRECT OPENING (STUDY THIS EXAMPLE):
+"[Sweeping crane shot] Dawn breaks over the mist-shrouded peaks of the Jade Mountains, golden light cascading across ancient temples that dot the cliffsides like scattered jewels. Prayer flags flutter in the morning breeze, their colors vibrant against the grey stone. The camera descends through layers of cloud, revealing a hidden monastery courtyard where incense smoke curls upward into the cool air.
+
+Amid the swirling fog of the courtyard, a solitary figure moves in graceful meditation - this is Mei, a young woman in simple training robes, her breath forming delicate clouds as she flows through ancient martial forms. Her eyes are closed, movements precise yet fluid, completely at one with her world.
+
+Her eyes snap open, fixed on something beyond the mountain range. Her hand moves to the jade pendant at her throat. In the distant valley, an unnatural storm gathers around a forbidden tower. Mei takes a steadying breath - her journey is about to begin."
+
+Notice how:
+✓ First paragraph: 100% environment (no character)
+✓ Second paragraph: Character revealed within the world
+✓ Third paragraph: Story hook established
+✓ Camera flows from wide to close, world to character
 
 📍 SCENES 2-3 - ESTABLISHMENT & CONFLICT INTRODUCTION:
 These scenes establish characters and introduce the central conflict.
@@ -41660,6 +41705,324 @@ const CROSS_SHOT_CALLBACKS = {
 };
 
 // =============================================================================
+// OPENING_SCENE_HANDLER - Hollywood World-First Structure Enforcer
+// Ensures opening scenes follow cinematic conventions: Environment → Character
+// =============================================================================
+
+/**
+ * OPENING_SCENE_HANDLER
+ * Enforces Hollywood "World-First" structure for opening scenes.
+ *
+ * The Rule: In cinema, opening scenes establish the WORLD before the CHARACTER.
+ * - Shot 1: Pure environment (no character visible)
+ * - Shot 2: World details (character as tiny element if any)
+ * - Shot 3: Character REVEALED (audience meets protagonist)
+ * - Shot 4: Character context (what drives them, story hook)
+ */
+const OPENING_SCENE_HANDLER = {
+  /**
+   * Check if a scene is an opening scene
+   */
+  isOpeningScene(scene, sceneIndex) {
+    if (sceneIndex === 0) return true;
+    if (scene?.sceneType === 'opening_narration') return true;
+    if (scene?.sceneRole === 'setup' && sceneIndex < 2) return true;
+    return false;
+  },
+
+  /**
+   * Get World-First shot structure for opening scenes
+   * @param {number} shotCount - Number of shots to generate
+   * @param {Object} scene - Scene data
+   * @returns {Array} Shot structure with World-First requirements
+   */
+  getOpeningShotStructure(shotCount, scene) {
+    const characters = scene?.charactersInScene || [];
+    const protagonist = characters[0] || 'the protagonist';
+    const location = scene?.location?.name || 'the world';
+
+    // Define World-First shot roles based on shot count
+    if (shotCount <= 2) {
+      return [
+        {
+          role: 'WORLD_THEN_REVEAL',
+          focus: 'environment_to_character',
+          requirement: `Start with wide environment of ${location}, then reveal ${protagonist}`,
+          characterVisibility: 'none_to_full',
+          cameraNote: 'Sweeping/crane movement, environment dominant then finds character'
+        },
+        {
+          role: 'CHARACTER_CONTEXT',
+          focus: 'character_in_world',
+          requirement: `${protagonist} established in their world, hint at journey`,
+          characterVisibility: 'full',
+          cameraNote: 'Medium shot, character with world context visible'
+        }
+      ];
+    }
+
+    if (shotCount === 3) {
+      return [
+        {
+          role: 'WORLD_ESTABLISHMENT',
+          focus: 'environment_only',
+          requirement: `Pure environment shot of ${location}. NO CHARACTER VISIBLE. World is the subject.`,
+          characterVisibility: 'none',
+          cameraNote: 'Extreme wide/aerial, sweeping camera, pure world-building'
+        },
+        {
+          role: 'CHARACTER_REVEAL',
+          focus: 'character_discovered',
+          requirement: `Camera discovers ${protagonist} in the environment. First glimpse of our hero.`,
+          characterVisibility: 'revealed',
+          cameraNote: 'Camera finds/lands on character, moment of discovery'
+        },
+        {
+          role: 'CHARACTER_CONTEXT',
+          focus: 'character_motivation',
+          requirement: `${protagonist} in context - what draws them, hint at the journey ahead`,
+          characterVisibility: 'full',
+          cameraNote: 'Medium shot, establish character purpose and story hook'
+        }
+      ];
+    }
+
+    // 4+ shots - full Hollywood structure
+    return [
+      {
+        role: 'WORLD_ESTABLISHMENT',
+        focus: 'environment_only',
+        requirement: `Pure environment shot of ${location}. NO CHARACTER VISIBLE. Establish the scale and uniqueness of this world.`,
+        characterVisibility: 'none',
+        cameraNote: 'Extreme wide/aerial/crane, sweeping movement, world is the star'
+      },
+      {
+        role: 'WORLD_DETAIL',
+        focus: 'environment_with_hint',
+        requirement: `Continue exploring ${location}. Character may appear as TINY SILHOUETTE only - not the focus.`,
+        characterVisibility: 'silhouette_only',
+        cameraNote: 'Wide shot, descending/moving through world, 90% environment'
+      },
+      {
+        role: 'CHARACTER_REVEAL',
+        focus: 'character_discovered',
+        requirement: `Camera discovers ${protagonist}. This is THE MOMENT the audience meets our hero. Make it count.`,
+        characterVisibility: 'revealed',
+        cameraNote: 'Camera arrives at character, reveal moment, medium-wide to medium'
+      },
+      {
+        role: 'CHARACTER_CONTEXT',
+        focus: 'character_hook',
+        requirement: `${protagonist} in their world with purpose. Show what calls to them. Plant the story hook.`,
+        characterVisibility: 'full',
+        cameraNote: 'Medium shot, character looking toward destiny/goal, anticipation'
+      }
+    ].slice(0, shotCount);
+  },
+
+  /**
+   * Apply World-First structure to shot prompts
+   * @param {Array} shots - Array of shot objects
+   * @param {Object} scene - Scene data
+   * @param {number} sceneIndex - Scene index (0 = first scene)
+   * @returns {Array} Enhanced shots with World-First structure
+   */
+  applyWorldFirstStructure(shots, scene, sceneIndex) {
+    if (!this.isOpeningScene(scene, sceneIndex)) {
+      return shots;
+    }
+
+    console.log('[OPENING_SCENE_HANDLER] Applying World-First structure to opening scene');
+
+    const openingStructure = this.getOpeningShotStructure(shots.length, scene);
+    const location = scene?.location?.name || scene?.visualPrompt?.match(/in (?:the |a )?([^,\.]+)/i)?.[1] || 'the world';
+    const characters = scene?.charactersInScene || [];
+    const protagonist = characters[0] || 'the protagonist';
+
+    return shots.map((shot, idx) => {
+      const structure = openingStructure[idx];
+      if (!structure) return shot;
+
+      // Build World-First enhanced prompt
+      const worldFirstPrefix = this.buildWorldFirstPrefix(structure, location, protagonist, idx);
+      const originalPrompt = shot.videoPrompt || shot.prompt || '';
+
+      // Enhance the prompt with World-First requirements
+      const enhancedPrompt = `[OPENING SCENE - ${structure.role}]
+${structure.requirement}
+
+Camera: ${structure.cameraNote}
+Character Visibility: ${structure.characterVisibility}
+
+${worldFirstPrefix}
+
+${originalPrompt}`;
+
+      return {
+        ...shot,
+        videoPrompt: enhancedPrompt,
+        openingStructure: {
+          role: structure.role,
+          focus: structure.focus,
+          characterVisibility: structure.characterVisibility,
+          isWorldFirst: idx < 2
+        }
+      };
+    });
+  },
+
+  /**
+   * Build World-First prefix based on shot role
+   */
+  buildWorldFirstPrefix(structure, location, protagonist, shotIndex) {
+    switch (structure.role) {
+      case 'WORLD_ESTABLISHMENT':
+        return `CRITICAL: This shot must show ONLY the environment. ${protagonist} should NOT be visible.
+Focus entirely on ${location} - its scale, atmosphere, unique elements.
+The audience needs to understand THIS WORLD before meeting the character.
+Think: Opening of Blade Runner, Lord of the Rings, Avatar - world first, always.`;
+
+      case 'WORLD_DETAIL':
+        return `Continue building the world of ${location}.
+If ${protagonist} appears, they should be a TINY figure - barely noticeable.
+The environment remains 90% of the visual focus.
+We're still in world-building mode.`;
+
+      case 'WORLD_THEN_REVEAL':
+        return `Start with environment, then REVEAL ${protagonist}.
+First half: Pure ${location} establishment.
+Second half: Camera discovers ${protagonist}.
+The reveal should feel like a discovery, not a cut-to.`;
+
+      case 'CHARACTER_REVEAL':
+        return `THE REVEAL MOMENT: Camera discovers ${protagonist}.
+This is when the audience MEETS our hero for the first time.
+Make this moment visually memorable - good framing, good lighting.
+${protagonist} should be doing something that defines them.`;
+
+      case 'CHARACTER_CONTEXT':
+        return `${protagonist} is now established. Show them in their world.
+What calls to them? What's their purpose? Plant the story hook.
+They might look toward something in the distance - their destiny.
+End this shot with anticipation of the journey ahead.`;
+
+      default:
+        return '';
+    }
+  },
+
+  /**
+   * Validate that opening scene follows World-First rules
+   */
+  validateWorldFirst(shots, sceneIndex) {
+    if (sceneIndex !== 0) return { valid: true, warnings: [] };
+
+    const warnings = [];
+
+    if (shots.length > 0) {
+      const firstShot = shots[0];
+      const prompt = (firstShot.videoPrompt || firstShot.prompt || '').toLowerCase();
+
+      // Check if first shot mentions character prominently
+      const characterPatterns = [
+        /^(?!\[opening).*\b(stands?|walks?|runs?|looks?|watches?|sees?)\b/i,
+        /\bclose-?up\b.*\bface\b/i,
+        /\b(he|she|they)\s+(is|are)\s+/i
+      ];
+
+      for (const pattern of characterPatterns) {
+        if (pattern.test(prompt) && !prompt.includes('no character') && !prompt.includes('environment')) {
+          warnings.push({
+            type: 'character_too_early',
+            message: 'Shot 1 may focus on character too early. Opening should establish world first.',
+            suggestion: 'Consider starting with pure environment shot before introducing character.'
+          });
+          break;
+        }
+      }
+    }
+
+    return {
+      valid: warnings.length === 0,
+      warnings
+    };
+  },
+
+  /**
+   * Get opening scene choreography beats
+   */
+  getOpeningChoreographyBeats(scene) {
+    const characters = scene?.charactersInScene || [];
+    const protagonist = characters[0] || 'the protagonist';
+    const location = scene?.location?.name || 'the world';
+
+    return [
+      {
+        beat: 1,
+        timing: '0-2s',
+        phase: 'WORLD_ONLY',
+        action: `Aerial/wide view of ${location}. No character visible. Pure environment establishment.`,
+        characterStates: {},
+        environmentState: `${location} in full glory - scale, atmosphere, unique visual elements`,
+        cameraNote: 'Sweeping crane/drone, extreme wide, world is the subject',
+        intensity: 0.3
+      },
+      {
+        beat: 2,
+        timing: '2-5s',
+        phase: 'WORLD_EXPLORE',
+        action: `Camera moves through ${location}, revealing details. Tiny silhouette of ${protagonist} may be visible in distance.`,
+        characterStates: {
+          [protagonist]: {
+            position: 'distant, barely visible if at all',
+            gesture: 'N/A - too far',
+            expression: 'N/A - too far',
+            bodyLanguage: 'silhouette only'
+          }
+        },
+        environmentState: 'World details: architecture, atmosphere, mood, unique elements',
+        cameraNote: 'Descending/tracking through world, maintaining wide perspective',
+        intensity: 0.5
+      },
+      {
+        beat: 3,
+        timing: '5-8s',
+        phase: 'CHARACTER_REVEAL',
+        action: `Camera discovers ${protagonist}. The reveal moment - audience meets our hero.`,
+        characterStates: {
+          [protagonist]: {
+            position: 'center frame, properly revealed',
+            gesture: 'doing something character-defining',
+            expression: 'focused, in their element',
+            bodyLanguage: 'confident, purposeful'
+          }
+        },
+        environmentState: 'World frames character, provides context',
+        cameraNote: 'Camera arrives at/finds character, medium-wide to medium',
+        intensity: 0.7
+      },
+      {
+        beat: 4,
+        timing: '8-10s',
+        phase: 'STORY_HOOK',
+        action: `${protagonist} in context. They sense/see something that will drive the story. The hook is planted.`,
+        characterStates: {
+          [protagonist]: {
+            position: 'medium shot, character dominant',
+            gesture: 'looking toward destiny/goal',
+            expression: 'anticipation, determination, or concern',
+            bodyLanguage: 'ready for what comes next'
+          }
+        },
+        environmentState: 'Something in the distance calls - the story hook visible',
+        cameraNote: 'Hold on character with goal/destiny visible in frame',
+        intensity: 0.6
+      }
+    ];
+  }
+};
+
+// =============================================================================
 // HOLLYWOOD_CHOREOGRAPHER - Master Orchestrator
 // Combines all 6 engines into complete choreographed video prompts
 // =============================================================================
@@ -46528,10 +46891,43 @@ exports.creationWizardDecomposeSceneToShots = functions
     const continuitySummary = VISUAL_CONTINUITY_ENGINE.getContinuitySummary(continuityShots);
     console.log(`[creationWizardDecomposeSceneToShots] ${continuitySummary}`);
 
+    // STEP 5.9: OPENING SCENE WORLD-FIRST STRUCTURE
+    // Apply Hollywood "World-First" structure to opening scenes
+    // Rule: Opening scenes must establish WORLD before CHARACTER
+    let worldFirstShots = continuityShots;
+    const currentSceneIndex = sceneIndex ?? 0;
+
+    if (OPENING_SCENE_HANDLER.isOpeningScene(scene, currentSceneIndex)) {
+      console.log(`[creationWizardDecomposeSceneToShots] Scene ${scene.id} is OPENING SCENE - applying World-First structure`);
+
+      try {
+        // Apply World-First enhancement to shots
+        worldFirstShots = OPENING_SCENE_HANDLER.applyWorldFirstStructure(
+          continuityShots,
+          scene,
+          currentSceneIndex
+        );
+
+        // Validate World-First compliance
+        const validation = OPENING_SCENE_HANDLER.validateWorldFirst(worldFirstShots, currentSceneIndex);
+        if (!validation.valid) {
+          console.warn(`[creationWizardDecomposeSceneToShots] World-First warnings:`, validation.warnings);
+        }
+
+        console.log(`[creationWizardDecomposeSceneToShots] World-First structure applied: ${worldFirstShots.length} shots enhanced for cinematic opening`);
+      } catch (openingError) {
+        console.error(`[creationWizardDecomposeSceneToShots] World-First enhancement failed:`, openingError.message);
+        // Continue with original shots
+        worldFirstShots = continuityShots;
+      }
+    }
+
     // STEP 6: Normalize shots with all required fields
     // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, and visualContinuity
-    const normalizedShots = continuityShots.map((shot, idx) => {
-      const isLast = idx === continuityShots.length - 1;
+    // IMPORTANT: Use worldFirstShots (enhanced for opening scenes) instead of continuityShots
+    const normalizedShots = worldFirstShots.map((shot, idx) => {
+      const isLast = idx === worldFirstShots.length - 1;
+      const isFirst = idx === 0;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
       return {
@@ -46577,10 +46973,16 @@ exports.creationWizardDecomposeSceneToShots = functions
         hollywoodChoreography: shot.hollywoodChoreography || null,
         hasChoreography: !!shot.hollywoodChoreography?.hasEnrichment,
         captureFrame: shot.hollywoodChoreography?.captureFrame || null,
+        // NEW: Opening scene World-First structure
+        openingStructure: shot.openingStructure || null,
+        isWorldFirst: shot.openingStructure?.isWorldFirst || false,
         // Generation status
-        imageUrl: null,
+        // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
+        // This ensures when user regenerates scene image, Shot 1 stays in sync
+        imageUrl: isFirst && scene.imageUrl ? scene.imageUrl : null,
+        syncedWithScene: isFirst && scene.imageUrl ? true : false,
         videoUrl: null,
-        status: 'pending'
+        status: isFirst && scene.imageUrl ? 'image_synced' : 'pending'
       };
     });
 
@@ -46636,6 +47038,19 @@ exports.creationWizardDecomposeSceneToShots = functions
         applied: hasChoreography,
         enrichmentSource: hasChoreography ? 'script_generation' : 'none',
         shotsWithChoreography: normalizedShots.filter(s => s.hasChoreography).length
+      },
+      // Opening Scene World-First status
+      openingSceneEnforcement: {
+        isOpeningScene: OPENING_SCENE_HANDLER.isOpeningScene(scene, currentSceneIndex),
+        worldFirstApplied: worldFirstShots !== continuityShots,
+        shotsWithWorldFirst: normalizedShots.filter(s => s.isWorldFirst).length,
+        openingStructure: normalizedShots.slice(0, 4).map(s => s.openingStructure?.role || null).filter(Boolean)
+      },
+      // Shot-Scene Image Sync status
+      shotSceneSync: {
+        shot1SyncedWithScene: normalizedShots[0]?.syncedWithScene || false,
+        sceneImageUrl: scene.imageUrl || null,
+        shot1ImageUrl: normalizedShots[0]?.imageUrl || null
       }
     };
 
