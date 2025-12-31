@@ -43068,6 +43068,686 @@ const AUDIO_BEAT_ENGINE = {
   }
 };
 
+// =============================================================================
+// SHOT_SEQUENCE_VALIDATOR - Cinematographic Progression Validation
+// =============================================================================
+/**
+ * SHOT_SEQUENCE_VALIDATOR
+ *
+ * Validates that shot sequences follow cinematographic best practices.
+ * Ensures camera progressions are logical and visually coherent.
+ *
+ * Validates:
+ * - Shot type progression (wide → medium → close-up pattern)
+ * - Camera movement variety
+ * - Transition logic between shots
+ * - Visual storytelling flow
+ */
+const SHOT_SEQUENCE_VALIDATOR = {
+
+  // Valid shot type progressions (cinematographic rules)
+  VALID_PROGRESSIONS: {
+    'establishing': ['wide', 'medium_wide', 'medium'],
+    'wide': ['medium_wide', 'medium', 'establishing'],
+    'medium_wide': ['medium', 'close_up', 'wide'],
+    'medium': ['close_up', 'medium_wide', 'extreme_close_up'],
+    'close_up': ['extreme_close_up', 'medium', 'cutaway'],
+    'extreme_close_up': ['close_up', 'medium', 'wide'],
+    'cutaway': ['medium', 'close_up', 'wide'],
+    'over_shoulder': ['close_up', 'medium', 'over_shoulder'],
+    'two_shot': ['close_up', 'medium', 'over_shoulder'],
+    'pov': ['close_up', 'medium', 'reaction']
+  },
+
+  // Camera movement variety rules
+  MOVEMENT_CATEGORIES: {
+    static: ['static', 'locked', 'tripod'],
+    pan: ['pan_left', 'pan_right', 'pan'],
+    tilt: ['tilt_up', 'tilt_down', 'tilt'],
+    dolly: ['dolly_in', 'dolly_out', 'push', 'pull'],
+    track: ['track_left', 'track_right', 'tracking'],
+    crane: ['crane_up', 'crane_down', 'crane', 'jib'],
+    handheld: ['handheld', 'shaky'],
+    steadicam: ['steadicam', 'gimbal', 'smooth'],
+    drone: ['drone', 'aerial']
+  },
+
+  /**
+   * Validate a sequence of shots
+   * @param {Array} shots - Array of shot objects
+   * @returns {Object} Validation result with issues and suggestions
+   */
+  validateSequence(shots) {
+    if (!shots || shots.length === 0) {
+      return {
+        valid: true,
+        score: 100,
+        issues: [],
+        suggestions: []
+      };
+    }
+
+    const issues = [];
+    const suggestions = [];
+    let score = 100;
+
+    // Run all validation checks
+    const progressionResult = this.validateShotProgression(shots);
+    issues.push(...progressionResult.issues);
+    suggestions.push(...progressionResult.suggestions);
+    score -= progressionResult.penalty;
+
+    const movementResult = this.validateMovementVariety(shots);
+    issues.push(...movementResult.issues);
+    suggestions.push(...movementResult.suggestions);
+    score -= movementResult.penalty;
+
+    const transitionResult = this.validateTransitions(shots);
+    issues.push(...transitionResult.issues);
+    suggestions.push(...transitionResult.suggestions);
+    score -= transitionResult.penalty;
+
+    const flowResult = this.validateVisualFlow(shots);
+    issues.push(...flowResult.issues);
+    suggestions.push(...flowResult.suggestions);
+    score -= flowResult.penalty;
+
+    return {
+      valid: score >= 70,
+      score: Math.max(0, score),
+      issues,
+      suggestions,
+      progressionValid: progressionResult.issues.length === 0,
+      movementVariety: movementResult.variety,
+      transitionsSmooth: transitionResult.issues.length === 0
+    };
+  },
+
+  /**
+   * Validate shot type progression
+   */
+  validateShotProgression(shots) {
+    const issues = [];
+    const suggestions = [];
+    let penalty = 0;
+
+    for (let i = 0; i < shots.length - 1; i++) {
+      const current = this.normalizeShotType(shots[i].shotType);
+      const next = this.normalizeShotType(shots[i + 1].shotType);
+
+      // Check if progression is valid
+      const validNextShots = this.VALID_PROGRESSIONS[current] || [];
+
+      // Jump detection (e.g., establishing directly to extreme close-up)
+      if (this.isJumpCut(current, next)) {
+        issues.push({
+          type: 'jump_cut',
+          location: `Shot ${i + 1} → ${i + 2}`,
+          message: `Jump cut detected: ${current} → ${next}. Consider adding intermediate shot.`
+        });
+        penalty += 5;
+        suggestions.push(`Insert a ${this.suggestIntermediateShot(current, next)} between shots ${i + 1} and ${i + 2}`);
+      }
+    }
+
+    // Check for shot type variety
+    const shotTypes = shots.map(s => this.normalizeShotType(s.shotType));
+    const uniqueTypes = new Set(shotTypes);
+    if (uniqueTypes.size < Math.min(3, shots.length)) {
+      issues.push({
+        type: 'low_variety',
+        message: `Low shot type variety. Only ${uniqueTypes.size} unique types in ${shots.length} shots.`
+      });
+      penalty += 5;
+      suggestions.push('Add more variety in shot types for visual interest');
+    }
+
+    return { issues, suggestions, penalty };
+  },
+
+  /**
+   * Validate camera movement variety
+   */
+  validateMovementVariety(shots) {
+    const issues = [];
+    const suggestions = [];
+    let penalty = 0;
+
+    const movements = shots.map(s => this.normalizeMovement(s.cameraMovement));
+    const categories = movements.map(m => this.categorizeMovement(m));
+
+    // Check for consecutive same movements
+    let sameMovementCount = 1;
+    for (let i = 1; i < categories.length; i++) {
+      if (categories[i] === categories[i - 1]) {
+        sameMovementCount++;
+        if (sameMovementCount >= 3) {
+          issues.push({
+            type: 'repetitive_movement',
+            location: `Shots ${i - 1} to ${i + 1}`,
+            message: `Repetitive camera movement: ${sameMovementCount} consecutive ${categories[i]} movements`
+          });
+          penalty += 3;
+        }
+      } else {
+        sameMovementCount = 1;
+      }
+    }
+
+    // Calculate movement variety
+    const uniqueCategories = new Set(categories);
+    const variety = (uniqueCategories.size / Object.keys(this.MOVEMENT_CATEGORIES).length) * 100;
+
+    if (variety < 30 && shots.length >= 4) {
+      suggestions.push('Consider adding more variety in camera movements (pan, dolly, crane, etc.)');
+    }
+
+    return { issues, suggestions, penalty, variety };
+  },
+
+  /**
+   * Validate transitions between shots
+   */
+  validateTransitions(shots) {
+    const issues = [];
+    const suggestions = [];
+    let penalty = 0;
+
+    // Check for 180-degree rule violations (if we had spatial data)
+    // Check for matching action (if action data available)
+
+    for (let i = 0; i < shots.length - 1; i++) {
+      const current = shots[i];
+      const next = shots[i + 1];
+
+      // Check for jarring transitions
+      const currentIntensity = current.cinematicPhysics?.intensity || 0.5;
+      const nextIntensity = next.cinematicPhysics?.intensity || 0.5;
+
+      // Sudden intensity jump without buildup
+      if (Math.abs(nextIntensity - currentIntensity) > 0.5) {
+        suggestions.push(`Shot ${i + 1} → ${i + 2}: Large intensity change (${(currentIntensity * 100).toFixed(0)}% → ${(nextIntensity * 100).toFixed(0)}%). Consider smoother transition.`);
+      }
+    }
+
+    return { issues, suggestions, penalty };
+  },
+
+  /**
+   * Validate visual storytelling flow
+   */
+  validateVisualFlow(shots) {
+    const issues = [];
+    const suggestions = [];
+    let penalty = 0;
+
+    // Opening shot check
+    if (shots.length > 0) {
+      const firstShot = this.normalizeShotType(shots[0].shotType);
+      if (!['establishing', 'wide', 'medium_wide'].includes(firstShot)) {
+        suggestions.push(`Consider starting with an establishing or wide shot instead of ${firstShot}`);
+      }
+    }
+
+    // Closing shot check
+    if (shots.length > 1) {
+      const lastShot = this.normalizeShotType(shots[shots.length - 1].shotType);
+      // Good endings: close-up (emotional), medium (balanced), wide (context)
+      if (lastShot === 'extreme_close_up') {
+        suggestions.push('Consider pulling back slightly for the final shot to give context');
+      }
+    }
+
+    // Pacing check (shot duration variance)
+    const durations = shots.map(s => s.duration || 10);
+    const avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
+    const variance = durations.reduce((sum, d) => sum + Math.pow(d - avgDuration, 2), 0) / durations.length;
+
+    if (variance < 0.5 && shots.length >= 3) {
+      suggestions.push('Consider varying shot durations for better pacing and rhythm');
+    }
+
+    return { issues, suggestions, penalty };
+  },
+
+  /**
+   * Normalize shot type string
+   */
+  normalizeShotType(shotType) {
+    if (!shotType) return 'medium';
+    const type = shotType.toLowerCase().replace(/[\s-]/g, '_');
+
+    if (type.includes('establish')) return 'establishing';
+    if (type.includes('extreme') && type.includes('close')) return 'extreme_close_up';
+    if (type.includes('close')) return 'close_up';
+    if (type.includes('medium') && type.includes('wide')) return 'medium_wide';
+    if (type.includes('medium')) return 'medium';
+    if (type.includes('wide')) return 'wide';
+    if (type.includes('over') && type.includes('shoulder')) return 'over_shoulder';
+    if (type.includes('two')) return 'two_shot';
+    if (type.includes('pov') || type.includes('point')) return 'pov';
+    if (type.includes('cutaway')) return 'cutaway';
+
+    return 'medium';
+  },
+
+  /**
+   * Normalize camera movement
+   */
+  normalizeMovement(movement) {
+    if (!movement) return 'static';
+    return movement.toLowerCase().replace(/[\s-]/g, '_');
+  },
+
+  /**
+   * Categorize movement type
+   */
+  categorizeMovement(movement) {
+    const m = movement.toLowerCase();
+    for (const [category, keywords] of Object.entries(this.MOVEMENT_CATEGORIES)) {
+      if (keywords.some(k => m.includes(k))) {
+        return category;
+      }
+    }
+    return 'static';
+  },
+
+  /**
+   * Check if this is a jarring jump cut
+   */
+  isJumpCut(current, next) {
+    const jumpPairs = [
+      ['establishing', 'extreme_close_up'],
+      ['establishing', 'close_up'],
+      ['wide', 'extreme_close_up'],
+      ['extreme_close_up', 'establishing'],
+      ['extreme_close_up', 'wide']
+    ];
+
+    return jumpPairs.some(([a, b]) =>
+      (current === a && next === b) || (current === b && next === a)
+    );
+  },
+
+  /**
+   * Suggest intermediate shot for jump cuts
+   */
+  suggestIntermediateShot(from, to) {
+    if (from === 'establishing' || from === 'wide') {
+      return 'medium or medium_wide';
+    }
+    if (to === 'extreme_close_up') {
+      return 'close_up';
+    }
+    return 'medium';
+  },
+
+  /**
+   * Get sequence summary for metadata
+   */
+  getSequenceSummary(shots) {
+    const validation = this.validateSequence(shots);
+
+    return {
+      valid: validation.valid,
+      score: validation.score,
+      issueCount: validation.issues.length,
+      suggestionCount: validation.suggestions.length,
+      progressionValid: validation.progressionValid,
+      movementVariety: validation.movementVariety?.toFixed(1) + '%',
+      transitionsSmooth: validation.transitionsSmooth
+    };
+  }
+};
+
+// =============================================================================
+// KEYFRAME_QUALITY_ENGINE - Image Quality Validation for Video Generation
+// =============================================================================
+/**
+ * KEYFRAME_QUALITY_ENGINE
+ *
+ * Validates keyframe images before video generation.
+ * Based on 2025 AI filmmaking: "The cleaner the keyframe, the less
+ * the video model needs to invent—and the more stable your motion becomes."
+ *
+ * Validates:
+ * - Subject clarity (faces unobscured, clear focus)
+ * - Motion-readiness (pose suitable for animation)
+ * - Technical quality (composition, lighting, framing)
+ * - AI-specific requirements (avoid problematic elements)
+ */
+const KEYFRAME_QUALITY_ENGINE = {
+
+  // Quality thresholds
+  THRESHOLDS: {
+    minSubjectVisibility: 0.3,  // At least 30% of frame
+    maxCrowding: 5,             // Max characters before quality drops
+    minContrast: 0.4,           // Minimum contrast for clear motion
+    optimalAspectRatios: ['16:9', '4:3', '1:1', '9:16']
+  },
+
+  /**
+   * Analyze image prompt for keyframe quality indicators
+   * @param {Object} shot - Shot data with imagePrompt
+   * @param {Object} scene - Scene context
+   * @returns {Object} Quality assessment
+   */
+  analyzeKeyframeQuality(shot, scene) {
+    const imagePrompt = shot?.imagePrompt || shot?.prompt || '';
+    const videoPrompt = shot?.videoPrompt || '';
+    const shotType = shot?.shotType || 'medium';
+
+    return {
+      subjectClarity: this.assessSubjectClarity(imagePrompt, shotType),
+      motionReadiness: this.assessMotionReadiness(imagePrompt, videoPrompt),
+      technicalQuality: this.assessTechnicalQuality(imagePrompt),
+      aiCompatibility: this.assessAICompatibility(imagePrompt),
+      recommendations: this.generateRecommendations(imagePrompt, shotType)
+    };
+  },
+
+  /**
+   * Assess subject clarity in the prompt
+   */
+  assessSubjectClarity(prompt, shotType) {
+    const lowerPrompt = prompt.toLowerCase();
+    const issues = [];
+    let score = 100;
+
+    // Face visibility issues
+    if (/back\s+view|from\s+behind|rear\s+view/i.test(prompt)) {
+      issues.push('Subject shown from behind - face not visible');
+      score -= 15;
+    }
+    if (/obscured|hidden|covered\s+face|mask|silhouette/i.test(prompt)) {
+      issues.push('Face may be obscured or hidden');
+      score -= 20;
+    }
+    if (/crowd|group|many\s+people|multiple\s+characters/i.test(prompt)) {
+      issues.push('Multiple subjects may reduce individual clarity');
+      score -= 10;
+    }
+
+    // Focus issues
+    if (/blur|blurry|out\s+of\s+focus|soft\s+focus/i.test(prompt)) {
+      issues.push('Blur mentioned - may affect video generation');
+      score -= 15;
+    }
+    if (/motion\s+blur/i.test(prompt)) {
+      issues.push('Motion blur in keyframe can cause video artifacts');
+      score -= 20;
+    }
+
+    // Good indicators
+    if (/clear\s+view|facing\s+camera|front\s+view|visible\s+face/i.test(prompt)) {
+      score += 10;
+    }
+    if (/sharp|crisp|detailed|high\s+definition/i.test(prompt)) {
+      score += 5;
+    }
+
+    // Shot type specific
+    if ((shotType.includes('close') || shotType.includes('medium')) &&
+        !/(face|portrait|expression|eyes)/i.test(prompt)) {
+      issues.push('Close/medium shot without clear face description');
+      score -= 10;
+    }
+
+    return {
+      score: Math.max(0, Math.min(100, score)),
+      issues,
+      suitable: score >= 70
+    };
+  },
+
+  /**
+   * Assess motion readiness of the keyframe
+   */
+  assessMotionReadiness(imagePrompt, videoPrompt) {
+    const combined = `${imagePrompt} ${videoPrompt}`.toLowerCase();
+    const issues = [];
+    let score = 100;
+
+    // Static poses that are hard to animate
+    if (/perfectly\s+still|frozen|statue|completely\s+motionless/i.test(combined)) {
+      issues.push('Extremely static pose - may create unnatural video motion');
+      score -= 10;
+    }
+
+    // Problematic positions
+    if (/lying\s+down|on\s+the\s+ground|prone|supine/i.test(combined)) {
+      issues.push('Lying position can be difficult for video models');
+      score -= 15;
+    }
+    if (/extreme\s+angle|dutch\s+angle|tilted/i.test(combined)) {
+      issues.push('Extreme camera angle may complicate motion');
+      score -= 5;
+    }
+
+    // Good motion indicators
+    if (/ready\s+to|about\s+to|beginning\s+to|starting\s+to/i.test(combined)) {
+      score += 10;
+    }
+    if (/dynamic|in\s+motion|moving|walking|running/i.test(combined)) {
+      score += 5;
+    }
+    if (/natural\s+pose|relaxed\s+stance|balanced/i.test(combined)) {
+      score += 5;
+    }
+
+    // Action potential
+    const hasActionPotential = /arms|legs|hands|body|torso|movement/i.test(combined);
+    if (!hasActionPotential) {
+      issues.push('Limited motion description - add body/movement details');
+      score -= 5;
+    }
+
+    return {
+      score: Math.max(0, Math.min(100, score)),
+      issues,
+      motionReady: score >= 70
+    };
+  },
+
+  /**
+   * Assess technical quality indicators
+   */
+  assessTechnicalQuality(prompt) {
+    const lowerPrompt = prompt.toLowerCase();
+    const issues = [];
+    let score = 100;
+
+    // Lighting issues
+    if (/harsh\s+shadows|extreme\s+contrast|backlit\s+only/i.test(prompt)) {
+      issues.push('Challenging lighting may affect video generation');
+      score -= 10;
+    }
+    if (/dark|underexposed|low\s+light|shadows/i.test(prompt) &&
+        !/dramatic|cinematic|moody/i.test(prompt)) {
+      issues.push('Low light conditions may reduce video quality');
+      score -= 5;
+    }
+
+    // Composition issues
+    if (/cropped|cut\s+off|edge\s+of\s+frame/i.test(prompt)) {
+      issues.push('Subject cropping may cause issues in video');
+      score -= 10;
+    }
+
+    // Quality indicators (positive)
+    if (/cinematic|professional|high\s+quality|4K|8K/i.test(prompt)) {
+      score += 10;
+    }
+    if (/well\s+lit|balanced\s+lighting|natural\s+light/i.test(prompt)) {
+      score += 5;
+    }
+    if (/sharp\s+focus|detailed|crisp/i.test(prompt)) {
+      score += 5;
+    }
+
+    return {
+      score: Math.max(0, Math.min(100, score)),
+      issues,
+      technicallySound: score >= 70
+    };
+  },
+
+  /**
+   * Assess AI video generation compatibility
+   */
+  assessAICompatibility(prompt) {
+    const lowerPrompt = prompt.toLowerCase();
+    const issues = [];
+    const warnings = [];
+    let score = 100;
+
+    // Known problematic elements for AI video
+    if (/text|words|letters|writing|sign\s+with|banner\s+saying/i.test(prompt)) {
+      issues.push('Text in image can cause artifacts in video');
+      score -= 20;
+    }
+    if (/mirror|reflection|glass/i.test(prompt)) {
+      warnings.push('Reflections can be challenging for AI video');
+      score -= 5;
+    }
+    if (/water\s+surface|transparent|translucent/i.test(prompt)) {
+      warnings.push('Transparent/water surfaces may have artifacts');
+      score -= 5;
+    }
+    if (/fingers|hands\s+close|detailed\s+hands/i.test(prompt)) {
+      warnings.push('Hand details can be problematic in AI video');
+      score -= 5;
+    }
+    if (/crowd|many\s+faces|group\s+of\s+people/i.test(prompt)) {
+      warnings.push('Multiple faces increase consistency challenges');
+      score -= 10;
+    }
+
+    // Positive AI-friendly elements
+    if (/simple\s+background|clean\s+composition|uncluttered/i.test(prompt)) {
+      score += 5;
+    }
+    if (/single\s+subject|one\s+person|lone\s+figure/i.test(prompt)) {
+      score += 5;
+    }
+
+    return {
+      score: Math.max(0, Math.min(100, score)),
+      issues,
+      warnings,
+      aiCompatible: score >= 70
+    };
+  },
+
+  /**
+   * Generate recommendations for improving keyframe quality
+   */
+  generateRecommendations(prompt, shotType) {
+    const recommendations = [];
+    const lowerPrompt = prompt.toLowerCase();
+
+    // Subject recommendations
+    if (!/(face|portrait|expression|looking)/i.test(prompt)) {
+      recommendations.push('Add clear face/expression description for character shots');
+    }
+
+    // Composition recommendations
+    if (!/(centered|framing|composition|rule\s+of\s+thirds)/i.test(prompt)) {
+      recommendations.push('Specify composition (centered, rule of thirds, etc.)');
+    }
+
+    // Lighting recommendations
+    if (!/(light|lit|lighting|sun|shadow)/i.test(prompt)) {
+      recommendations.push('Add lighting description for more controlled output');
+    }
+
+    // Quality recommendations
+    if (!/(quality|resolution|4K|cinematic|professional)/i.test(prompt)) {
+      recommendations.push('Add quality indicators (cinematic, 4K, professional)');
+    }
+
+    // Shot-type specific
+    if (shotType.includes('close') && !/(expression|emotion|eyes|face)/i.test(prompt)) {
+      recommendations.push('Close-up shots should emphasize facial expression/emotion');
+    }
+    if (shotType.includes('wide') && !/(environment|setting|location|landscape)/i.test(prompt)) {
+      recommendations.push('Wide shots should describe the environment/setting');
+    }
+
+    return recommendations;
+  },
+
+  /**
+   * Validate a shot's keyframe quality
+   * @param {Object} shot - Shot data
+   * @param {Object} scene - Scene context
+   * @returns {Object} Validation result with score and recommendations
+   */
+  validateKeyframe(shot, scene) {
+    const analysis = this.analyzeKeyframeQuality(shot, scene);
+
+    // Calculate overall score
+    const overallScore = Math.round(
+      (analysis.subjectClarity.score * 0.3) +
+      (analysis.motionReadiness.score * 0.3) +
+      (analysis.technicalQuality.score * 0.2) +
+      (analysis.aiCompatibility.score * 0.2)
+    );
+
+    // Collect all issues
+    const allIssues = [
+      ...analysis.subjectClarity.issues,
+      ...analysis.motionReadiness.issues,
+      ...analysis.technicalQuality.issues,
+      ...analysis.aiCompatibility.issues
+    ];
+
+    return {
+      valid: overallScore >= 70,
+      score: overallScore,
+      grade: this.scoreToGrade(overallScore),
+      issues: allIssues,
+      warnings: analysis.aiCompatibility.warnings || [],
+      recommendations: analysis.recommendations,
+      details: {
+        subjectClarity: analysis.subjectClarity.score,
+        motionReadiness: analysis.motionReadiness.score,
+        technicalQuality: analysis.technicalQuality.score,
+        aiCompatibility: analysis.aiCompatibility.score
+      }
+    };
+  },
+
+  /**
+   * Convert score to letter grade
+   */
+  scoreToGrade(score) {
+    if (score >= 90) return 'A';
+    if (score >= 80) return 'B';
+    if (score >= 70) return 'C';
+    if (score >= 60) return 'D';
+    return 'F';
+  },
+
+  /**
+   * Get keyframe quality summary for metadata
+   */
+  getKeyframeSummary(shot, scene) {
+    const validation = this.validateKeyframe(shot, scene);
+
+    return {
+      valid: validation.valid,
+      score: validation.score,
+      grade: validation.grade,
+      issueCount: validation.issues.length,
+      warningCount: validation.warnings.length,
+      recommendationCount: validation.recommendations.length,
+      subjectClarity: validation.details.subjectClarity,
+      motionReadiness: validation.details.motionReadiness
+    };
+  }
+};
+
 /**
  * ENVIRONMENT_RESPONSE_SYSTEM
  * Environment reacts to character actions and emotions
@@ -48803,6 +49483,20 @@ exports.creationWizardDecomposeSceneToShots = functions
         lipSyncRequired: normalizedShots.some(s => s.audioBeat?.lipSyncRequired),
         ambienceTypes: [...new Set(normalizedShots.map(s => s.audioAmbience).filter(Boolean))],
         musicMoods: [...new Set(normalizedShots.map(s => s.audioBeat?.musicMood).filter(Boolean))]
+      },
+      // Shot Sequence Validation status
+      shotSequenceValidation: SHOT_SEQUENCE_VALIDATOR.getSequenceSummary(normalizedShots),
+      // Keyframe Quality Check status
+      keyframeQuality: {
+        averageScore: Math.round(normalizedShots.reduce((sum, shot) => {
+          const quality = KEYFRAME_QUALITY_ENGINE.getKeyframeSummary(shot, scene);
+          return sum + quality.score;
+        }, 0) / (normalizedShots.length || 1)),
+        shotsAnalyzed: normalizedShots.length,
+        shotGrades: normalizedShots.map(shot => {
+          const quality = KEYFRAME_QUALITY_ENGINE.getKeyframeSummary(shot, scene);
+          return { shotId: shot.id, grade: quality.grade, score: quality.score };
+        })
       }
     };
 
