@@ -27137,6 +27137,99 @@ Refer to the DEEP STORY ARCHITECTURE section in the system prompt.
 You MUST incorporate all characters, world-building, and visual signature elements.
 This is NOT optional - failure to use this enrichment data will result in generic content.
 ` : ''}
+
+=== HOLLYWOOD CHOREOGRAPHY ENRICHMENT (CRITICAL FOR VIDEO QUALITY) ===
+Each scene MUST include detailed choreography data for AI video generation. This data enables precise 4-beat animation sequences with proper character blocking, physics, and continuity.
+
+📍 PERFORMANCE BLUEPRINT (Required per scene):
+Define the emotional arc and energy progression:
+- sceneArc: The overall emotional shape ("build_to_climax" | "tension_release" | "steady_build" | "peak_then_calm")
+- overallIntensity: { start: 0.0-1.0, peak: 0.0-1.0, end: 0.0-1.0 }
+- characterEnergy: Map each character's energy through the scene
+  Example: { "Kai": ["hesitant:40%", "curious:60%", "committed:85%", "connected:70%"] }
+
+📍 SPATIAL BLOCKING (Required per scene):
+Define where characters are in the frame and how they move:
+- initialPositions: Where each character starts
+  Format: { "CharName": { stage: "left|center|right", depth: "foreground|midground|background", elevation: "floor|seated|standing|elevated", facing: "camera|away|left|right|character_name" } }
+- finalPositions: Where each character ends (same format)
+- formation: Starting formation ("triangle" | "line" | "scattered" | "facing_pair" | "circle")
+- formationChange: How formation evolves ("triangle → unified line" | "scattered → gathered")
+- keyDistances: Array of distance relationships (["Kai-to-Mei: 8ft → 2ft", "All converge to center"])
+
+📍 EYELINE CHOREOGRAPHY (Required - 4 entries per scene, one per beat):
+Define who looks at whom and when. This creates emotional connection and viewer guidance.
+Array of: { beat: 1-4, from: "CharName" or "All", to: "CharName" or "object" or "distance", emotion: "searching|connecting|avoiding|longing|threatening", duration: "brief|held|lingering" }
+
+Example:
+[
+  { beat: 1, from: "Kai", to: "artifact", emotion: "wary", duration: "held" },
+  { beat: 2, from: "Mei", to: "Kai", emotion: "hopeful", duration: "brief" },
+  { beat: 3, from: "Both", to: "artifact between them", emotion: "shared awe", duration: "held" },
+  { beat: 4, from: "Kai", to: "Mei's eyes", emotion: "gratitude", duration: "lingering" }
+]
+
+📍 BEAT BREAKDOWN (CRITICAL - Exactly 4 beats per scene):
+Divide EVERY scene into 4 timed beats. This is the foundation for video animation.
+
+Beat timing for ${clipDuration}-second shots:
+- Beat 1 (0-2s): ESTABLISH - Set up the visual, characters positioned, scene grounded
+- Beat 2 (2-5s): DEVELOP - Movement begins, action unfolds, tension builds
+- Beat 3 (5-8s): ESCALATE - Key action, peak moment, most visual interest
+- Beat 4 (8-10s): RESOLVE/TRANSITION - Conclude beat, set up continuity to next shot
+
+Each beat requires:
+{
+  beat: 1-4,
+  timing: "0-2s" | "2-5s" | "5-8s" | "8-10s",
+  action: "What happens in this beat (one sentence)",
+  characterStates: {
+    "CharName": {
+      position: "Where in frame (e.g., 'center-left, 3 feet from Mei')",
+      gesture: "What their hands/body are doing (e.g., 'right hand rises slowly, fingers spread')",
+      expression: "What's on their face (e.g., 'conflict visible - desire vs caution, jaw tightens')",
+      bodyLanguage: "Posture and weight (e.g., 'weight shifts forward, breath held, shoulders tense')"
+    }
+  },
+  environmentState: "What the environment is doing (e.g., 'Artifact glow pulses brighter, shadows deepen')",
+  cameraNote: "Camera behavior (e.g., 'Slow push toward hands, shallow focus')",
+  intensity: 0.0-1.0
+}
+
+📍 OBJECT TRACKING (Required if scene has important props):
+Track objects/props through the scene beats:
+{
+  object: "artifact name",
+  states: [
+    { beat: 1, holder: "Mei", visibility: "revealed", position: "cupped in both palms, extended" },
+    { beat: 2, holder: "Mei", visibility: "prominent", position: "extended toward Kai" },
+    { beat: 3, holder: "both", visibility: "central focus", position: "shared grip, lifted between them" },
+    { beat: 4, holder: "both", visibility: "secondary", position: "held together, eye contact primary" }
+  ]
+}
+
+📍 ENVIRONMENTAL CUES (Required - sync environment to action):
+Define how environment reacts to character actions/emotions:
+[
+  { beat: 1, element: "artifact glow", state: "soft pulse", syncedTo: "reveal moment" },
+  { beat: 2, element: "shadows", state: "deepening", syncedTo: "Kai's approach" },
+  { beat: 3, element: "particles + light", state: "flare outward", syncedTo: "contact moment" },
+  { beat: 4, element: "all elements", state: "settling calm", syncedTo: "emotional resolution" }
+]
+
+=== WHY CHOREOGRAPHY MATTERS ===
+Without this data, AI video generation produces:
+- Static characters standing around
+- Random movements not connected to story
+- No emotional progression within shots
+- Poor continuity between shots
+
+WITH this data, AI video generation produces:
+- Precisely choreographed 4-beat sequences
+- Characters moving with purpose and emotion
+- Physics-aware animation (weight, breathing, tension)
+- Professional Hollywood-quality cinematography
+
 === HOLLYWOOD CINEMATOGRAPHY REQUIREMENTS FOR visualPrompt ===
 Each visualPrompt MUST be a RICH, DETAILED cinematographic description with ALL these elements:
 
@@ -27324,7 +27417,99 @@ Return ONLY valid JSON:
         "purpose": "Why this transition - what story beat it serves"
       },
       "charactersInScene": ["Character names from characters array"],
-      "sceneRole": "setup|conflict|rising_action|climax|resolution"
+      "sceneRole": "setup|conflict|rising_action|climax|resolution",
+
+      "performanceBlueprint": {
+        "sceneArc": "build_to_climax|tension_release|steady_build|peak_then_calm",
+        "overallIntensity": { "start": 0.4, "peak": 0.85, "end": 0.7 },
+        "characterEnergy": {
+          "CharacterName": ["emotion:intensity%", "emotion:intensity%", "emotion:intensity%", "emotion:intensity%"]
+        }
+      },
+
+      "spatialBlocking": {
+        "initialPositions": {
+          "CharacterName": { "stage": "left|center|right", "depth": "foreground|midground|background", "elevation": "floor|seated|standing|elevated", "facing": "camera|away|left|right|CharacterName" }
+        },
+        "finalPositions": {
+          "CharacterName": { "stage": "left|center|right", "depth": "foreground|midground|background", "elevation": "floor|seated|standing|elevated", "facing": "camera|away|left|right|CharacterName" }
+        },
+        "formation": "triangle|line|scattered|facing_pair|circle",
+        "formationChange": "formation → new_formation (or 'static' if unchanged)",
+        "keyDistances": ["CharA-to-CharB: Xft → Yft"]
+      },
+
+      "eyelines": [
+        { "beat": 1, "from": "CharacterName", "to": "target", "emotion": "wary|hopeful|threatening|longing", "duration": "brief|held|lingering" },
+        { "beat": 2, "from": "CharacterName", "to": "target", "emotion": "emotion", "duration": "duration" },
+        { "beat": 3, "from": "CharacterName", "to": "target", "emotion": "emotion", "duration": "duration" },
+        { "beat": 4, "from": "CharacterName", "to": "target", "emotion": "emotion", "duration": "duration" }
+      ],
+
+      "beatBreakdown": [
+        {
+          "beat": 1,
+          "timing": "0-2s",
+          "action": "What happens in this beat (one sentence)",
+          "characterStates": {
+            "CharacterName": {
+              "position": "Where in frame with distance from others",
+              "gesture": "What hands/body are doing",
+              "expression": "What is visible on their face",
+              "bodyLanguage": "Posture, weight distribution, tension level"
+            }
+          },
+          "environmentState": "What environment is doing (lighting, particles, atmospheric effects)",
+          "cameraNote": "Camera behavior for this beat",
+          "intensity": 0.5
+        },
+        {
+          "beat": 2,
+          "timing": "2-5s",
+          "action": "Beat 2 action",
+          "characterStates": {},
+          "environmentState": "Environment state",
+          "cameraNote": "Camera note",
+          "intensity": 0.65
+        },
+        {
+          "beat": 3,
+          "timing": "5-8s",
+          "action": "Beat 3 action (usually peak action)",
+          "characterStates": {},
+          "environmentState": "Environment state",
+          "cameraNote": "Camera note",
+          "intensity": 0.85
+        },
+        {
+          "beat": 4,
+          "timing": "8-10s",
+          "action": "Beat 4 action (resolution/transition)",
+          "characterStates": {},
+          "environmentState": "Environment state",
+          "cameraNote": "Camera note",
+          "intensity": 0.7
+        }
+      ],
+
+      "objectTracking": [
+        {
+          "object": "Name of important prop/artifact",
+          "states": [
+            { "beat": 1, "holder": "CharacterName|none", "visibility": "hidden|revealed|prominent|secondary", "position": "Position description" },
+            { "beat": 2, "holder": "CharacterName", "visibility": "visibility", "position": "Position" },
+            { "beat": 3, "holder": "CharacterName", "visibility": "visibility", "position": "Position" },
+            { "beat": 4, "holder": "CharacterName", "visibility": "visibility", "position": "Position" }
+          ]
+        }
+      ],
+
+      "environmentalCues": [
+        { "beat": 1, "element": "wind|light|particles|glow|shadows", "state": "starting|intensifying|calming|shifting", "syncedTo": "What action/emotion triggers this" },
+        { "beat": 2, "element": "element", "state": "state", "syncedTo": "trigger" },
+        { "beat": 3, "element": "element", "state": "state", "syncedTo": "trigger" },
+        { "beat": 4, "element": "element", "state": "state", "syncedTo": "trigger" }
+      ]
     }
   ],
   "cta": "Call-to-action woven naturally into story (not presentation-style)",
@@ -41001,6 +41186,997 @@ exports.PROMPT_CHAIN_ARCHITECTURE = {
 // =============================================================================
 
 // =============================================================================
+// HOLLYWOOD CHOREOGRAPHY ENGINES
+// Six specialized engines that transform enriched scene data into detailed
+// cinematic prompts with precise 4-beat animation sequences
+// =============================================================================
+
+/**
+ * BEAT_TIMELINE_GENERATOR
+ * Divides 10-second shots into 4 timed beats with frame ranges
+ * Beat 1: 0-2s (frames 0-60)   - ESTABLISH
+ * Beat 2: 2-5s (frames 60-150) - DEVELOP
+ * Beat 3: 5-8s (frames 150-240) - ESCALATE
+ * Beat 4: 8-10s (frames 240-300) - RESOLVE
+ */
+const BEAT_TIMELINE_GENERATOR = {
+  /**
+   * Generate beat timeline with frame-level timing
+   * @param {Array} beatBreakdown - Scene's beatBreakdown array from script
+   * @param {number} fps - Frames per second (default 30)
+   * @param {number} shotDuration - Duration of shot in seconds (default 10)
+   * @returns {Array} Enhanced beats with frame timing
+   */
+  generateBeatTimeline(beatBreakdown, fps = 30, shotDuration = 10) {
+    const defaultBeats = [
+      { beat: 1, timing: '0-2s', startFrame: 0, endFrame: 60, duration: 2000, phase: 'ESTABLISH' },
+      { beat: 2, timing: '2-5s', startFrame: 60, endFrame: 150, duration: 3000, phase: 'DEVELOP' },
+      { beat: 3, timing: '5-8s', startFrame: 150, endFrame: 240, duration: 3000, phase: 'ESCALATE' },
+      { beat: 4, timing: '8-10s', startFrame: 240, endFrame: 300, duration: 2000, phase: 'RESOLVE' }
+    ];
+
+    // Merge with provided beatBreakdown or use defaults
+    return defaultBeats.map((beat, i) => {
+      const providedBeat = beatBreakdown?.[i] || {};
+      return {
+        ...beat,
+        action: providedBeat.action || `Beat ${beat.beat} action`,
+        characterStates: providedBeat.characterStates || {},
+        environmentState: providedBeat.environmentState || '',
+        cameraNote: providedBeat.cameraNote || '',
+        intensity: providedBeat.intensity ?? (i === 2 ? 0.85 : i === 0 ? 0.5 : 0.65)
+      };
+    });
+  },
+
+  /**
+   * Get capture frame recommendation based on beat intensities
+   * @param {Array} beats - Processed beat array
+   * @returns {Object} Capture recommendation with frame and reason
+   */
+  getCaptureFrame(beats) {
+    // Find peak intensity beat
+    const peakBeat = beats.reduce((max, beat) =>
+      beat.intensity > max.intensity ? beat : max
+    , beats[0]);
+
+    // Capture at 70% through the peak beat for best visual
+    const capturePoint = 0.7;
+    const frameRange = peakBeat.endFrame - peakBeat.startFrame;
+    const captureFrame = Math.floor(peakBeat.startFrame + (frameRange * capturePoint));
+
+    return {
+      beat: peakBeat.beat,
+      frame: captureFrame,
+      timing: `${(captureFrame / 30).toFixed(1)}s`,
+      action: peakBeat.action,
+      reason: `Peak intensity (${(peakBeat.intensity * 100).toFixed(0)}%) at ${peakBeat.phase} phase`
+    };
+  }
+};
+
+/**
+ * ENSEMBLE_BLOCKING_SYSTEM
+ * Tracks all characters' positions, movements, and eye-lines across beats
+ * Creates a spatial map of the scene for coherent multi-character choreography
+ */
+const ENSEMBLE_BLOCKING_SYSTEM = {
+  /**
+   * Generate comprehensive blocking data from spatial info
+   * @param {Object} spatialBlocking - Scene's spatialBlocking from script
+   * @param {Array} eyelines - Scene's eyelines array from script
+   * @param {Array} beatBreakdown - Scene's beatBreakdown array
+   * @returns {Object} Complete blocking map
+   */
+  generateEnsembleBlocking(spatialBlocking, eyelines, beatBreakdown) {
+    const blocking = {
+      characters: {},
+      formations: [],
+      eyeContact: [],
+      movements: []
+    };
+
+    if (!spatialBlocking) {
+      return this.getDefaultBlocking();
+    }
+
+    // Track each character's journey through the scene
+    const allChars = new Set([
+      ...Object.keys(spatialBlocking.initialPositions || {}),
+      ...Object.keys(spatialBlocking.finalPositions || {})
+    ]);
+
+    allChars.forEach(char => {
+      const startPos = spatialBlocking.initialPositions?.[char] || {};
+      const endPos = spatialBlocking.finalPositions?.[char] || startPos;
+
+      blocking.characters[char] = {
+        startPosition: this.formatPosition(startPos),
+        endPosition: this.formatPosition(endPos),
+        beatPositions: beatBreakdown?.map(b =>
+          b.characterStates?.[char]?.position || ''
+        ) || [],
+        movement: this.calculateMovement(startPos, endPos)
+      };
+    });
+
+    // Formation evolution
+    if (spatialBlocking.formation) {
+      const formations = spatialBlocking.formationChange?.split(' → ') || [spatialBlocking.formation];
+      blocking.formations = [
+        { beat: 1, formation: formations[0] },
+        { beat: 4, formation: formations[formations.length - 1] || formations[0] }
+      ];
+    }
+
+    // Eyeline map with emotional context
+    blocking.eyeContact = (eyelines || []).map(eye => ({
+      beat: eye.beat,
+      from: eye.from,
+      to: eye.to,
+      emotion: eye.emotion,
+      duration: eye.duration,
+      description: `${eye.from} looks at ${eye.to} with ${eye.emotion} (${eye.duration})`
+    }));
+
+    // Key distances
+    blocking.keyDistances = spatialBlocking.keyDistances || [];
+
+    return blocking;
+  },
+
+  /**
+   * Format position object into readable string
+   */
+  formatPosition(pos) {
+    if (!pos || typeof pos === 'string') return pos || 'center, midground';
+    return `${pos.stage || 'center'}, ${pos.depth || 'midground'}, ${pos.elevation || 'standing'}, facing ${pos.facing || 'camera'}`;
+  },
+
+  /**
+   * Calculate movement type based on position change
+   */
+  calculateMovement(start, end) {
+    if (!start || !end) return 'static';
+    const changes = [];
+    if (start.stage !== end.stage) changes.push(`stage ${start.stage} → ${end.stage}`);
+    if (start.depth !== end.depth) changes.push(`depth ${start.depth} → ${end.depth}`);
+    if (start.facing !== end.facing) changes.push(`turns to face ${end.facing}`);
+    return changes.length > 0 ? changes.join(', ') : 'static';
+  },
+
+  /**
+   * Get default blocking for scenes without spatial data
+   */
+  getDefaultBlocking() {
+    return {
+      characters: {},
+      formations: [{ beat: 1, formation: 'natural' }],
+      eyeContact: [],
+      keyDistances: [],
+      movements: []
+    };
+  }
+};
+
+/**
+ * OBJECT_STATE_MACHINE
+ * Tracks props and objects through shots with state transitions
+ * Handles: hidden → revealed → transferred → displayed sequences
+ */
+const OBJECT_STATE_MACHINE = {
+  /**
+   * Generate object states with transition types
+   * @param {Array} objectTracking - Scene's objectTracking array
+   * @returns {Array} Enhanced object states with transitions
+   */
+  generateObjectStates(objectTracking) {
+    if (!objectTracking || objectTracking.length === 0) {
+      return [];
+    }
+
+    return objectTracking.map(obj => ({
+      object: obj.object,
+      transitions: (obj.states || []).map((state, i) => ({
+        ...state,
+        transitionFrom: i > 0 ? obj.states[i - 1] : null,
+        transitionType: i > 0 ? this.determineTransition(obj.states[i - 1], state) : 'initial',
+        description: this.describeState(obj.object, state)
+      }))
+    }));
+  },
+
+  /**
+   * Determine transition type between two states
+   */
+  determineTransition(from, to) {
+    if (!from || !to) return 'initial';
+    if (from.holder !== to.holder) return 'transfer';
+    if (from.visibility !== to.visibility) return 'reveal';
+    if (from.position !== to.position) return 'reposition';
+    return 'maintain';
+  },
+
+  /**
+   * Create human-readable state description
+   */
+  describeState(object, state) {
+    if (!state) return '';
+    const holder = state.holder === 'none' ? 'unattended' : `held by ${state.holder}`;
+    return `${object}: ${state.visibility}, ${state.position}, ${holder}`;
+  },
+
+  /**
+   * Get object continuity requirements for cross-shot matching
+   */
+  getContinuityRequirements(objectStates) {
+    return objectStates.map(obj => {
+      const finalState = obj.transitions[obj.transitions.length - 1];
+      return {
+        object: obj.object,
+        exitState: finalState,
+        note: `${obj.object} must enter next shot matching: ${this.describeState(obj.object, finalState)}`
+      };
+    });
+  }
+};
+
+/**
+ * PHYSICS_LAYER
+ * Adds body mechanics, weight distribution, breathing, and muscle tension
+ * Creates realistic physical presence for characters
+ */
+const PHYSICS_LAYER = {
+  /**
+   * Generate physics layer from beat and performance data
+   * @param {Array} beatBreakdown - Scene's beatBreakdown array
+   * @param {Object} performanceBlueprint - Scene's performanceBlueprint
+   * @returns {Array} Physics data per beat
+   */
+  generatePhysicsLayer(beatBreakdown, performanceBlueprint) {
+    if (!beatBreakdown || beatBreakdown.length === 0) {
+      return this.getDefaultPhysics();
+    }
+
+    return beatBreakdown.map((beat, i) => {
+      const intensity = beat.intensity ?? 0.5;
+      const characterEnergy = performanceBlueprint?.characterEnergy || {};
+
+      return {
+        beat: beat.beat || (i + 1),
+        physics: {
+          breathing: this.getBreathing(intensity),
+          muscleState: this.getMuscleState(intensity),
+          weightDistribution: this.getWeight(beat.characterStates, intensity),
+          microMovements: this.getMicroMovements(intensity),
+          tension: this.getTension(intensity)
+        },
+        characterPhysics: this.getCharacterPhysics(beat.characterStates, characterEnergy, i)
+      };
+    });
+  },
+
+  /**
+   * Get breathing description based on intensity
+   */
+  getBreathing(intensity) {
+    if (intensity > 0.8) return 'rapid, visible chest movement, possible breath holds';
+    if (intensity > 0.6) return 'controlled but quickened, visible on exhale';
+    if (intensity > 0.4) return 'steady, deep, measured breathing';
+    return 'slow, relaxed, barely visible';
+  },
+
+  /**
+   * Get muscle state based on intensity
+   */
+  getMuscleState(intensity) {
+    if (intensity > 0.8) return 'coiled, ready to spring, visible tension in shoulders and jaw';
+    if (intensity > 0.6) return 'engaged, alert posture, prepared for action';
+    if (intensity > 0.4) return 'active but relaxed, natural readiness';
+    return 'at ease, soft posture, minimal tension';
+  },
+
+  /**
+   * Get weight distribution from character states
+   */
+  getWeight(characterStates, intensity) {
+    const weights = {};
+    if (!characterStates) return weights;
+
+    Object.entries(characterStates).forEach(([char, state]) => {
+      const bodyLang = (state.bodyLanguage || '').toLowerCase();
+      if (bodyLang.includes('forward') || bodyLang.includes('lean in')) {
+        weights[char] = 'balls of feet, leaning forward';
+      } else if (bodyLang.includes('back') || bodyLang.includes('retreat')) {
+        weights[char] = 'heels, leaning back';
+      } else if (intensity > 0.7) {
+        weights[char] = 'centered but coiled, ready to move';
+      } else {
+        weights[char] = 'evenly distributed, grounded';
+      }
+    });
+    return weights;
+  },
+
+  /**
+   * Get micro-movements based on intensity
+   */
+  getMicroMovements(intensity) {
+    if (intensity > 0.7) return 'fingers flexing, jaw tightening, subtle weight shifts';
+    if (intensity > 0.4) return 'occasional blinks, small adjustments, natural fidgets';
+    return 'still with natural breathing movement only';
+  },
+
+  /**
+   * Get tension level
+   */
+  getTension(intensity) {
+    if (intensity > 0.8) return 'high - visible in neck, shoulders, and hands';
+    if (intensity > 0.6) return 'moderate - alert and ready';
+    if (intensity > 0.4) return 'low - comfortable but aware';
+    return 'minimal - fully relaxed';
+  },
+
+  /**
+   * Get per-character physics from their energy states
+   */
+  getCharacterPhysics(characterStates, characterEnergy, beatIndex) {
+    const physics = {};
+    if (!characterStates) return physics;
+
+    Object.keys(characterStates).forEach(char => {
+      const energyStates = characterEnergy[char] || [];
+      const currentEnergy = energyStates[beatIndex] || 'neutral:50%';
+      const [emotion, intensityStr] = currentEnergy.split(':');
+      const intensityVal = parseInt(intensityStr) / 100 || 0.5;
+
+      physics[char] = {
+        emotion,
+        intensity: intensityVal,
+        posture: this.getPosture(emotion, intensityVal),
+        eyeActivity: this.getEyeActivity(emotion, intensityVal)
+      };
+    });
+    return physics;
+  },
+
+  /**
+   * Get posture based on emotion and intensity
+   */
+  getPosture(emotion, intensity) {
+    const postures = {
+      'hesitant': 'shoulders slightly hunched, weight back',
+      'curious': 'head tilted, leaning slightly forward',
+      'determined': 'spine straight, shoulders square, chin up',
+      'fearful': 'body contracted, ready to retreat',
+      'loving': 'open posture, soft shoulders, head inclined',
+      'angry': 'shoulders forward, stance wide, fists may clench',
+      'sad': 'shoulders dropped, head lowered, collapsed posture',
+      'confident': 'chest open, shoulders back, commanding stance'
+    };
+    return postures[emotion] || 'natural standing posture';
+  },
+
+  /**
+   * Get eye activity based on emotion
+   */
+  getEyeActivity(emotion, intensity) {
+    if (intensity > 0.7) return 'wide, alert, minimal blinking';
+    if (emotion === 'hesitant' || emotion === 'fearful') return 'darting, checking surroundings';
+    if (emotion === 'loving' || emotion === 'connected') return 'soft, held gaze, gentle';
+    return 'natural movement, regular blinking';
+  },
+
+  /**
+   * Get default physics for scenes without data
+   */
+  getDefaultPhysics() {
+    return [1, 2, 3, 4].map(beat => ({
+      beat,
+      physics: {
+        breathing: 'natural, steady',
+        muscleState: 'relaxed but present',
+        weightDistribution: {},
+        microMovements: 'natural fidgets',
+        tension: 'minimal'
+      },
+      characterPhysics: {}
+    }));
+  }
+};
+
+/**
+ * ENVIRONMENT_RESPONSE_SYSTEM
+ * Environment reacts to character actions and emotions
+ * Syncs atmospheric elements to story beats
+ */
+const ENVIRONMENT_RESPONSE_SYSTEM = {
+  /**
+   * Generate environment responses from cues
+   * @param {Array} environmentalCues - Scene's environmentalCues array
+   * @param {Array} beatBreakdown - Scene's beatBreakdown array
+   * @returns {Array} Environment state per beat
+   */
+  generateEnvironmentResponses(environmentalCues, beatBreakdown) {
+    return [1, 2, 3, 4].map(beatNum => {
+      const beat = beatBreakdown?.find(b => b.beat === beatNum) || {};
+      const cues = (environmentalCues || []).filter(c => c.beat === beatNum);
+
+      return {
+        beat: beatNum,
+        baseEnvironment: beat.environmentState || this.getDefaultEnvironment(beatNum),
+        reactiveElements: cues.map(cue => ({
+          element: cue.element,
+          state: cue.state,
+          trigger: cue.syncedTo,
+          description: `${cue.element} ${cue.state} (synced to: ${cue.syncedTo})`
+        })),
+        atmosphericMood: this.getAtmosphericMood(beat.intensity || 0.5)
+      };
+    });
+  },
+
+  /**
+   * Get default environment based on beat position
+   */
+  getDefaultEnvironment(beatNum) {
+    const defaults = {
+      1: 'Ambient atmosphere established, lighting set, particles drift gently',
+      2: 'Environment begins responding to action, subtle shifts in lighting',
+      3: 'Peak environmental response - dramatic lighting, active particles',
+      4: 'Environment settles, atmosphere resolves to new state'
+    };
+    return defaults[beatNum] || 'Standard atmospheric conditions';
+  },
+
+  /**
+   * Get atmospheric mood from intensity
+   */
+  getAtmosphericMood(intensity) {
+    if (intensity > 0.8) return 'charged, dramatic, elements at peak activity';
+    if (intensity > 0.6) return 'building, responsive, heightened awareness';
+    if (intensity > 0.4) return 'active, present, supporting the action';
+    return 'calm, ambient, establishing mood';
+  },
+
+  /**
+   * Generate continuity notes for environment
+   */
+  getContinuityNotes(environmentResponses) {
+    const finalBeat = environmentResponses[3];
+    return {
+      exitState: finalBeat.baseEnvironment,
+      mood: finalBeat.atmosphericMood,
+      activeElements: finalBeat.reactiveElements.map(e => e.element),
+      note: `Next shot should maintain: ${finalBeat.atmosphericMood}`
+    };
+  }
+};
+
+/**
+ * CROSS_SHOT_CALLBACKS
+ * Ensures visual continuity between shots
+ * Tracks: position matches, gaze follow-through, object handoffs
+ */
+const CROSS_SHOT_CALLBACKS = {
+  /**
+   * Generate cross-shot continuity callbacks
+   * @param {Object} currentScene - Current scene data
+   * @param {Object} previousScene - Previous scene data (if any)
+   * @param {Object} nextScene - Next scene data (if any)
+   * @returns {Object} Continuity callbacks
+   */
+  generateCrossCallbacks(currentScene, previousScene, nextScene) {
+    const callbacks = {
+      fromPrevious: [],
+      toNext: [],
+      warnings: []
+    };
+
+    // Match positions from previous shot's end
+    if (previousScene?.spatialBlocking?.finalPositions) {
+      const prevPositions = previousScene.spatialBlocking.finalPositions;
+      const currPositions = currentScene?.spatialBlocking?.initialPositions || {};
+
+      Object.keys(prevPositions).forEach(char => {
+        if (currPositions[char]) {
+          callbacks.fromPrevious.push({
+            type: 'position_match',
+            character: char,
+            expectedPosition: prevPositions[char],
+            note: `${char} should enter matching exit from previous shot`
+          });
+        }
+      });
+
+      // Check for object handoffs
+      if (previousScene.objectTracking) {
+        previousScene.objectTracking.forEach(obj => {
+          const lastState = obj.states?.[obj.states.length - 1];
+          if (lastState) {
+            callbacks.fromPrevious.push({
+              type: 'object_continuity',
+              object: obj.object,
+              expectedState: lastState,
+              note: `${obj.object} should match: ${lastState.visibility}, ${lastState.position}`
+            });
+          }
+        });
+      }
+    }
+
+    // Setup continuity for next shot
+    if (nextScene) {
+      const lastBeat = currentScene?.beatBreakdown?.[3] || {};
+      callbacks.toNext.push({
+        type: 'intensity_handoff',
+        intensity: lastBeat.intensity || 0.5,
+        note: `Next scene should acknowledge intensity level of ${((lastBeat.intensity || 0.5) * 100).toFixed(0)}%`
+      });
+
+      // Environment handoff
+      if (currentScene?.environmentalCues) {
+        const lastEnvCue = currentScene.environmentalCues.find(c => c.beat === 4);
+        if (lastEnvCue) {
+          callbacks.toNext.push({
+            type: 'environment_continuity',
+            element: lastEnvCue.element,
+            state: lastEnvCue.state,
+            note: `${lastEnvCue.element} should continue at ${lastEnvCue.state} state`
+          });
+        }
+      }
+    }
+
+    // Check for potential continuity issues
+    callbacks.warnings = this.checkContinuityIssues(currentScene, previousScene);
+
+    return callbacks;
+  },
+
+  /**
+   * Check for potential continuity issues
+   */
+  checkContinuityIssues(current, previous) {
+    const warnings = [];
+
+    if (previous && current) {
+      // Check for sudden position jumps
+      const prevFinal = previous.spatialBlocking?.finalPositions || {};
+      const currInitial = current.spatialBlocking?.initialPositions || {};
+
+      Object.keys(prevFinal).forEach(char => {
+        if (currInitial[char]) {
+          const prev = prevFinal[char];
+          const curr = currInitial[char];
+          if (prev.stage !== curr.stage && prev.depth !== curr.depth) {
+            warnings.push({
+              type: 'position_jump',
+              character: char,
+              message: `${char} jumps from ${prev.stage}/${prev.depth} to ${curr.stage}/${curr.depth}`
+            });
+          }
+        }
+      });
+    }
+
+    return warnings;
+  },
+
+  /**
+   * Format callbacks for prompt inclusion
+   */
+  formatForPrompt(callbacks) {
+    const lines = [];
+
+    if (callbacks.fromPrevious.length > 0) {
+      lines.push('[CONTINUITY FROM PREVIOUS SHOT]');
+      callbacks.fromPrevious.forEach(cb => {
+        lines.push(`- ${cb.note}`);
+      });
+      lines.push('');
+    }
+
+    if (callbacks.toNext.length > 0) {
+      lines.push('[CONTINUITY TO NEXT SHOT]');
+      callbacks.toNext.forEach(cb => {
+        lines.push(`- ${cb.note}`);
+      });
+      lines.push('');
+    }
+
+    if (callbacks.warnings.length > 0) {
+      lines.push('[CONTINUITY WARNINGS]');
+      callbacks.warnings.forEach(w => {
+        lines.push(`⚠️ ${w.message}`);
+      });
+      lines.push('');
+    }
+
+    return lines.join('\n');
+  }
+};
+
+// =============================================================================
+// HOLLYWOOD_CHOREOGRAPHER - Master Orchestrator
+// Combines all 6 engines into complete choreographed video prompts
+// =============================================================================
+
+/**
+ * HOLLYWOOD_CHOREOGRAPHER
+ * The master orchestrator that combines all choreography engines to produce
+ * rich, detailed prompts for AI video generation.
+ *
+ * Input: Enriched scene data with choreography fields
+ * Output: Complete 4-beat choreographed prompt ready for video generation
+ */
+const HOLLYWOOD_CHOREOGRAPHER = {
+  /**
+   * Generate complete Hollywood choreography from enriched scene data
+   * @param {Object} enrichedScene - Scene with all choreography fields
+   * @param {Object} previousScene - Previous scene for continuity (optional)
+   * @param {Object} nextScene - Next scene for continuity (optional)
+   * @param {string} shotType - Camera shot type for this scene
+   * @param {Object} styleBible - Style bible for visual consistency
+   * @returns {Object} Complete choreographed data with prompt
+   */
+  generateChoreography(enrichedScene, previousScene = null, nextScene = null, shotType = 'MEDIUM', styleBible = {}) {
+    console.log('[HOLLYWOOD_CHOREOGRAPHER] Generating choreography for scene:', enrichedScene?.sceneNumber || 'unknown');
+
+    // Check if scene has enriched choreography data
+    const hasEnrichment = this.hasChoreographyData(enrichedScene);
+    if (!hasEnrichment) {
+      console.log('[HOLLYWOOD_CHOREOGRAPHER] Scene lacks choreography data, using fallback');
+      return this.generateFallbackChoreography(enrichedScene, shotType, styleBible);
+    }
+
+    // Generate all component data from engines
+    const beatTimeline = BEAT_TIMELINE_GENERATOR.generateBeatTimeline(enrichedScene.beatBreakdown);
+    const captureRecommendation = BEAT_TIMELINE_GENERATOR.getCaptureFrame(beatTimeline);
+
+    const ensembleBlocking = ENSEMBLE_BLOCKING_SYSTEM.generateEnsembleBlocking(
+      enrichedScene.spatialBlocking,
+      enrichedScene.eyelines,
+      enrichedScene.beatBreakdown
+    );
+
+    const objectStates = OBJECT_STATE_MACHINE.generateObjectStates(enrichedScene.objectTracking || []);
+
+    const physicsLayer = PHYSICS_LAYER.generatePhysicsLayer(
+      enrichedScene.beatBreakdown,
+      enrichedScene.performanceBlueprint
+    );
+
+    const environmentResponses = ENVIRONMENT_RESPONSE_SYSTEM.generateEnvironmentResponses(
+      enrichedScene.environmentalCues || [],
+      enrichedScene.beatBreakdown
+    );
+
+    const crossCallbacks = CROSS_SHOT_CALLBACKS.generateCrossCallbacks(
+      enrichedScene,
+      previousScene,
+      nextScene
+    );
+
+    // Combine all data into choreography structure
+    const choreographyData = {
+      sceneInfo: {
+        number: enrichedScene.sceneNumber || enrichedScene.id || 1,
+        title: enrichedScene.sceneTitle || `Scene ${enrichedScene.sceneNumber || 1}`,
+        shotType: shotType,
+        sceneType: enrichedScene.sceneType || 'dialogue',
+        sceneArc: enrichedScene.performanceBlueprint?.sceneArc || 'build_to_climax'
+      },
+      spatial: ensembleBlocking,
+      beats: beatTimeline.map((beat, i) => ({
+        ...beat,
+        physics: physicsLayer[i]?.physics || {},
+        characterPhysics: physicsLayer[i]?.characterPhysics || {},
+        environment: environmentResponses[i] || {},
+        objects: objectStates.map(obj => obj.transitions[i]).filter(Boolean),
+        eyeline: ensembleBlocking.eyeContact.find(e => e.beat === beat.beat) || null
+      })),
+      continuity: crossCallbacks,
+      capture: captureRecommendation,
+      styleBible: styleBible
+    };
+
+    // Build the formatted prompt
+    const prompt = this.buildChoreographedPrompt(choreographyData);
+
+    return {
+      choreographyData,
+      prompt,
+      captureFrame: captureRecommendation,
+      hasEnrichment: true
+    };
+  },
+
+  /**
+   * Check if scene has choreography enrichment data
+   */
+  hasChoreographyData(scene) {
+    if (!scene) return false;
+    return !!(
+      scene.beatBreakdown?.length > 0 ||
+      scene.spatialBlocking?.initialPositions ||
+      scene.performanceBlueprint?.sceneArc ||
+      scene.eyelines?.length > 0
+    );
+  },
+
+  /**
+   * Generate fallback choreography when enrichment data is missing
+   */
+  generateFallbackChoreography(scene, shotType, styleBible) {
+    const sceneAction = scene?.sceneAction || scene?.action || '';
+    const characters = scene?.charactersInScene || [];
+
+    // Create basic beat structure from sceneAction
+    const beats = this.inferBeatsFromAction(sceneAction, characters);
+
+    const choreographyData = {
+      sceneInfo: {
+        number: scene?.sceneNumber || scene?.id || 1,
+        title: scene?.sceneTitle || 'Scene',
+        shotType: shotType,
+        sceneType: scene?.sceneType || 'dialogue',
+        sceneArc: 'steady_build'
+      },
+      spatial: ENSEMBLE_BLOCKING_SYSTEM.getDefaultBlocking(),
+      beats: beats,
+      continuity: { fromPrevious: [], toNext: [], warnings: [] },
+      capture: { beat: 3, frame: 210, timing: '7.0s', action: 'Peak moment', reason: 'Default capture at beat 3' },
+      styleBible: styleBible
+    };
+
+    return {
+      choreographyData,
+      prompt: this.buildChoreographedPrompt(choreographyData),
+      captureFrame: choreographyData.capture,
+      hasEnrichment: false
+    };
+  },
+
+  /**
+   * Infer basic beats from sceneAction text
+   */
+  inferBeatsFromAction(sceneAction, characters) {
+    const sentences = sceneAction.split(/[.!?]+/).filter(s => s.trim().length > 10);
+    const defaultPhysics = PHYSICS_LAYER.getDefaultPhysics();
+
+    return [1, 2, 3, 4].map((beatNum, i) => {
+      const sentence = sentences[i] || sentences[0] || 'Action continues';
+      return {
+        beat: beatNum,
+        timing: ['0-2s', '2-5s', '5-8s', '8-10s'][i],
+        phase: ['ESTABLISH', 'DEVELOP', 'ESCALATE', 'RESOLVE'][i],
+        action: sentence.trim(),
+        characterStates: {},
+        physics: defaultPhysics[i]?.physics || {},
+        characterPhysics: {},
+        environment: {
+          baseEnvironment: ENVIRONMENT_RESPONSE_SYSTEM.getDefaultEnvironment(beatNum),
+          reactiveElements: [],
+          atmosphericMood: ENVIRONMENT_RESPONSE_SYSTEM.getAtmosphericMood(i === 2 ? 0.85 : 0.5)
+        },
+        objects: [],
+        eyeline: null,
+        intensity: i === 2 ? 0.85 : i === 0 ? 0.5 : 0.65
+      };
+    });
+  },
+
+  /**
+   * Build the complete choreographed prompt from data
+   */
+  buildChoreographedPrompt(data) {
+    const lines = [];
+    const { sceneInfo, spatial, beats, continuity, capture, styleBible } = data;
+
+    // Header
+    lines.push(`SHOT ${sceneInfo.number} | ${sceneInfo.shotType.toUpperCase()} | ${sceneInfo.title}`);
+    lines.push(`Scene Type: ${sceneInfo.sceneType} | Arc: ${sceneInfo.sceneArc}`);
+    lines.push('');
+
+    // Style reference if available
+    if (styleBible?.visualStyle) {
+      lines.push(`[STYLE] ${styleBible.visualStyle}`);
+      if (styleBible.colorGrade) lines.push(`[COLOR] ${styleBible.colorGrade}`);
+      if (styleBible.lighting) lines.push(`[LIGHTING] ${styleBible.lighting}`);
+      lines.push('');
+    }
+
+    // Spatial blocking
+    lines.push('[SPATIAL BLOCKING]');
+    if (Object.keys(spatial.characters).length > 0) {
+      Object.entries(spatial.characters).forEach(([char, positions]) => {
+        lines.push(`${char}: ${positions.startPosition}`);
+        if (positions.movement !== 'static') {
+          lines.push(`  Movement: ${positions.movement}`);
+        }
+      });
+    }
+    if (spatial.formations.length > 0) {
+      lines.push(`Formation: ${spatial.formations.map(f => f.formation).join(' → ')}`);
+    }
+    if (spatial.keyDistances.length > 0) {
+      lines.push(`Distances: ${spatial.keyDistances.join(', ')}`);
+    }
+    lines.push('');
+
+    // Each beat with full detail
+    beats.forEach(beat => {
+      lines.push(`[BEAT ${beat.beat}: ${beat.timing}] ${beat.phase}`);
+      lines.push(`Action: ${beat.action}`);
+
+      // Character states
+      if (Object.keys(beat.characterStates).length > 0) {
+        Object.entries(beat.characterStates).forEach(([char, state]) => {
+          lines.push(`${char}:`);
+          if (state.position) lines.push(`  Position: ${state.position}`);
+          if (state.gesture) lines.push(`  Gesture: ${state.gesture}`);
+          if (state.expression) lines.push(`  Expression: ${state.expression}`);
+          if (state.bodyLanguage) lines.push(`  Body: ${state.bodyLanguage}`);
+        });
+      }
+
+      // Character physics
+      if (Object.keys(beat.characterPhysics || {}).length > 0) {
+        Object.entries(beat.characterPhysics).forEach(([char, phys]) => {
+          if (phys.posture) lines.push(`${char} Physics: ${phys.posture}, eyes ${phys.eyeActivity}`);
+        });
+      }
+
+      // General physics
+      if (beat.physics) {
+        const phys = beat.physics;
+        lines.push(`Physics: ${phys.breathing}, ${phys.muscleState}`);
+        if (phys.tension) lines.push(`Tension: ${phys.tension}`);
+      }
+
+      // Eyeline
+      if (beat.eyeline) {
+        lines.push(`Eyeline: ${beat.eyeline.description}`);
+      }
+
+      // Environment
+      if (beat.environment) {
+        lines.push(`Environment: ${beat.environment.baseEnvironment}`);
+        if (beat.environment.reactiveElements?.length > 0) {
+          beat.environment.reactiveElements.forEach(elem => {
+            lines.push(`  ${elem.description}`);
+          });
+        }
+        lines.push(`Atmosphere: ${beat.environment.atmosphericMood}`);
+      }
+
+      // Objects
+      if (beat.objects?.length > 0) {
+        beat.objects.forEach(obj => {
+          if (obj.description) {
+            lines.push(`Object: ${obj.description}`);
+          }
+        });
+      }
+
+      lines.push(`Intensity: ${(beat.intensity * 100).toFixed(0)}%`);
+      lines.push('');
+    });
+
+    // Continuity section
+    if (continuity.fromPrevious?.length > 0 || continuity.toNext?.length > 0) {
+      lines.push(CROSS_SHOT_CALLBACKS.formatForPrompt(continuity));
+    }
+
+    // Capture frame
+    lines.push(`>>> CAPTURE FRAME: Beat ${capture.beat} at ${capture.timing} <<<`);
+    lines.push(`>>> ${capture.action} <<<`);
+    lines.push(`>>> ${capture.reason} <<<`);
+
+    return lines.join('\n');
+  },
+
+  /**
+   * Generate choreography for multiple shots from a single scene
+   * Used when a scene is decomposed into multiple shots
+   */
+  generateMultiShotChoreography(enrichedScene, shotCount, previousScene = null, nextScene = null, styleBible = {}) {
+    const shots = [];
+    const shotTypes = this.getShotTypeSequence(enrichedScene.sceneType, shotCount);
+
+    for (let i = 0; i < shotCount; i++) {
+      // Create a variant of the scene data for each shot
+      const shotScene = this.createShotVariant(enrichedScene, i, shotCount);
+
+      // Determine context for continuity
+      const prevContext = i === 0 ? previousScene : shots[i - 1]?.choreographyData;
+      const nextContext = i === shotCount - 1 ? nextScene : null;
+
+      const choreography = this.generateChoreography(
+        shotScene,
+        prevContext,
+        nextContext,
+        shotTypes[i],
+        styleBible
+      );
+
+      choreography.shotIndex = i + 1;
+      choreography.totalShots = shotCount;
+      shots.push(choreography);
+    }
+
+    return shots;
+  },
+
+  /**
+   * Get appropriate shot type sequence for scene
+   */
+  getShotTypeSequence(sceneType, shotCount) {
+    const sequences = {
+      dialogue: ['MEDIUM TWO-SHOT', 'CLOSE-UP', 'OVER-SHOULDER', 'MEDIUM'],
+      action: ['WIDE', 'MEDIUM', 'CLOSE-UP', 'WIDE'],
+      emotional: ['MEDIUM', 'CLOSE-UP', 'EXTREME CLOSE-UP', 'MEDIUM'],
+      establishing: ['EXTREME WIDE', 'WIDE', 'MEDIUM', 'WIDE'],
+      revelation: ['MEDIUM', 'PUSH-IN', 'CLOSE-UP', 'REACTION'],
+      default: ['WIDE', 'MEDIUM', 'CLOSE-UP', 'MEDIUM']
+    };
+
+    const sequence = sequences[sceneType] || sequences.default;
+    return Array.from({ length: shotCount }, (_, i) => sequence[i % sequence.length]);
+  },
+
+  /**
+   * Create a variant of scene data focused on a specific shot
+   */
+  createShotVariant(scene, shotIndex, totalShots) {
+    if (!scene.beatBreakdown || scene.beatBreakdown.length < 4) {
+      return scene;
+    }
+
+    // Distribute beats across shots
+    const beatsPerShot = Math.ceil(4 / totalShots);
+    const startBeat = shotIndex * beatsPerShot;
+    const endBeat = Math.min(startBeat + beatsPerShot, 4);
+
+    // Extract relevant beats for this shot
+    const shotBeats = scene.beatBreakdown.slice(startBeat, endBeat);
+
+    // Renumber beats to be 1-4 within the shot
+    const renumberedBeats = shotBeats.map((beat, i) => ({
+      ...beat,
+      beat: i + 1,
+      timing: ['0-2s', '2-5s', '5-8s', '8-10s'][i]
+    }));
+
+    // Pad to 4 beats if needed
+    while (renumberedBeats.length < 4) {
+      const lastBeat = renumberedBeats[renumberedBeats.length - 1] || {};
+      renumberedBeats.push({
+        ...lastBeat,
+        beat: renumberedBeats.length + 1,
+        timing: ['0-2s', '2-5s', '5-8s', '8-10s'][renumberedBeats.length],
+        action: 'Continuation of previous action'
+      });
+    }
+
+    return {
+      ...scene,
+      beatBreakdown: renumberedBeats,
+      sceneTitle: `${scene.sceneTitle || 'Scene'} - Shot ${shotIndex + 1}/${totalShots}`
+    };
+  },
+
+  /**
+   * Quick check to determine if choreography should be used
+   */
+  shouldUseChoreography(scene) {
+    // Use choreography if scene has any enrichment data
+    return this.hasChoreographyData(scene);
+  }
+};
+
+// =============================================================================
 // STORY_BEAT_DECOMPOSER - Frame-Chain Video Prompt Generation
 // =============================================================================
 /**
@@ -45296,6 +46472,54 @@ exports.creationWizardDecomposeSceneToShots = functions
       });
     }
 
+    // STEP 5.55: HOLLYWOOD CHOREOGRAPHY for enriched scenes
+    // Apply 4-beat choreography when scene has choreography enrichment data
+    const hasChoreography = HOLLYWOOD_CHOREOGRAPHER.shouldUseChoreography(scene);
+    if (hasChoreography) {
+      console.log(`[creationWizardDecomposeSceneToShots] Applying Hollywood Choreography for enriched scene ${scene.id}`);
+
+      try {
+        // Generate choreography for each shot
+        const choreographedShots = HOLLYWOOD_CHOREOGRAPHER.generateMultiShotChoreography(
+          scene,
+          shotsWithPrompts.length,
+          previousSceneContext,  // Previous scene for continuity
+          null,  // Next scene (not available here)
+          styleBible || {}
+        );
+
+        // Apply choreographed prompts to shots
+        shotsWithPrompts.forEach((shot, idx) => {
+          const choreography = choreographedShots[idx];
+          if (choreography && choreography.prompt) {
+            // Enhance the video prompt with choreography data
+            const existingPrompt = shot.videoPrompt || '';
+
+            // Build enhanced prompt with choreography
+            shot.videoPrompt = `${choreography.prompt}\n\n[ORIGINAL SCENE CONTEXT]\n${existingPrompt}`;
+
+            // Add choreography metadata
+            shot.hollywoodChoreography = {
+              hasEnrichment: choreography.hasEnrichment,
+              captureFrame: choreography.captureFrame,
+              sceneArc: choreography.choreographyData?.sceneInfo?.sceneArc,
+              shotIndex: choreography.shotIndex,
+              totalShots: choreography.totalShots
+            };
+
+            console.log(`[creationWizardDecomposeSceneToShots] Shot ${idx + 1} choreographed (${choreography.hasEnrichment ? 'enriched' : 'fallback'}): capture at beat ${choreography.captureFrame?.beat}`);
+          }
+        });
+
+        console.log(`[creationWizardDecomposeSceneToShots] Hollywood Choreography applied to ${shotsWithPrompts.length} shots`);
+      } catch (choreographyError) {
+        console.error(`[creationWizardDecomposeSceneToShots] Hollywood Choreography failed, continuing without:`, choreographyError.message);
+        // Continue without choreography - fallback to existing prompts
+      }
+    } else {
+      console.log(`[creationWizardDecomposeSceneToShots] Scene ${scene.id} lacks choreography enrichment, skipping Hollywood Choreographer`);
+    }
+
     // STEP 5.6: HOLLYWOOD SCENE CLOSURE for final shot
     // Use SCENE_CLOSURE_ENGINE to ensure meaningful narrative resolution
     if (shotsWithPrompts.length > 0) {
@@ -45407,6 +46631,10 @@ exports.creationWizardDecomposeSceneToShots = functions
         visualContinuity: shot.visualContinuity || null,
         lastFrameCapture: shot.visualContinuity?.lastFrameCapture || null,
         anchorCategories: shot.visualContinuity?.anchorCategories || [],
+        // NEW: Hollywood choreography (4-beat system)
+        hollywoodChoreography: shot.hollywoodChoreography || null,
+        hasChoreography: !!shot.hollywoodChoreography?.hasEnrichment,
+        captureFrame: shot.hollywoodChoreography?.captureFrame || null,
         // Generation status
         imageUrl: null,
         videoUrl: null,
@@ -45460,6 +46688,12 @@ exports.creationWizardDecomposeSceneToShots = functions
         promptTokens: decompositionMethod === 'ai-powered' ? 500 : 0,
         completionTokens: decompositionMethod === 'ai-powered' ? 1000 : 0,
         method: decompositionMethod
+      },
+      // Hollywood choreography status
+      hollywoodChoreography: {
+        applied: hasChoreography,
+        enrichmentSource: hasChoreography ? 'script_generation' : 'none',
+        shotsWithChoreography: normalizedShots.filter(s => s.hasChoreography).length
       }
     };
 
