@@ -39109,7 +39109,7 @@ const VISUAL_STYLE_DNA = {
     description: 'Hollywood blockbuster look, dramatic but grounded in reality',
     icon: '🎬',
 
-    promptPrefix: 'Cinematic film still, Hollywood production quality, dramatic cinematography, professional movie lighting,',
+    promptPrefix: 'Cinematic film still, real human being, actual person, Hollywood production quality, dramatic cinematography, professional movie lighting, genuine actors,',
 
     cameraLanguage: {
       primary: 'Shot on ARRI Alexa 65 with Panavision anamorphic lenses',
@@ -39139,7 +39139,9 @@ const VISUAL_STYLE_DNA = {
     negativeKeywords: [
       'amateur', 'low budget', 'TV movie quality', 'soap opera',
       'video look', 'digital harshness', 'flat lighting',
-      'cartoon', 'anime', 'illustration', '3D animated',
+      'cartoon', 'anime', 'illustration', '3D animated', '3D render', 'CGI character',
+      'computer generated', 'Unreal Engine', 'video game', 'Pixar', 'Disney animation',
+      'stylized', 'synthetic skin', 'plastic skin', 'waxy skin',
       'oversaturated', 'instagram filter', 'mobile phone quality',
       'stock footage', 'corporate video'
     ],
@@ -39156,10 +39158,10 @@ const VISUAL_STYLE_DNA = {
     },
 
     skinRendering: {
-      texture: 'refined but natural skin, subtle smoothing acceptable',
-      subsurface: 'enhanced subsurface scattering for glamour',
-      color: 'pleasing skin tones, slightly idealized',
-      avoid: 'harsh texture, unflattering angles, bad skin'
+      texture: 'real human skin with natural texture, visible pores, refined but authentic',
+      subsurface: 'natural subsurface scattering like real skin',
+      color: 'real human skin tones, natural undertones, authentic complexion',
+      avoid: '3D rendered skin, plastic skin, waxy skin, synthetic skin, CGI skin, porcelain doll, airbrushed'
     },
 
     technicalSpecs: {
