@@ -46299,6 +46299,33 @@ Think of it like a film crew with ${shotCount} cameras capturing the SAME scene 
    - "Continuing from the same moment:"
    - Reference the SAME character(s) and SAME location
 
+5. ⚠️ FRAMING STABILITY FOR FRAME CHAIN (CRITICAL FOR SHOTS 1 to ${shotCount - 1}):
+   The LAST FRAME of each shot becomes the INPUT FRAME for the next shot.
+   If the last frame has bad composition, the chain BREAKS.
+
+   FOR TRANSITION SHOTS (shots 1 to ${shotCount - 1}):
+   ❌ DO NOT pull back to wide shot during the clip
+   ❌ DO NOT dramatically change camera distance
+   ❌ DO NOT let character become small/distant by end
+   ❌ DO NOT add dramatic zoom-outs or crane-ups
+   ✓ KEEP character at CONSISTENT SIZE throughout
+   ✓ KEEP framing STABLE - only gentle drift allowed
+   ✓ END with character clearly visible and prominent
+   ✓ Camera movement: "static", "subtle drift", "slow push in" ONLY
+
+   FOR FINAL SHOT (shot ${shotCount} only):
+   ✓ CAN have dramatic concluding movement (pull back, reveal, etc.)
+   ✓ CAN end with wide establishing shot
+   ✓ This shot doesn't chain to another, so framing is flexible
+
+   EXAMPLE - WRONG (breaks frame chain):
+   Shot 2 prompt: "Camera dramatically pulls back to reveal the entire warehouse"
+   Result: Character tiny at end → Shot 3 input frame unusable
+
+   EXAMPLE - CORRECT (maintains chain):
+   Shot 2 prompt: "Static camera, over-shoulder angle. Character remains prominent throughout."
+   Result: Character clear at end → Shot 3 input frame usable
+
 === OUTPUT FORMAT ===
 Return ONLY valid JSON:
 {
@@ -46392,6 +46419,16 @@ Create ${shotCount} cinematographic variations now:`;
           const continuityPrefix = `Same ${sceneSubject} in same ${sceneLocation}, different angle. `;
           if (!videoPrompt.toLowerCase().includes('same ')) {
             videoPrompt = continuityPrefix + videoPrompt;
+          }
+        }
+
+        // FRAMING STABILITY: For transition shots (not the last), add strict framing constraints
+        // This ensures the end frame is suitable for capturing → next shot input
+        if (!isLast) {
+          const stabilityConstraint = ' CRITICAL: Maintain stable framing throughout. Keep subject at consistent size. NO dramatic pullbacks or zoom-outs. Character must remain clearly visible at END of shot.';
+          // Only add if not already present
+          if (!videoPrompt.toLowerCase().includes('stable framing') && !videoPrompt.toLowerCase().includes('no dramatic')) {
+            videoPrompt += stabilityConstraint;
           }
         }
 
@@ -46700,19 +46737,38 @@ Create ${shotCount} cinematographic variations now:`;
 
   /**
    * Get camera movement for shot type
+   * @param {string} shotType - The type of shot
+   * @param {boolean} isTransitionShot - If true, only return stable movements (no pullbacks)
    */
-  getCameraMovementForType(shotType) {
-    const movements = {
-      'ESTABLISHING': 'Slow pan across',
+  getCameraMovementForType(shotType, isTransitionShot = true) {
+    // For transition shots, use only stable movements that won't break frame chain
+    const stableMovements = {
+      'ESTABLISHING': 'Static with subtle drift',
       'WIDE': 'Static with subtle drift',
       'MEDIUM': 'Slow push in',
       'CLOSE-UP': 'Gentle push in',
       'EXTREME CLOSE-UP': 'Very slow drift',
       'DETAIL': 'Subtle tracking',
       'REACTION': 'Static hold',
+      'OVER-SHOULDER': 'Static hold',
+      'WIDE PULL-BACK': 'Static with subtle drift' // Override pull-back for transitions
+    };
+
+    // For final shots, allow more dramatic movements
+    const finalShotMovements = {
+      'ESTABLISHING': 'Slow pan across',
+      'WIDE': 'Gradual pull back to reveal',
+      'MEDIUM': 'Slow push in',
+      'CLOSE-UP': 'Gentle push in',
+      'EXTREME CLOSE-UP': 'Very slow drift',
+      'DETAIL': 'Subtle tracking',
+      'REACTION': 'Static hold then pull back',
+      'OVER-SHOULDER': 'Pull back to wide',
       'WIDE PULL-BACK': 'Gradual pull back'
     };
-    return movements[shotType] || 'Smooth tracking';
+
+    const movements = isTransitionShot ? stableMovements : finalShotMovements;
+    return movements[shotType] || 'Static with subtle drift';
   },
 
   /**
@@ -46721,8 +46777,9 @@ Create ${shotCount} cinematographic variations now:`;
   buildCinematographicPrompt(subject, location, action, shotType, isFirst, isLast, sceneContext) {
     const parts = [];
 
-    // Camera movement first
-    parts.push(`${this.getCameraMovementForType(shotType)}.`);
+    // Camera movement first - use stable movements for transition shots
+    const isTransitionShot = !isLast;
+    parts.push(`${this.getCameraMovementForType(shotType, isTransitionShot)}.`);
 
     // Shot type and subject (SAME subject in every shot)
     parts.push(`${shotType} shot.`);
@@ -46736,6 +46793,12 @@ Create ${shotCount} cinematographic variations now:`;
     // Continuity anchor for shots after first
     if (!isFirst) {
       parts.push('Same scene, different angle.');
+    }
+
+    // FRAMING STABILITY: For transition shots (not the last), add strict framing constraints
+    // This ensures the end frame is suitable for capturing → next shot input
+    if (!isLast) {
+      parts.push('CRITICAL: Maintain stable framing. Keep subject at consistent size throughout. NO dramatic pullbacks or zoom-outs. Character must remain clearly visible at END.');
     }
 
     // Environmental detail from context
