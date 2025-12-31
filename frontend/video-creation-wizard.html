@@ -8744,9 +8744,22 @@
                                         </div>
                                     `}
                                     <div style="flex: 1; min-width: 0;">
-                                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">SCENE PROMPT</div>
-                                        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.9); line-height: 1.4; max-height: 4.2em; overflow: hidden;">
-                                            ${(scene.visualPrompt || scene.visual || 'No visual prompt').substring(0, 200)}${(scene.visualPrompt || scene.visual || '').length > 200 ? '...' : ''}
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">SCENE PROMPT</div>
+                                            ${(scene.visualPrompt || scene.visual || '').length > 200 ? `
+                                                <button onclick="this.closest('.scene-prompt-container').querySelector('.prompt-text').classList.toggle('expanded'); this.textContent = this.textContent === 'Show All' ? 'Show Less' : 'Show All';"
+                                                        style="font-size: 0.65rem; color: #8b5cf6; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); padding: 0.15rem 0.5rem; border-radius: 0.25rem; cursor: pointer; transition: all 0.2s;">
+                                                    Show All
+                                                </button>
+                                            ` : ''}
+                                        </div>
+                                        <div class="scene-prompt-container">
+                                            <div class="prompt-text" style="font-size: 0.85rem; color: rgba(255,255,255,0.9); line-height: 1.4; max-height: 4.2em; overflow: hidden; transition: max-height 0.3s ease;">
+                                                ${scene.visualPrompt || scene.visual || 'No visual prompt'}
+                                            </div>
+                                            <style>
+                                                .prompt-text.expanded { max-height: none !important; }
+                                            </style>
                                         </div>
                                         <div style="margin-top: 0.5rem; font-size: 0.75rem; color: rgba(255,255,255,0.4);">
                                             Duration: ${scene.duration || 6}s
@@ -9078,20 +9091,35 @@
                                     </div>
 
                                     <!-- Prompt Details (expandable) -->
-                                    <details style="margin-top: 1rem;">
-                                        <summary style="cursor: pointer; color: rgba(255,255,255,0.6); font-size: 0.8rem; padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem;">
-                                            📝 View Shot Prompts
+                                    <details style="margin-top: 1rem;" class="shot-prompts-details">
+                                        <summary style="cursor: pointer; color: rgba(255,255,255,0.6); font-size: 0.8rem; padding: 0.5rem; background: rgba(255,255,255,0.03); border-radius: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                                            <span>📝 View Shot Prompts</span>
+                                            <button onclick="event.stopPropagation(); const container = this.closest('.shot-prompts-details'); const prompts = container.querySelectorAll('.shot-prompt-text'); const allExpanded = Array.from(prompts).every(p => p.classList.contains('expanded')); prompts.forEach(p => allExpanded ? p.classList.remove('expanded') : p.classList.add('expanded')); this.textContent = allExpanded ? 'Expand All' : 'Collapse All';"
+                                                    style="font-size: 0.6rem; color: #8b5cf6; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); padding: 0.15rem 0.4rem; border-radius: 0.25rem; cursor: pointer; margin-left: 0.5rem;">
+                                                Expand All
+                                            </button>
                                         </summary>
                                         <div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
                                             ${decomposed.shots.map((shot, idx) => `
                                                 <div style="background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 0.5rem; border-left: 3px solid rgba(139, 92, 246, 0.5);">
-                                                    <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">Shot ${idx + 1} - ${shot.shotType || 'shot'}</div>
-                                                    <div style="font-size: 0.8rem; color: rgba(255,255,255,0.8); line-height: 1.4;">
-                                                        ${(shot.prompt || 'No prompt').substring(0, 150)}${(shot.prompt || '').length > 150 ? '...' : ''}
+                                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                                        <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Shot ${idx + 1} - ${shot.shotType || 'shot'}</div>
+                                                        ${(shot.prompt || '').length > 150 ? `
+                                                            <button onclick="const textEl = this.parentElement.nextElementSibling; textEl.classList.toggle('expanded'); this.textContent = textEl.classList.contains('expanded') ? '−' : '+';"
+                                                                    style="font-size: 0.7rem; color: #8b5cf6; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); width: 18px; height: 18px; border-radius: 0.25rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                                                                +
+                                                            </button>
+                                                        ` : ''}
+                                                    </div>
+                                                    <div class="shot-prompt-text" style="font-size: 0.8rem; color: rgba(255,255,255,0.8); line-height: 1.4; max-height: 3.6em; overflow: hidden; transition: max-height 0.3s ease;">
+                                                        ${shot.prompt || 'No prompt'}
                                                     </div>
                                                 </div>
                                             `).join('')}
                                         </div>
+                                        <style>
+                                            .shot-prompt-text.expanded { max-height: none !important; }
+                                        </style>
                                     </details>
                                 </div>
                             ` : ''}
