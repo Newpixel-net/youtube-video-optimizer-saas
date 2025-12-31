@@ -27138,97 +27138,36 @@ You MUST incorporate all characters, world-building, and visual signature elemen
 This is NOT optional - failure to use this enrichment data will result in generic content.
 ` : ''}
 
-=== HOLLYWOOD CHOREOGRAPHY ENRICHMENT (CRITICAL FOR VIDEO QUALITY) ===
-Each scene MUST include detailed choreography data for AI video generation. This data enables precise 4-beat animation sequences with proper character blocking, physics, and continuity.
+=== SCENE CHOREOGRAPHY (for video animation) ===
+Each scene includes a "choreography" object to guide AI video generation with 4-beat timing:
 
-📍 PERFORMANCE BLUEPRINT (Required per scene):
-Define the emotional arc and energy progression:
-- sceneArc: The overall emotional shape ("build_to_climax" | "tension_release" | "steady_build" | "peak_then_calm")
-- overallIntensity: { start: 0.0-1.0, peak: 0.0-1.0, end: 0.0-1.0 }
-- characterEnergy: Map each character's energy through the scene
-  Example: { "Kai": ["hesitant:40%", "curious:60%", "committed:85%", "connected:70%"] }
+- sceneArc: The emotional shape ("build_to_climax" | "tension_release" | "steady_build" | "peak_then_calm")
+- intensityProgression: Array of 4 intensity values [beat1, beat2, beat3, beat4] from 0.0-1.0
+- blocking: String describing character positions and key movements
+- keyBeats: Array of 4 strings describing what happens in each beat:
+  * Beat 1 (0-2s): Establish the scene
+  * Beat 2 (2-5s): Develop the action
+  * Beat 3 (5-8s): Peak moment
+  * Beat 4 (8-10s): Resolve/transition
+- eyeContact: String describing key gaze moments between characters
+- physicsNote: String with body language hints (weight, breathing, tension)
+- environmentSync: String describing how environment reacts to action
 
-📍 SPATIAL BLOCKING (Required per scene):
-Define where characters are in the frame and how they move:
-- initialPositions: Where each character starts
-  Format: { "CharName": { stage: "left|center|right", depth: "foreground|midground|background", elevation: "floor|seated|standing|elevated", facing: "camera|away|left|right|character_name" } }
-- finalPositions: Where each character ends (same format)
-- formation: Starting formation ("triangle" | "line" | "scattered" | "facing_pair" | "circle")
-- formationChange: How formation evolves ("triangle → unified line" | "scattered → gathered")
-- keyDistances: Array of distance relationships (["Kai-to-Mei: 8ft → 2ft", "All converge to center"])
-
-📍 EYELINE CHOREOGRAPHY (Required - 4 entries per scene, one per beat):
-Define who looks at whom and when. This creates emotional connection and viewer guidance.
-Array of: { beat: 1-4, from: "CharName" or "All", to: "CharName" or "object" or "distance", emotion: "searching|connecting|avoiding|longing|threatening", duration: "brief|held|lingering" }
-
-Example:
-[
-  { beat: 1, from: "Kai", to: "artifact", emotion: "wary", duration: "held" },
-  { beat: 2, from: "Mei", to: "Kai", emotion: "hopeful", duration: "brief" },
-  { beat: 3, from: "Both", to: "artifact between them", emotion: "shared awe", duration: "held" },
-  { beat: 4, from: "Kai", to: "Mei's eyes", emotion: "gratitude", duration: "lingering" }
-]
-
-📍 BEAT BREAKDOWN (CRITICAL - Exactly 4 beats per scene):
-Divide EVERY scene into 4 timed beats. This is the foundation for video animation.
-
-Beat timing for ${clipDuration}-second shots:
-- Beat 1 (0-2s): ESTABLISH - Set up the visual, characters positioned, scene grounded
-- Beat 2 (2-5s): DEVELOP - Movement begins, action unfolds, tension builds
-- Beat 3 (5-8s): ESCALATE - Key action, peak moment, most visual interest
-- Beat 4 (8-10s): RESOLVE/TRANSITION - Conclude beat, set up continuity to next shot
-
-Each beat requires:
+Example choreography:
 {
-  beat: 1-4,
-  timing: "0-2s" | "2-5s" | "5-8s" | "8-10s",
-  action: "What happens in this beat (one sentence)",
-  characterStates: {
-    "CharName": {
-      position: "Where in frame (e.g., 'center-left, 3 feet from Mei')",
-      gesture: "What their hands/body are doing (e.g., 'right hand rises slowly, fingers spread')",
-      expression: "What's on their face (e.g., 'conflict visible - desire vs caution, jaw tightens')",
-      bodyLanguage: "Posture and weight (e.g., 'weight shifts forward, breath held, shoulders tense')"
-    }
-  },
-  environmentState: "What the environment is doing (e.g., 'Artifact glow pulses brighter, shadows deepen')",
-  cameraNote: "Camera behavior (e.g., 'Slow push toward hands, shallow focus')",
-  intensity: 0.0-1.0
+  "sceneArc": "build_to_climax",
+  "intensityProgression": [0.4, 0.6, 0.85, 0.7],
+  "blocking": "Kai center-left facing Mei at center-right, 4ft apart. Kai steps forward to 2ft by beat 3.",
+  "keyBeats": [
+    "Beat 1 (0-2s): Mei reveals artifact, Kai's eyes widen in recognition",
+    "Beat 2 (2-5s): Kai reaches hesitantly toward artifact, internal conflict visible",
+    "Beat 3 (5-8s): Kai grasps artifact, both feel its power surge through them",
+    "Beat 4 (8-10s): Eyes meet over glowing artifact, alliance sealed"
+  ],
+  "eyeContact": "Kai: artifact → Mei's hands → artifact → Mei's eyes",
+  "physicsNote": "Kai: weight back (hesitant) → forward (committed). Visible breath held at beat 3.",
+  "environmentSync": "Artifact glow: soft → pulsing → flare at contact → warm steady"
 }
-
-📍 OBJECT TRACKING (Required if scene has important props):
-Track objects/props through the scene beats:
-{
-  object: "artifact name",
-  states: [
-    { beat: 1, holder: "Mei", visibility: "revealed", position: "cupped in both palms, extended" },
-    { beat: 2, holder: "Mei", visibility: "prominent", position: "extended toward Kai" },
-    { beat: 3, holder: "both", visibility: "central focus", position: "shared grip, lifted between them" },
-    { beat: 4, holder: "both", visibility: "secondary", position: "held together, eye contact primary" }
-  ]
-}
-
-📍 ENVIRONMENTAL CUES (Required - sync environment to action):
-Define how environment reacts to character actions/emotions:
-[
-  { beat: 1, element: "artifact glow", state: "soft pulse", syncedTo: "reveal moment" },
-  { beat: 2, element: "shadows", state: "deepening", syncedTo: "Kai's approach" },
-  { beat: 3, element: "particles + light", state: "flare outward", syncedTo: "contact moment" },
-  { beat: 4, element: "all elements", state: "settling calm", syncedTo: "emotional resolution" }
-]
-
-=== WHY CHOREOGRAPHY MATTERS ===
-Without this data, AI video generation produces:
-- Static characters standing around
-- Random movements not connected to story
-- No emotional progression within shots
-- Poor continuity between shots
-
-WITH this data, AI video generation produces:
-- Precisely choreographed 4-beat sequences
-- Characters moving with purpose and emotion
-- Physics-aware animation (weight, breathing, tension)
-- Professional Hollywood-quality cinematography
 
 === HOLLYWOOD CINEMATOGRAPHY REQUIREMENTS FOR visualPrompt ===
 Each visualPrompt MUST be a RICH, DETAILED cinematographic description with ALL these elements:
@@ -27419,97 +27358,20 @@ Return ONLY valid JSON:
       "charactersInScene": ["Character names from characters array"],
       "sceneRole": "setup|conflict|rising_action|climax|resolution",
 
-      "performanceBlueprint": {
+      "choreography": {
         "sceneArc": "build_to_climax|tension_release|steady_build|peak_then_calm",
-        "overallIntensity": { "start": 0.4, "peak": 0.85, "end": 0.7 },
-        "characterEnergy": {
-          "CharacterName": ["emotion:intensity%", "emotion:intensity%", "emotion:intensity%", "emotion:intensity%"]
-        }
-      },
-
-      "spatialBlocking": {
-        "initialPositions": {
-          "CharacterName": { "stage": "left|center|right", "depth": "foreground|midground|background", "elevation": "floor|seated|standing|elevated", "facing": "camera|away|left|right|CharacterName" }
-        },
-        "finalPositions": {
-          "CharacterName": { "stage": "left|center|right", "depth": "foreground|midground|background", "elevation": "floor|seated|standing|elevated", "facing": "camera|away|left|right|CharacterName" }
-        },
-        "formation": "triangle|line|scattered|facing_pair|circle",
-        "formationChange": "formation → new_formation (or 'static' if unchanged)",
-        "keyDistances": ["CharA-to-CharB: Xft → Yft"]
-      },
-
-      "eyelines": [
-        { "beat": 1, "from": "CharacterName", "to": "target", "emotion": "wary|hopeful|threatening|longing", "duration": "brief|held|lingering" },
-        { "beat": 2, "from": "CharacterName", "to": "target", "emotion": "emotion", "duration": "duration" },
-        { "beat": 3, "from": "CharacterName", "to": "target", "emotion": "emotion", "duration": "duration" },
-        { "beat": 4, "from": "CharacterName", "to": "target", "emotion": "emotion", "duration": "duration" }
-      ],
-
-      "beatBreakdown": [
-        {
-          "beat": 1,
-          "timing": "0-2s",
-          "action": "What happens in this beat (one sentence)",
-          "characterStates": {
-            "CharacterName": {
-              "position": "Where in frame with distance from others",
-              "gesture": "What hands/body are doing",
-              "expression": "What is visible on their face",
-              "bodyLanguage": "Posture, weight distribution, tension level"
-            }
-          },
-          "environmentState": "What environment is doing (lighting, particles, atmospheric effects)",
-          "cameraNote": "Camera behavior for this beat",
-          "intensity": 0.5
-        },
-        {
-          "beat": 2,
-          "timing": "2-5s",
-          "action": "Beat 2 action",
-          "characterStates": {},
-          "environmentState": "Environment state",
-          "cameraNote": "Camera note",
-          "intensity": 0.65
-        },
-        {
-          "beat": 3,
-          "timing": "5-8s",
-          "action": "Beat 3 action (usually peak action)",
-          "characterStates": {},
-          "environmentState": "Environment state",
-          "cameraNote": "Camera note",
-          "intensity": 0.85
-        },
-        {
-          "beat": 4,
-          "timing": "8-10s",
-          "action": "Beat 4 action (resolution/transition)",
-          "characterStates": {},
-          "environmentState": "Environment state",
-          "cameraNote": "Camera note",
-          "intensity": 0.7
-        }
-      ],
-
-      "objectTracking": [
-        {
-          "object": "Name of important prop/artifact",
-          "states": [
-            { "beat": 1, "holder": "CharacterName|none", "visibility": "hidden|revealed|prominent|secondary", "position": "Position description" },
-            { "beat": 2, "holder": "CharacterName", "visibility": "visibility", "position": "Position" },
-            { "beat": 3, "holder": "CharacterName", "visibility": "visibility", "position": "Position" },
-            { "beat": 4, "holder": "CharacterName", "visibility": "visibility", "position": "Position" }
-          ]
-        }
-      ],
-
-      "environmentalCues": [
-        { "beat": 1, "element": "wind|light|particles|glow|shadows", "state": "starting|intensifying|calming|shifting", "syncedTo": "What action/emotion triggers this" },
-        { "beat": 2, "element": "element", "state": "state", "syncedTo": "trigger" },
-        { "beat": 3, "element": "element", "state": "state", "syncedTo": "trigger" },
-        { "beat": 4, "element": "element", "state": "state", "syncedTo": "trigger" }
-      ]
+        "intensityProgression": [0.4, 0.6, 0.85, 0.7],
+        "blocking": "Character positions and movements (e.g., 'Kai center-left facing Mei, moves to center')",
+        "keyBeats": [
+          "Beat 1 (0-2s): Establish - what happens",
+          "Beat 2 (2-5s): Develop - what happens",
+          "Beat 3 (5-8s): Peak - what happens",
+          "Beat 4 (8-10s): Resolve - what happens"
+        ],
+        "eyeContact": "Key gaze moments (e.g., 'Kai looks at artifact then to Mei')",
+        "physicsNote": "Body language hints (e.g., 'weight forward, breath held')",
+        "environmentSync": "Environment reactions (e.g., 'artifact glows brighter at contact')"
+      }
     }
   ],
   "cta": "Call-to-action woven naturally into story (not presentation-style)",
@@ -41830,30 +41692,37 @@ const HOLLYWOOD_CHOREOGRAPHER = {
       return this.generateFallbackChoreography(enrichedScene, shotType, styleBible);
     }
 
+    // Expand simplified choreography format if needed
+    const expandedScene = enrichedScene.choreography
+      ? this.expandSimplifiedChoreography(enrichedScene)
+      : enrichedScene;
+
+    console.log('[HOLLYWOOD_CHOREOGRAPHER] Using', expandedScene.choreography ? 'simplified' : 'expanded', 'choreography format');
+
     // Generate all component data from engines
-    const beatTimeline = BEAT_TIMELINE_GENERATOR.generateBeatTimeline(enrichedScene.beatBreakdown);
+    const beatTimeline = BEAT_TIMELINE_GENERATOR.generateBeatTimeline(expandedScene.beatBreakdown);
     const captureRecommendation = BEAT_TIMELINE_GENERATOR.getCaptureFrame(beatTimeline);
 
     const ensembleBlocking = ENSEMBLE_BLOCKING_SYSTEM.generateEnsembleBlocking(
-      enrichedScene.spatialBlocking,
-      enrichedScene.eyelines,
-      enrichedScene.beatBreakdown
+      expandedScene.spatialBlocking,
+      expandedScene.eyelines,
+      expandedScene.beatBreakdown
     );
 
-    const objectStates = OBJECT_STATE_MACHINE.generateObjectStates(enrichedScene.objectTracking || []);
+    const objectStates = OBJECT_STATE_MACHINE.generateObjectStates(expandedScene.objectTracking || []);
 
     const physicsLayer = PHYSICS_LAYER.generatePhysicsLayer(
-      enrichedScene.beatBreakdown,
-      enrichedScene.performanceBlueprint
+      expandedScene.beatBreakdown,
+      expandedScene.performanceBlueprint
     );
 
     const environmentResponses = ENVIRONMENT_RESPONSE_SYSTEM.generateEnvironmentResponses(
-      enrichedScene.environmentalCues || [],
-      enrichedScene.beatBreakdown
+      expandedScene.environmentalCues || [],
+      expandedScene.beatBreakdown
     );
 
     const crossCallbacks = CROSS_SHOT_CALLBACKS.generateCrossCallbacks(
-      enrichedScene,
+      expandedScene,
       previousScene,
       nextScene
     );
@@ -41861,11 +41730,11 @@ const HOLLYWOOD_CHOREOGRAPHER = {
     // Combine all data into choreography structure
     const choreographyData = {
       sceneInfo: {
-        number: enrichedScene.sceneNumber || enrichedScene.id || 1,
-        title: enrichedScene.sceneTitle || `Scene ${enrichedScene.sceneNumber || 1}`,
+        number: expandedScene.sceneNumber || expandedScene.id || 1,
+        title: expandedScene.sceneTitle || `Scene ${expandedScene.sceneNumber || 1}`,
         shotType: shotType,
-        sceneType: enrichedScene.sceneType || 'dialogue',
-        sceneArc: enrichedScene.performanceBlueprint?.sceneArc || 'build_to_climax'
+        sceneType: expandedScene.sceneType || 'dialogue',
+        sceneArc: expandedScene.performanceBlueprint?.sceneArc || 'build_to_climax'
       },
       spatial: ensembleBlocking,
       beats: beatTimeline.map((beat, i) => ({
@@ -41894,15 +41763,88 @@ const HOLLYWOOD_CHOREOGRAPHER = {
 
   /**
    * Check if scene has choreography enrichment data
+   * Supports both simplified format (choreography object) and expanded format
    */
   hasChoreographyData(scene) {
     if (!scene) return false;
+    // Check for simplified choreography format (new)
+    if (scene.choreography?.keyBeats?.length > 0 || scene.choreography?.sceneArc) {
+      return true;
+    }
+    // Check for expanded format (legacy)
     return !!(
       scene.beatBreakdown?.length > 0 ||
       scene.spatialBlocking?.initialPositions ||
       scene.performanceBlueprint?.sceneArc ||
       scene.eyelines?.length > 0
     );
+  },
+
+  /**
+   * Expand simplified choreography format into full format for processing
+   */
+  expandSimplifiedChoreography(scene) {
+    const choreo = scene.choreography;
+    if (!choreo) return scene;
+
+    // Parse keyBeats into beatBreakdown
+    const beatBreakdown = (choreo.keyBeats || []).map((beatText, i) => {
+      // Extract action from "Beat X (timing): action" format
+      const actionMatch = beatText.match(/Beat \d.*?:\s*(.+)$/i);
+      const action = actionMatch ? actionMatch[1] : beatText;
+
+      return {
+        beat: i + 1,
+        timing: ['0-2s', '2-5s', '5-8s', '8-10s'][i],
+        action: action,
+        characterStates: {},
+        environmentState: '',
+        cameraNote: '',
+        intensity: choreo.intensityProgression?.[i] || [0.5, 0.65, 0.85, 0.7][i]
+      };
+    });
+
+    // Ensure 4 beats
+    while (beatBreakdown.length < 4) {
+      const i = beatBreakdown.length;
+      beatBreakdown.push({
+        beat: i + 1,
+        timing: ['0-2s', '2-5s', '5-8s', '8-10s'][i],
+        action: 'Action continues',
+        characterStates: {},
+        environmentState: '',
+        cameraNote: '',
+        intensity: [0.5, 0.65, 0.85, 0.7][i]
+      });
+    }
+
+    // Build expanded scene data
+    return {
+      ...scene,
+      beatBreakdown: beatBreakdown,
+      performanceBlueprint: {
+        sceneArc: choreo.sceneArc || 'steady_build',
+        overallIntensity: {
+          start: choreo.intensityProgression?.[0] || 0.5,
+          peak: Math.max(...(choreo.intensityProgression || [0.85])),
+          end: choreo.intensityProgression?.[3] || 0.7
+        },
+        characterEnergy: {}
+      },
+      spatialBlocking: {
+        initialPositions: {},
+        finalPositions: {},
+        formation: 'natural',
+        formationChange: 'static',
+        keyDistances: [],
+        blockingDescription: choreo.blocking || ''
+      },
+      eyelines: [],
+      eyeContactDescription: choreo.eyeContact || '',
+      physicsNote: choreo.physicsNote || '',
+      environmentSyncDescription: choreo.environmentSync || '',
+      environmentalCues: []
+    };
   },
 
   /**
