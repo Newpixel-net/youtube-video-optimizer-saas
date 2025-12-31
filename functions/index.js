@@ -27037,6 +27037,91 @@ REQUIREMENTS for sceneAction:
 4. Provide enough detail for ${actualShotsPerScene} distinct 10-second video clips
 5. End with a clear "landing moment" that can be captured as a freeze frame
 
+=== CRITICAL: HOLLYWOOD NARRATIVE STRUCTURE BY SCENE POSITION ===
+Each scene's content MUST match its position in the story arc. Do NOT write generic content - write POSITION-AWARE content.
+
+📍 SCENE 1 - THE OPENING (World-First Structure):
+The opening scene MUST follow this exact structure - this is how Hollywood films begin:
+
+OPENING sceneAction STRUCTURE (3-4 shots):
+- Shot 1: WORLD ESTABLISHMENT - Show the ENVIRONMENT first. No character OR character as tiny distant figure.
+  "The camera glides over the neon-drenched skyline of Neo-Shaolin at dusk, hover-cars streaming between towering megastructures..."
+- Shot 2: CHARACTER REVEAL - Introduce the protagonist. They ENTER or are DISCOVERED.
+  "Among the rooftop gardens, a solitary figure emerges from the shadows - Kai, his weathered coat catching the wind..."
+- Shot 3+: CONTEXT & HOOK - Establish what draws them, hint at the journey ahead.
+  "He pauses at the edge, eyes fixed on a distant tower pulsing with forbidden energy. His hand moves to the artifact at his chest..."
+
+OPENING visualPrompt STRUCTURE:
+- MUST start with [Crane/Drone/Sweeping] camera movement showing ENVIRONMENT
+- First describe the WORLD, then find/reveal the CHARACTER within it
+- Character should feel like part of the world, not the sole focus initially
+
+❌ WRONG OPENING (Do NOT write this):
+"Kai stands at the heart of the nexus, channeling ancient energy..."
+- This is MID-STORY content. Character is already doing something significant.
+
+✅ CORRECT OPENING (Write this):
+"[Sweeping crane shot] Dawn breaks over the mist-shrouded peaks of the Jade Mountains, ancient temples dotting the cliffsides like scattered jewels. Prayer flags flutter in the morning breeze as the camera descends through clouds to find a lone monastery courtyard. There, amid the swirling fog, a young woman in simple training robes moves through fluid martial forms - this is Mei, her breath visible in the cold air, her movements precise yet graceful..."
+
+📍 SCENES 2-3 - ESTABLISHMENT & CONFLICT INTRODUCTION:
+These scenes establish characters and introduce the central conflict.
+
+ESTABLISHMENT sceneAction PATTERNS:
+- Introduce supporting characters through INTERACTION, not description
+- Show character relationships through dialogue and body language
+- Plant seeds of conflict - a disagreement, a warning, a mysterious event
+- End with a clear "call to action" or disruption of status quo
+
+Example for Scene 2:
+"In the monastery's candlelit library, Mei kneels before Master Chen, his ancient face etched with concern. He speaks slowly, each word weighted with meaning. Mei's expression shifts from confusion to disbelief as he reveals a hidden scroll. She reaches for it hesitantly, her fingers trembling. As she unrolls the brittle parchment, her eyes widen - the camera pushes in on her face as realization dawns. She looks up at her master, a question forming on her lips, but his grave nod confirms her fears."
+
+📍 MIDDLE SCENES - RISING ACTION:
+These scenes BUILD TENSION and COMPLICATE the journey.
+
+RISING ACTION sceneAction PATTERNS:
+- Each scene should ESCALATE stakes from the previous
+- Introduce obstacles, setbacks, or new information
+- Show character growth through challenges faced
+- Create mini-arcs within each scene: goal → obstacle → adaptation
+
+Progression principles:
+- Scene after scene should feel like climbing stairs, not walking flat
+- Each scene ends with MORE tension/stakes than it began
+- Victories should be partial; setbacks should reveal new paths
+
+📍 CLIMAX SCENE (Scene ${sceneCount - 1} or ${sceneCount - 2}):
+The peak of action/revelation - maximum tension.
+
+CLIMAX sceneAction REQUIREMENTS:
+- FASTEST pacing of any scene - quick cuts, intense action OR dramatic revelation
+- All story threads should converge here
+- Character faces their greatest challenge/makes crucial choice
+- NO new information - payoff what was set up earlier
+- End on the pivotal moment before resolution
+
+Example Climax:
+"Kai and the Shadow Lord circle each other in the shattered throne room, debris floating in the anti-gravity field. Lightning crackles between them as they clash - Kai is thrown back but rolls to his feet. He sees Mei struggling in energy bonds across the chamber. Their eyes meet. In that moment, Kai makes his choice - he hurls his weapon not at the Shadow Lord, but at the power conduit. The world erupts in blinding light..."
+
+📍 FINAL SCENE - RESOLUTION:
+The closing must provide emotional satisfaction and closure.
+
+RESOLUTION sceneAction STRUCTURE:
+- SLOW DOWN the pacing - let the audience breathe
+- Show the NEW STATUS QUO - how the world/characters have changed
+- Provide emotional payoff for character arcs
+- End with an IMAGE that encapsulates the journey's meaning
+- Optional: hint at future (for series) but resolve the main arc
+
+Example Resolution:
+"Sunlight streams through the restored temple windows as villagers gather in celebration. Mei moves through the crowd, accepting grateful touches and tearful embraces. She finds Kai standing apart, gazing at the horizon. They share a wordless moment - everything that needed saying already said. Mei places the restored artifact on its ancient pedestal. As its light fills the chamber, she turns back to Kai with the smallest smile. Together, they walk toward the temple doors, silhouettes framed against the bright new day. The massive doors slowly close behind them."
+
+=== SCENE-TO-SCENE FLOW REQUIREMENTS ===
+1. Each scene's OPENING SHOT should connect to the previous scene's FINAL SHOT
+2. Emotional energy should flow logically: calm→tension→peak→resolution
+3. Character knowledge should accumulate - they learn/change each scene
+4. Location changes should be motivated by story needs, not random
+5. Time progression should be clear (same day? next morning? weeks later?)
+
 5. AUDIO TIMING:
    - Voiceover scenes: ~${wordsPerScene} words
    - Dialogue scenes: 2-4 lines of dialogue per ${clipDuration}-second clip
