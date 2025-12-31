@@ -13145,6 +13145,60 @@
                             ${subTypeConfig.characteristics ? `<div style="font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.5rem;">Characteristics: ${subTypeConfig.characteristics.join(' • ')}</div>` : ''}
                         </div>
                     `;
+
+                    // ==========================================
+                    // VISUAL_STYLE_DNA: Visual Rendering Style Selector
+                    // This controls whether images are photorealistic, cinematic, 3D animated, etc.
+                    // ==========================================
+                    const visualStyleModes = [
+                        { id: 'photorealistic', name: 'Photorealistic', icon: '📷', description: 'Real photography, documentary realism', color: '#10b981' },
+                        { id: 'cinematic', name: 'Cinematic', icon: '🎬', description: 'Hollywood blockbuster look', color: '#8b5cf6' },
+                        { id: 'stylized_3d', name: 'Stylized 3D', icon: '🎨', description: 'Pixar/Disney animation', color: '#f59e0b' },
+                        { id: 'illustrated', name: 'Illustrated', icon: '🖌️', description: 'Concept art style', color: '#ec4899' },
+                        { id: 'anime', name: 'Anime', icon: '✨', description: 'Japanese animation', color: '#06b6d4' },
+                        { id: 'noir', name: 'Film Noir', icon: '🌑', description: 'High contrast shadows', color: '#6b7280' }
+                    ];
+                    const currentVisualStyle = state.content.visualStyleMode || 'photorealistic';
+
+                    // Build visual style cards
+                    let visualStyleHtml = '';
+                    visualStyleModes.forEach(style => {
+                        const isStyleSelected = currentVisualStyle === style.id;
+                        visualStyleHtml += `
+                            <div onclick="setVisualStyleMode('${style.id}')"
+                                 style="cursor: pointer; padding: 0.5rem; border-radius: 0.5rem; border: 2px solid ${isStyleSelected ? style.color : 'rgba(255,255,255,0.1)'}; background: ${isStyleSelected ? style.color + '20' : 'rgba(255,255,255,0.03)'}; text-align: center; transition: all 0.2s;">
+                                <div style="font-size: 1.1rem;">${style.icon}</div>
+                                <div style="font-size: 0.7rem; color: ${isStyleSelected ? style.color : 'white'}; font-weight: 600; margin-top: 0.2rem;">${style.name}</div>
+                                <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5); margin-top: 0.1rem;">${style.description}</div>
+                            </div>
+                        `;
+                    });
+
+                    const selectedStyleData = visualStyleModes.find(s => s.id === currentVisualStyle);
+                    const bestForMap = {
+                        'photorealistic': 'Real stories, documentaries, live-action',
+                        'cinematic': 'Hollywood films, blockbusters, music videos',
+                        'stylized_3d': 'Family content, animation projects',
+                        'illustrated': 'Artistic content, concept videos',
+                        'anime': 'Anime-style content, manga adaptations',
+                        'noir': 'Crime dramas, mysteries, dark content'
+                    };
+
+                    html += `
+                        <div style="margin-top: 1rem; padding: 1rem; background: rgba(16, 185, 129, 0.1); border-radius: 0.5rem; border: 1px solid rgba(16, 185, 129, 0.3);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                <span style="font-size: 1rem;">🎨</span>
+                                <span style="font-weight: 600; color: #10b981;">Visual Rendering Style</span>
+                                <span style="margin-left: auto; font-size: 0.6rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #10b981, #06b6d4); border-radius: 0.2rem; color: white; font-weight: 600;">CRITICAL</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.4rem;">
+                                ${visualStyleHtml}
+                            </div>
+                            <div style="margin-top: 0.5rem; font-size: 0.7rem; color: ${selectedStyleData?.color || '#10b981'};">
+                                ✅ Best for: ${bestForMap[currentVisualStyle] || ''}
+                            </div>
+                        </div>
+                    `;
                 }
             }
 
