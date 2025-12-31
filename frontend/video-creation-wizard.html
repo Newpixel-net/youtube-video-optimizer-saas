@@ -8069,6 +8069,17 @@
                         storyboardScene.prompt = fullPrompt;
                         storyboardScene.source = 'ai';
                         storyboardScene.usedCharacterRef = characterRef ? characterRef.characterName : null;
+
+                        // CRITICAL: Sync scene image to Shot 1 if decomposed
+                        // When scene image is regenerated, Shot 1 should automatically get the new image
+                        const decomposed = state.storyboard.multiShotMode?.decomposedScenes?.[sceneId];
+                        if (decomposed?.shots?.length > 0) {
+                            decomposed.shots[0].imageUrl = storyboardScene.imageUrl;
+                            decomposed.shots[0].status = 'ready';
+                            decomposed.shots[0].fromSceneImage = true;
+                            console.log('[Scene Generation] Synced new scene image to Shot 1');
+                        }
+
                         showToast(`Image generated! (${modelConfig.name})${characterRef ? ' with character ref' : ''}`, 'success');
                         scheduleAutoSave();
                     } else {
@@ -8318,6 +8329,17 @@
                         consistencyAnchors: result.data.consistencyAnchors,
                         selectedShot: 0
                     };
+
+                    // CRITICAL: Auto-sync scene image to Shot 1
+                    // Shot 1 should automatically use the scene's existing image as its starting frame
+                    const storyboardScene = state.storyboard.scenes.find(s => s.sceneId === sceneId);
+                    if (storyboardScene?.imageUrl && result.data.shots.length > 0) {
+                        const shot1 = state.storyboard.multiShotMode.decomposedScenes[sceneId].shots[0];
+                        shot1.imageUrl = storyboardScene.imageUrl;
+                        shot1.status = 'ready';
+                        shot1.fromSceneImage = true;
+                        console.log('[decomposeSceneToShots] Auto-synced scene image to Shot 1:', storyboardScene.imageUrl);
+                    }
 
                     showToast(`✅ Scene decomposed into ${result.data.shotCount} shots!`, 'success');
                     render();
@@ -11430,6 +11452,16 @@
                             await new Promise(resolve => setTimeout(resolve, 1000));
 
                             storyboardScene.status = 'ready';
+
+                            // CRITICAL: Sync scene image to Shot 1 if decomposed
+                            // When HiDream scene image completes, Shot 1 should automatically get the image
+                            const decomposed = state.storyboard.multiShotMode?.decomposedScenes?.[sceneId];
+                            if (decomposed?.shots?.length > 0 && storyboardScene.imageUrl) {
+                                decomposed.shots[0].imageUrl = storyboardScene.imageUrl;
+                                decomposed.shots[0].status = 'ready';
+                                decomposed.shots[0].fromSceneImage = true;
+                                console.log('[HiDream Polling] Synced completed scene image to Shot 1');
+                            }
                         }
 
                         // Check if all generating scenes are done
