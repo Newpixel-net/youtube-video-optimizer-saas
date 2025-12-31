@@ -4113,6 +4113,41 @@
             }, 2000);
         }
 
+        /**
+         * Prepare data for saving by stripping large base64 images
+         * This prevents 503 errors from payload size limits (Cloud Functions: 10MB, Firestore: 1MB)
+         * Reference images are stored in Firebase Storage and accessed via URLs
+         */
+        function prepareDataForSave(data) {
+            if (!data) return data;
+            if (typeof data !== 'object') return data;
+            if (Array.isArray(data)) {
+                return data.map(item => prepareDataForSave(item));
+            }
+
+            const cleaned = {};
+            for (const [key, value] of Object.entries(data)) {
+                // Skip base64 image data - these are stored in Firebase Storage
+                if (key.includes('Base64') || key.includes('base64')) {
+                    // Keep a flag that indicates there WAS data, but don't save the actual base64
+                    if (value) {
+                        cleaned[key.replace('Base64', 'HasData').replace('base64', 'HasData')] = true;
+                    }
+                    continue;
+                }
+                // Skip UI-only state that shouldn't be persisted
+                if (key === 'activePollingIntervals' || key === 'decompositionModal' ||
+                    key === 'modifyingScene' || key === 'modifyPrompt' || key === 'modifyStyle' ||
+                    key === 'showStyleBibleModal' || key === 'showCharacterBibleModal' ||
+                    key === 'showLocationBibleModal' || key === 'showTechnicalSpecsModal') {
+                    continue;
+                }
+                // Recursively clean nested objects
+                cleaned[key] = prepareDataForSave(value);
+            }
+            return cleaned;
+        }
+
         async function saveProject(silent = false) {
             if (isSaving) return;
             isSaving = true;
@@ -4120,7 +4155,8 @@
             try {
                 const saveProjectFn = functions.httpsCallable('creationWizardSaveProject');
 
-                const projectData = {
+                // Prepare cleaned data - strips base64 images to prevent payload size issues
+                const projectData = prepareDataForSave({
                     name: state.project.name || generateProjectName(),
                     status: state.project.status,
                     // CRITICAL: Save current step and max reached step for proper restoration
@@ -4138,7 +4174,9 @@
                     animation: state.animation,
                     assembly: state.assembly,
                     export: state.export
-                };
+                });
+
+                console.log('[saveProject] Saving project data (base64 stripped)');
 
                 const result = await saveProjectFn({
                     projectId: state.project.id || null,
@@ -4244,8 +4282,10 @@
                         state.storyboard = { ...state.storyboard, ...project.storyboard };
                         // Phase 4: Initialize Scene Memory defaults for older projects
                         initSceneMemory();
-                        // Refresh character portrait base64 from URLs (don't await, run in background)
+                        // Refresh reference image base64 from URLs (don't await, run in background)
+                        // Base64 data is stripped during save to prevent payload size issues
                         refreshCharacterPortraitBase64();
+                        refreshLocationReferenceBase64();
                     }
 
                     // Restore animation data
@@ -6477,6 +6517,32 @@
                         }
                     } catch (error) {
                         console.warn(`[Character Bible] Failed to refresh base64 for "${char.name}":`, error);
+                    }
+                }
+            }
+        }
+
+        /**
+         * Refresh location reference images from URLs after project load
+         * Base64 data is stripped during save to prevent payload size issues
+         * This restores the base64 data needed for image generation
+         */
+        async function refreshLocationReferenceBase64() {
+            if (!state.storyboard.locationBible?.locations) return;
+
+            const locations = state.storyboard.locationBible.locations;
+
+            for (const loc of locations) {
+                // If location has a reference URL but no base64, fetch and convert
+                if (loc.referenceImageUrl && loc.referenceImageStatus === 'ready' && !loc.referenceImageBase64) {
+                    try {
+                        console.log(`[Location Bible] Refreshing base64 for "${loc.name}"`);
+                        const base64 = await fetchImageAsBase64(loc.referenceImageUrl);
+                        if (base64) {
+                            loc.referenceImageBase64 = base64;
+                        }
+                    } catch (error) {
+                        console.warn(`[Location Bible] Failed to refresh base64 for "${loc.name}":`, error);
                     }
                 }
             }
