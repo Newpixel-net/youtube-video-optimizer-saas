@@ -4873,6 +4873,27 @@
             scheduleAutoSave();
         }
 
+        // VISUAL_STYLE_DNA: Set Visual Rendering Style
+        // This controls whether images are photorealistic, cinematic, 3D animated, etc.
+        function setVisualStyleMode(styleMode) {
+            state.content.visualStyleMode = styleMode;
+            console.log('[VISUAL_STYLE_DNA] Selected style mode:', styleMode);
+
+            // Show feedback to user
+            const styleNames = {
+                'photorealistic': 'Photorealistic (Real Photography)',
+                'cinematic': 'Cinematic (Hollywood Look)',
+                'stylized_3d': 'Stylized 3D (Pixar Quality)',
+                'illustrated': 'Illustrated (Concept Art)',
+                'anime': 'Anime (Japanese Animation)',
+                'noir': 'Film Noir (High Contrast)'
+            };
+            showNotification(`Visual style set to: ${styleNames[styleMode] || styleMode}`, 'success');
+
+            render();
+            scheduleAutoSave();
+        }
+
         // ==========================================
         // GENRE INTELLIGENCE SYSTEM
         // Cascades production settings from genre selection
@@ -10944,7 +10965,9 @@
                     characterReference: characterReference,
                     characterBible: characterBible,
                     // Location consistency parameters
-                    locationBible: locationBible
+                    locationBible: locationBible,
+                    // VISUAL_STYLE_DNA: Visual rendering style mode
+                    visualStyleMode: state.content.visualStyleMode || 'photorealistic'
                 });
 
                 if (result.data.success) {
@@ -13798,6 +13821,57 @@
                     ` : ''}
                 </div>
             `;
+
+            // VISUAL_STYLE_DNA: Visual Rendering Style Selector
+            // This controls whether images are photorealistic, cinematic, 3D animated, etc.
+            const visualStyleModes = [
+                { id: 'photorealistic', name: 'Photorealistic', icon: '📷', description: 'Real photography, documentary realism, actual humans', color: '#10b981' },
+                { id: 'cinematic', name: 'Cinematic', icon: '🎬', description: 'Hollywood blockbuster look, dramatic but grounded', color: '#8b5cf6' },
+                { id: 'stylized_3d', name: 'Stylized 3D', icon: '🎨', description: 'Pixar/Disney quality 3D animation', color: '#f59e0b' },
+                { id: 'illustrated', name: 'Illustrated', icon: '🖌️', description: 'Concept art, painterly artistic style', color: '#ec4899' },
+                { id: 'anime', name: 'Anime', icon: '✨', description: 'High-quality Japanese animation style', color: '#06b6d4' },
+                { id: 'noir', name: 'Film Noir', icon: '🌑', description: 'High contrast, dramatic shadows', color: '#6b7280' }
+            ];
+            const selectedVisualStyle = state.content.visualStyleMode || 'photorealistic';
+
+            html += \`
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <div class="content-card-icon">🎨</div>
+                        <div>
+                            <div class="content-card-title">Visual Rendering Style</div>
+                            <div class="content-card-subtitle">How your images will look - photorealistic, cinematic, 3D, etc.</div>
+                        </div>
+                        <span style="margin-left: auto; font-size: 0.55rem; padding: 0.15rem 0.4rem; background: linear-gradient(135deg, #10b981, #06b6d4); border-radius: 0.2rem; color: white; font-weight: 600;">CRITICAL</span>
+                    </div>
+
+                    <!-- Visual Style Grid -->
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
+                        \${visualStyleModes.map(style => \`
+                            <div onclick="setVisualStyleMode('\${style.id}')"
+                                 style="padding: 0.6rem; border-radius: 0.5rem; border: 2px solid \${selectedVisualStyle === style.id ? style.color : 'rgba(255,255,255,0.1)'}; background: \${selectedVisualStyle === style.id ? style.color + '20' : 'rgba(255,255,255,0.03)'}; cursor: pointer; transition: all 0.2s; text-align: center;">
+                                <div style="font-size: 1.2rem;">\${style.icon}</div>
+                                <div style="font-size: 0.7rem; color: \${selectedVisualStyle === style.id ? style.color : 'white'}; font-weight: 600; margin-top: 0.25rem;">\${style.name}</div>
+                                <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5); margin-top: 0.2rem; line-height: 1.3;">\${style.description}</div>
+                            </div>
+                        \`).join('')}
+                    </div>
+
+                    <!-- Selected Style Info -->
+                    \${selectedVisualStyle ? \`
+                        <div style="margin-top: 0.75rem; padding: 0.6rem; background: \${visualStyleModes.find(s => s.id === selectedVisualStyle)?.color || '#10b981'}15; border-radius: 0.4rem; border: 1px solid \${visualStyleModes.find(s => s.id === selectedVisualStyle)?.color || '#10b981'}40;">
+                            <div style="font-size: 0.7rem; color: \${visualStyleModes.find(s => s.id === selectedVisualStyle)?.color || '#10b981'}; font-weight: 600;">
+                                \${selectedVisualStyle === 'photorealistic' ? '✅ Best for: Real stories, documentaries, live-action films with actual people' :
+                                  selectedVisualStyle === 'cinematic' ? '✅ Best for: Hollywood-style dramatic films, blockbusters, music videos' :
+                                  selectedVisualStyle === 'stylized_3d' ? '✅ Best for: Family content, animation projects, stylized characters' :
+                                  selectedVisualStyle === 'illustrated' ? '✅ Best for: Artistic content, concept videos, unique visual narratives' :
+                                  selectedVisualStyle === 'anime' ? '✅ Best for: Anime-style content, manga adaptations, Japanese aesthetics' :
+                                  selectedVisualStyle === 'noir' ? '✅ Best for: Crime dramas, mysteries, dark atmospheric content' : ''}
+                            </div>
+                        </div>
+                    \` : ''}
+                </div>
+            \`;
 
             // Phase 3F: Narrative Structure Intelligence Card
             const narrativePreset = state.content.narrativePreset || '';

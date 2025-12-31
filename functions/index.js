@@ -33838,57 +33838,83 @@ const NANOBANANA_PROMPT_BUILDER = {
 
   /**
    * Build a narrative prompt for shot image generation
+   * NOW INTEGRATES WITH VISUAL_STYLE_DNA for comprehensive style control
+   *
    * @param {Object} shot - Shot data with shotType, prompt, etc.
    * @param {Object} context - Scene context with environment, lighting, mood
    * @param {Object} characterBible - Character information
    * @param {Object} styleBible - Style/visual guidelines
+   * @param {string} visualStyleMode - VISUAL_STYLE_DNA mode (photorealistic, cinematic, etc.)
    * @returns {string} Optimized narrative prompt
    */
-  buildShotPrompt(shot, context = {}, characterBible = null, styleBible = null) {
+  buildShotPrompt(shot, context = {}, characterBible = null, styleBible = null, visualStyleMode = 'photorealistic') {
     const shotType = (shot.shotType || 'medium').toLowerCase();
     const parts = [];
 
-    // 1. COMPOSITION BUZZWORD (proven to improve framing)
+    // 0. GET VISUAL_STYLE_DNA ENHANCEMENT - This is the KEY to jaw-dropping results
+    const hasHumanSubject = !!(characterBible && characterBible.length > 0);
+    const styleEnhancement = VISUAL_STYLE_DNA.buildStyleEnhancement(visualStyleMode, hasHumanSubject);
+
+    // 1. VISUAL_STYLE_DNA PREFIX - MUST come FIRST for maximum impact
+    // This is what differentiates photorealistic from 3D rendered output
+    parts.push(styleEnhancement.prefix);
+
+    // 2. COMPOSITION BUZZWORD (proven to improve framing)
     const buzzword = this.compositionBuzzwords[Math.floor(Math.random() * 3)]; // Use top 3
     parts.push(buzzword + '.');
 
-    // 2. SHOT TYPE with NARRATIVE description
+    // 3. SHOT TYPE with NARRATIVE description
     const shotTypeDesc = this._getShotTypeNarrative(shotType, shot, context);
     parts.push(shotTypeDesc);
 
-    // 3. SUBJECT description (if character present)
-    if (characterBible && characterBible.length > 0) {
+    // 4. SUBJECT description (if character present)
+    if (hasHumanSubject) {
       const charDesc = this._buildCharacterDescription(characterBible, shot);
       if (charDesc) parts.push(charDesc);
+
+      // 4.5 SKIN RENDERING from VISUAL_STYLE_DNA (critical for realism)
+      if (styleEnhancement.skinText) {
+        parts.push(styleEnhancement.skinText + '.');
+      }
     }
 
-    // 4. ENVIRONMENT and ATMOSPHERE
+    // 5. ENVIRONMENT and ATMOSPHERE
     if (context.visualPrompt || context.environment) {
       const envDesc = this._buildEnvironmentDescription(context);
       parts.push(envDesc);
     }
 
-    // 5. LIGHTING (critical for photorealism)
-    const lighting = this._selectLighting(context, styleBible);
-    parts.push(`The scene is illuminated by ${lighting}.`);
+    // 6. LIGHTING - Now enhanced with VISUAL_STYLE_DNA lighting
+    const baseLighting = this._selectLighting(context, styleBible);
+    const styleLighting = styleEnhancement.lighting || '';
+    const combinedLighting = styleLighting ? `${baseLighting}, ${styleLighting}` : baseLighting;
+    parts.push(`The scene is illuminated by ${combinedLighting}.`);
 
-    // 6. MOOD and ATMOSPHERE
+    // 7. MOOD and ATMOSPHERE
     if (context.mood || shot.mood) {
       parts.push(`The atmosphere feels ${context.mood || shot.mood}.`);
     }
 
-    // 7. CAMERA SPECIFICATIONS (for photorealism)
-    const cameraSpec = this.cameraSpecs[this._mapShotTypeToCamera(shotType)];
-    parts.push(cameraSpec + '.');
+    // 8. CAMERA SPECIFICATIONS - Enhanced with VISUAL_STYLE_DNA camera language
+    const baseCameraSpec = this.cameraSpecs[this._mapShotTypeToCamera(shotType)];
+    const styleCameraSpec = styleEnhancement.camera || '';
+    const combinedCamera = styleCameraSpec || baseCameraSpec;
+    parts.push(combinedCamera + '.');
 
-    // 8. FRAMING RULES with CAPS emphasis
+    // 9. FRAMING RULES with CAPS emphasis
     const framingRule = this.framingRules[this._mapToFramingCategory(shotType)];
     parts.push(framingRule);
 
-    // 9. REALISM CONSTRAINTS
-    parts.push('Natural skin texture with visible pores, film grain, authentic fabric textures.');
+    // 10. REALISM CONSTRAINTS - Now style-specific
+    if (visualStyleMode === 'photorealistic' || visualStyleMode === 'cinematic') {
+      parts.push('Natural skin texture with visible pores, film grain, authentic fabric textures, real-world physics.');
+    } else if (visualStyleMode === 'stylized_3d') {
+      parts.push('Pixar-quality rendering, appealing stylized surfaces, expressive animation design.');
+    } else if (visualStyleMode === 'anime') {
+      parts.push('Clean anime linework, expressive anime eyes, dynamic anime composition.');
+    }
 
-    // 10. STYLE BIBLE elements
+    // 11. STYLE BIBLE elements
     if (styleBible && styleBible.enabled) {
       const styleElements = [];
       if (styleBible.colorGrade) styleElements.push(styleBible.colorGrade);
@@ -33898,10 +33924,15 @@ const NANOBANANA_PROMPT_BUILDER = {
       }
     }
 
-    // 11. NEGATIVE instructions (what to avoid)
-    parts.push('STRICTLY AVOID: blurry, distorted anatomy, cropped heads, cut-off faces, characters facing away, back-of-head shots, AI-generated artifacts, plastic skin, unnatural poses, low resolution, JPEG artifacts.');
+    // 12. TECHNICAL QUALITY from VISUAL_STYLE_DNA
+    parts.push(styleEnhancement.suffix + '.');
 
-    // 12. FINAL CHARACTER EMPHASIS (critical for proper output)
+    // 13. NEGATIVE instructions - Now using VISUAL_STYLE_DNA negatives
+    // Note: For Imagen, we include AVOID in the positive prompt since it doesn't support negative prompt parameter
+    const negativeKeywords = styleEnhancement.negative.split(', ').slice(0, 20).join(', '); // Limit to avoid prompt bloat
+    parts.push(`STRICTLY AVOID: ${negativeKeywords}, cropped heads, cut-off faces, characters facing away, back-of-head shots.`);
+
+    // 14. FINAL CHARACTER EMPHASIS (critical for proper output)
     parts.push('FINAL REQUIREMENT: Character MUST be the hero of this shot - clearly visible, properly framed, and FACING THE CAMERA with face clearly recognizable. The character is the main subject, environment is secondary.');
 
     return parts.join(' ');
@@ -38954,6 +38985,548 @@ const COLOR_GRADING_PRESETS_GLOBAL = {
 };
 
 // =============================================================================
+// SECTION 9.0: VISUAL_STYLE_DNA - Comprehensive Visual Style Engine
+// =============================================================================
+/**
+ * VISUAL_STYLE_DNA
+ *
+ * The definitive visual style engine that controls HOW images are rendered.
+ * This is the difference between amateur and jaw-dropping professional output.
+ *
+ * Each style mode includes:
+ * - promptPrefix: Critical keywords added at START of every prompt
+ * - cameraLanguage: Technical camera/lens specifications for authenticity
+ * - lightingStyle: How lighting should be described per style
+ * - textureKeywords: Surface/material quality descriptors
+ * - negativeKeywords: Explicit list of what to AVOID
+ * - referenceFilms: Style references for AI context
+ * - colorGrading: Color treatment approach
+ * - skinRendering: How human skin should appear (critical for realism)
+ */
+const VISUAL_STYLE_DNA = {
+
+  // Available style modes
+  STYLE_MODES: {
+    PHOTOREALISTIC: 'photorealistic',
+    CINEMATIC: 'cinematic',
+    STYLIZED_3D: 'stylized_3d',
+    ILLUSTRATED: 'illustrated',
+    ANIME: 'anime',
+    NOIR: 'noir'
+  },
+
+  // ========================================
+  // PHOTOREALISTIC - Real photography look
+  // ========================================
+  photorealistic: {
+    id: 'photorealistic',
+    name: 'Photorealistic',
+    description: 'Real photography, documentary realism, actual human beings',
+    icon: '📷',
+
+    // CRITICAL: These keywords MUST appear at the START of every prompt
+    promptPrefix: 'Professional photograph, real photography, genuine human being, authentic documentary realism, actual physical location, shot on location,',
+
+    // Camera authenticity language
+    cameraLanguage: {
+      primary: 'Shot on ARRI Alexa Mini with Zeiss Master Prime lenses',
+      alternatives: [
+        'Canon EOS R5 with RF 85mm f/1.2',
+        'Sony A7R IV with GM 24-70mm f/2.8',
+        'RED Komodo with Sigma Art primes',
+        'Blackmagic URSA with vintage Cooke lenses'
+      ],
+      sensorDescription: 'full-frame sensor, natural depth of field',
+      shutterLanguage: '180-degree shutter, natural motion'
+    },
+
+    // Lighting approach for realism
+    lightingStyle: {
+      approach: 'Natural available light with subtle fill',
+      keywords: ['natural window light', 'golden hour sunlight', 'overcast soft light', 'practical lighting from scene elements'],
+      avoid: ['dramatic stylized lighting', 'colored gels', 'artificial studio look']
+    },
+
+    // Texture and surface rendering
+    textureKeywords: [
+      'natural skin texture with pores and fine details',
+      'real fabric weave visible',
+      'authentic material surfaces',
+      'environmental textures like weathered wood and worn metal',
+      'imperfect real-world surfaces',
+      'subsurface skin scattering'
+    ],
+
+    // CRITICAL: Comprehensive negative keywords
+    negativeKeywords: [
+      '3D render', '3D model', 'CGI', 'computer generated', 'digital art',
+      'stylized', 'animation', 'cartoon', 'anime', 'illustration',
+      'Unreal Engine', 'Unity', 'video game', 'game render', 'game screenshot',
+      'synthetic', 'artificial', 'plastic skin', 'waxy skin', 'porcelain skin',
+      'hyperreal', 'oversaturated', 'HDR overprocessed',
+      'airbrushed', 'smooth skin', 'perfect skin', 'flawless',
+      'fantasy lighting', 'impossible lighting', 'rim light everywhere',
+      'concept art', 'matte painting', 'digital painting',
+      'stock photo', 'generic', 'posed unnaturally'
+    ],
+
+    // Film references for style context
+    referenceFilms: ['The Revenant', 'No Country for Old Men', 'Zodiac', 'Sicario', 'Hell or High Water'],
+
+    // Color grading approach
+    colorGrading: {
+      approach: 'Natural color science with subtle grading',
+      lut: 'Film emulation - Kodak 5219 or Fuji Eterna',
+      saturation: 'Natural, never oversaturated',
+      contrast: 'Realistic dynamic range',
+      highlights: 'Soft roll-off, no clipping',
+      shadows: 'Rich detail, not crushed'
+    },
+
+    // Human skin rendering - CRITICAL for realism
+    skinRendering: {
+      texture: 'visible pores, fine lines, natural imperfections',
+      subsurface: 'subtle subsurface scattering in ears and fingertips',
+      color: 'natural undertones, blood vessel hints in thin skin areas',
+      avoid: 'plastic, waxy, airbrushed, porcelain, unnaturally smooth'
+    },
+
+    // Technical quality specs
+    technicalSpecs: {
+      resolution: '8K RAW quality',
+      sharpness: 'Natural sharpness, not oversharpened',
+      noise: 'Subtle organic film grain acceptable',
+      dof: 'Natural depth of field based on aperture'
+    }
+  },
+
+  // ========================================
+  // CINEMATIC - Hollywood film look
+  // ========================================
+  cinematic: {
+    id: 'cinematic',
+    name: 'Cinematic',
+    description: 'Hollywood blockbuster look, dramatic but grounded in reality',
+    icon: '🎬',
+
+    promptPrefix: 'Cinematic film still, Hollywood production quality, dramatic cinematography, professional movie lighting,',
+
+    cameraLanguage: {
+      primary: 'Shot on ARRI Alexa 65 with Panavision anamorphic lenses',
+      alternatives: [
+        'RED V-Raptor with Cooke Anamorphic/i',
+        'Sony Venice with Hawk V-Lite anamorphics',
+        'ARRI Alexa Mini LF with vintage Kowa anamorphics'
+      ],
+      sensorDescription: 'large format sensor, anamorphic lens characteristics',
+      shutterLanguage: 'cinematic motion blur, 24fps aesthetic'
+    },
+
+    lightingStyle: {
+      approach: 'Dramatic three-point lighting with motivated sources',
+      keywords: ['key light with character', 'atmospheric fill', 'rim light separation', 'practical motivation', 'volumetric atmosphere'],
+      avoid: ['flat lighting', 'amateur on-camera flash', 'unmotivated colors']
+    },
+
+    textureKeywords: [
+      'cinematic skin rendering',
+      'movie-quality costumes and props',
+      'high-budget production design',
+      'atmospheric depth and haze',
+      'anamorphic lens characteristics like oval bokeh and subtle flares'
+    ],
+
+    negativeKeywords: [
+      'amateur', 'low budget', 'TV movie quality', 'soap opera',
+      'video look', 'digital harshness', 'flat lighting',
+      'cartoon', 'anime', 'illustration', '3D animated',
+      'oversaturated', 'instagram filter', 'mobile phone quality',
+      'stock footage', 'corporate video'
+    ],
+
+    referenceFilms: ['Blade Runner 2049', 'Dune', 'Mad Max Fury Road', 'Arrival', 'Interstellar'],
+
+    colorGrading: {
+      approach: 'Stylized but grounded color grading',
+      lut: 'Custom film LUT with teal/orange split-toning option',
+      saturation: 'Controlled saturation with specific color emphasis',
+      contrast: 'Rich contrast with preserved details',
+      highlights: 'Blooming highlights when motivated',
+      shadows: 'Deep shadows with detail'
+    },
+
+    skinRendering: {
+      texture: 'refined but natural skin, subtle smoothing acceptable',
+      subsurface: 'enhanced subsurface scattering for glamour',
+      color: 'pleasing skin tones, slightly idealized',
+      avoid: 'harsh texture, unflattering angles, bad skin'
+    },
+
+    technicalSpecs: {
+      resolution: '6K cinematic quality',
+      sharpness: 'Cinema sharpness, slight softness acceptable for mood',
+      noise: 'Clean with optional stylistic grain',
+      dof: 'Shallow cinematic depth of field'
+    }
+  },
+
+  // ========================================
+  // STYLIZED 3D - Modern 3D animation
+  // ========================================
+  stylized_3d: {
+    id: 'stylized_3d',
+    name: 'Stylized 3D',
+    description: 'Pixar/Disney quality 3D animation, expressive and polished',
+    icon: '🎨',
+
+    promptPrefix: 'High-end 3D animated film, Pixar animation quality, stylized 3D render, expressive character design, modern animation studio quality,',
+
+    cameraLanguage: {
+      primary: 'Virtual camera with cinematic 3D animation cinematography',
+      sensorDescription: 'perfect virtual lens, impossible camera moves possible',
+      shutterLanguage: 'stylized motion blur for animation'
+    },
+
+    lightingStyle: {
+      approach: 'Expressive stylized lighting that supports mood',
+      keywords: ['global illumination', 'bounce light', 'subsurface scattering', 'volumetric god rays', 'stylized rim lights'],
+      avoid: ['flat even lighting', 'harsh shadows without purpose']
+    },
+
+    textureKeywords: [
+      'stylized but detailed surfaces',
+      'appealing material rendering',
+      'Pixar-quality subsurface skin',
+      'expressive texture work',
+      'clean but characterful surfaces'
+    ],
+
+    negativeKeywords: [
+      'photorealistic', 'live action', 'real photography',
+      'low poly', 'mobile game', 'amateur 3D',
+      'uncanny valley', 'creepy', 'unsettling',
+      'flat shading', 'no lighting', 'PS2 graphics',
+      '2D illustration', 'hand drawn', 'sketch'
+    ],
+
+    referenceFilms: ['Soul', 'Coco', 'Spider-Verse', 'The Incredibles', 'How to Train Your Dragon'],
+
+    colorGrading: {
+      approach: 'Vibrant, appealing, story-driven colors',
+      saturation: 'Rich and vibrant but controlled',
+      contrast: 'Stylized contrast for mood'
+    },
+
+    skinRendering: {
+      texture: 'smooth stylized skin with subtle detail',
+      subsurface: 'beautiful subsurface scattering, warm and appealing',
+      color: 'appealing idealized skin tones',
+      avoid: 'realistic pores, harsh imperfections'
+    },
+
+    technicalSpecs: {
+      resolution: '4K animation render quality',
+      sharpness: 'Crisp stylized edges',
+      noise: 'No noise, clean render',
+      dof: 'Stylized depth of field'
+    }
+  },
+
+  // ========================================
+  // ILLUSTRATED - Artistic/concept art
+  // ========================================
+  illustrated: {
+    id: 'illustrated',
+    name: 'Illustrated',
+    description: 'Concept art quality, painterly, artistic interpretation',
+    icon: '🖌️',
+
+    promptPrefix: 'Professional concept art, digital illustration, painterly style, artistic interpretation, high-end illustration,',
+
+    cameraLanguage: {
+      primary: 'Artistic composition with illustrative perspective',
+      sensorDescription: 'artistic interpretation of camera angles'
+    },
+
+    lightingStyle: {
+      approach: 'Dramatic artistic lighting for visual impact',
+      keywords: ['dramatic light and shadow', 'artistic color lighting', 'atmospheric mood lighting', 'painterly light rendering'],
+      avoid: ['flat boring lighting', 'no contrast']
+    },
+
+    textureKeywords: [
+      'visible brushwork',
+      'painterly texture',
+      'artistic surface treatment',
+      'stylized material rendering',
+      'concept art detail level'
+    ],
+
+    negativeKeywords: [
+      'photorealistic', '3D render', 'photograph',
+      'amateur art', 'bad anatomy', 'sketch quality',
+      'unfinished', 'rough draft', 'low effort',
+      'clip art', 'stock illustration'
+    ],
+
+    referenceFilms: ['Into the Spider-Verse (concept art)', 'Arcane', 'Klaus', 'The Art of Studio Ghibli'],
+
+    colorGrading: {
+      approach: 'Artistic color choices for emotional impact',
+      saturation: 'Artist-controlled, can be stylized',
+      contrast: 'Dramatic artistic contrast'
+    },
+
+    technicalSpecs: {
+      resolution: '4K illustration quality',
+      sharpness: 'Artistic sharpness with soft edges where needed',
+      noise: 'Artistic texture acceptable'
+    }
+  },
+
+  // ========================================
+  // ANIME - Japanese animation style
+  // ========================================
+  anime: {
+    id: 'anime',
+    name: 'Anime',
+    description: 'High-quality Japanese animation style, expressive and dynamic',
+    icon: '✨',
+
+    promptPrefix: 'High-quality anime style, Japanese animation, detailed anime art, studio quality anime, expressive anime characters,',
+
+    cameraLanguage: {
+      primary: 'Dynamic anime cinematography with dramatic angles'
+    },
+
+    lightingStyle: {
+      approach: 'Anime-style lighting with cel-shading influence',
+      keywords: ['anime lighting', 'dramatic shadows', 'rim light glow', 'atmospheric color'],
+      avoid: ['flat lighting', 'no shading']
+    },
+
+    textureKeywords: [
+      'clean anime linework',
+      'cel-shaded surfaces',
+      'anime hair rendering',
+      'expressive anime eyes',
+      'detailed anime backgrounds'
+    ],
+
+    negativeKeywords: [
+      'photorealistic', '3D render', 'western cartoon',
+      'bad anatomy', 'amateur anime', 'chibi (unless requested)',
+      'low quality anime', 'rushed animation'
+    ],
+
+    referenceFilms: ['Your Name', 'Spirited Away', 'Violet Evergarden', 'Demon Slayer', 'Attack on Titan'],
+
+    colorGrading: {
+      approach: 'Vibrant anime color palette',
+      saturation: 'Rich anime colors',
+      contrast: 'Anime-appropriate contrast'
+    },
+
+    technicalSpecs: {
+      resolution: '4K anime quality',
+      sharpness: 'Crisp anime linework'
+    }
+  },
+
+  // ========================================
+  // NOIR - Dark, high-contrast dramatic
+  // ========================================
+  noir: {
+    id: 'noir',
+    name: 'Film Noir',
+    description: 'Classic noir aesthetic, high contrast, dramatic shadows',
+    icon: '🌑',
+
+    promptPrefix: 'Film noir style, high contrast black and white with selective color, dramatic shadows, moody atmosphere, classic noir cinematography,',
+
+    cameraLanguage: {
+      primary: 'Classic noir camera angles with dutch tilts and low angles',
+      sensorDescription: 'noir cinematography style'
+    },
+
+    lightingStyle: {
+      approach: 'Extreme chiaroscuro lighting with venetian blind shadows',
+      keywords: ['hard shadows', 'single source dramatic lighting', 'noir silhouettes', 'smoke and atmosphere', 'neon reflections'],
+      avoid: ['flat even lighting', 'bright cheerful lighting']
+    },
+
+    textureKeywords: [
+      'wet streets reflecting neon',
+      'smoky atmospheric haze',
+      'gritty urban textures',
+      'vintage noir surfaces'
+    ],
+
+    negativeKeywords: [
+      'bright', 'cheerful', 'colorful', 'cartoon',
+      'flat lighting', 'no shadows', 'amateur',
+      'low quality', 'blurry'
+    ],
+
+    referenceFilms: ['Sin City', 'Blade Runner', 'LA Confidential', 'Chinatown', 'The Third Man'],
+
+    colorGrading: {
+      approach: 'Desaturated with selective color accents',
+      saturation: 'Very low, almost monochrome',
+      contrast: 'Extreme high contrast'
+    },
+
+    technicalSpecs: {
+      resolution: '4K noir quality',
+      sharpness: 'Sharp with grain',
+      noise: 'Film noir grain encouraged'
+    }
+  },
+
+  // ========================================
+  // HELPER METHODS
+  // ========================================
+
+  /**
+   * Get complete style configuration by mode
+   * @param {string} styleMode - One of STYLE_MODES values
+   * @returns {Object} Complete style configuration
+   */
+  getStyleConfig(styleMode) {
+    const mode = styleMode?.toLowerCase() || 'photorealistic';
+    return this[mode] || this.photorealistic;
+  },
+
+  /**
+   * Generate the prompt prefix for a style
+   * @param {string} styleMode - Style mode identifier
+   * @returns {string} Prompt prefix to prepend
+   */
+  getPromptPrefix(styleMode) {
+    const config = this.getStyleConfig(styleMode);
+    return config.promptPrefix;
+  },
+
+  /**
+   * Generate comprehensive negative prompt for a style
+   * @param {string} styleMode - Style mode identifier
+   * @returns {string} Negative prompt string
+   */
+  getNegativePrompt(styleMode) {
+    const config = this.getStyleConfig(styleMode);
+    const baseNegative = [
+      'blurry', 'low quality', 'distorted', 'amateur',
+      'text', 'watermark', 'signature', 'logo',
+      'ugly', 'deformed', 'disfigured', 'mutated',
+      'bad anatomy', 'extra limbs', 'missing limbs',
+      'floating limbs', 'disconnected limbs',
+      'malformed hands', 'extra fingers', 'missing fingers',
+      'poorly drawn face', 'cloned face'
+    ];
+
+    const styleNegative = config.negativeKeywords || [];
+    return [...baseNegative, ...styleNegative].join(', ');
+  },
+
+  /**
+   * Get camera language for prompt enhancement
+   * @param {string} styleMode - Style mode identifier
+   * @returns {string} Camera technical language
+   */
+  getCameraLanguage(styleMode) {
+    const config = this.getStyleConfig(styleMode);
+    const cam = config.cameraLanguage;
+    if (!cam) return '';
+
+    return cam.primary + (cam.sensorDescription ? `, ${cam.sensorDescription}` : '');
+  },
+
+  /**
+   * Get lighting keywords for the style
+   * @param {string} styleMode - Style mode identifier
+   * @returns {string[]} Array of lighting keywords
+   */
+  getLightingKeywords(styleMode) {
+    const config = this.getStyleConfig(styleMode);
+    return config.lightingStyle?.keywords || [];
+  },
+
+  /**
+   * Get skin rendering guidance (for human subjects)
+   * @param {string} styleMode - Style mode identifier
+   * @returns {Object} Skin rendering configuration
+   */
+  getSkinRendering(styleMode) {
+    const config = this.getStyleConfig(styleMode);
+    return config.skinRendering || {
+      texture: 'natural skin texture',
+      avoid: 'artificial, plastic'
+    };
+  },
+
+  /**
+   * Build complete style enhancement for image prompt
+   * @param {string} styleMode - Style mode identifier
+   * @param {boolean} hasHumanSubject - Whether the scene has human characters
+   * @returns {Object} { prefix, suffix, negative, camera, lighting }
+   */
+  buildStyleEnhancement(styleMode, hasHumanSubject = true) {
+    const config = this.getStyleConfig(styleMode);
+
+    let prefix = config.promptPrefix;
+
+    // Add camera language
+    const camera = this.getCameraLanguage(styleMode);
+
+    // Add skin rendering for human subjects
+    let skinText = '';
+    if (hasHumanSubject && config.skinRendering) {
+      const skin = config.skinRendering;
+      skinText = `${skin.texture}, ${skin.color || ''}`.trim();
+    }
+
+    // Build technical suffix
+    const tech = config.technicalSpecs || {};
+    const suffix = [
+      tech.resolution || '4K quality',
+      tech.sharpness || 'sharp focus',
+      config.colorGrading?.approach || ''
+    ].filter(Boolean).join(', ');
+
+    // Get negative prompt
+    const negative = this.getNegativePrompt(styleMode);
+
+    // Get lighting keywords
+    const lighting = this.getLightingKeywords(styleMode).join(', ');
+
+    return {
+      prefix,
+      suffix,
+      negative,
+      camera,
+      lighting,
+      skinText,
+      referenceFilms: config.referenceFilms || []
+    };
+  },
+
+  /**
+   * Get all available styles for UI display
+   * @returns {Array} Array of style objects for UI
+   */
+  getAllStyles() {
+    return [
+      { id: 'photorealistic', name: 'Photorealistic', icon: '📷', description: 'Real photography, documentary realism', recommended: true },
+      { id: 'cinematic', name: 'Cinematic', icon: '🎬', description: 'Hollywood blockbuster look' },
+      { id: 'stylized_3d', name: 'Stylized 3D', icon: '🎨', description: 'Pixar/Disney animation quality' },
+      { id: 'illustrated', name: 'Illustrated', icon: '🖌️', description: 'Concept art, painterly style' },
+      { id: 'anime', name: 'Anime', icon: '✨', description: 'Japanese animation style' },
+      { id: 'noir', name: 'Film Noir', icon: '🌑', description: 'High contrast, dramatic shadows' }
+    ];
+  }
+};
+
+// =============================================================================
 // SECTION 9.1: IMAGE PROMPT GENERATOR - Scene to Image Transformation
 // =============================================================================
 
@@ -38961,15 +39534,31 @@ const COLOR_GRADING_PRESETS_GLOBAL = {
  * IMAGE PROMPT GENERATOR
  * Transforms scene visual blueprints into precise AI image prompts
  *
- * UPGRADED: Now produces Hollywood-quality cinematographic prompts
+ * UPGRADED: Now integrates with VISUAL_STYLE_DNA for style control
  */
 const IMAGE_PROMPT_GENERATOR = {
 
   /**
    * Generate HOLLYWOOD-QUALITY image prompt from scene script
    * Uses BLUEPRINT_EXTRACTOR to enhance simple scene.visual text
+   * NOW INTEGRATES WITH VISUAL_STYLE_DNA for comprehensive style control
+   *
+   * @param {Object} scene - Scene object with visual/action descriptions
+   * @param {Object} styleBible - Style guidelines
+   * @param {Object} characterBible - Character definitions
+   * @param {string} genre - Video genre
+   * @param {string} productionMode - Production type
+   * @param {string} visualStyleMode - VISUAL_STYLE_DNA mode (photorealistic, cinematic, etc.)
    */
-  generateFromScene: (scene, styleBible, characterBible, genre, productionMode) => {
+  generateFromScene: (scene, styleBible, characterBible, genre, productionMode, visualStyleMode = 'photorealistic') => {
+    // STEP 0: Get VISUAL_STYLE_DNA enhancement for the selected style mode
+    // This is the KEY to getting jaw-dropping results - style-specific prompt engineering
+    const hasHumanSubject = !!(characterBible && characterBible.length > 0);
+    const styleEnhancement = VISUAL_STYLE_DNA.buildStyleEnhancement(visualStyleMode, hasHumanSubject);
+
+    console.log(`[IMAGE_PROMPT_GENERATOR] Using visual style mode: ${visualStyleMode}`);
+    console.log(`[IMAGE_PROMPT_GENERATOR] Style prefix: ${styleEnhancement.prefix.substring(0, 50)}...`);
+
     // STEP 1: Extract blueprint from scene visual description
     // This converts simple text like "[Push in] A workshop..." into structured cinematography data
     const extracted = BLUEPRINT_EXTRACTOR.extractFromScene(scene, genre, productionMode);
@@ -38980,13 +39569,21 @@ const IMAGE_PROMPT_GENERATOR = {
     const subject = IMAGE_PROMPT_GENERATOR.buildSubjectDescription(scene, characterBible, vb);
 
     // STEP 3: Build camera and composition description
+    // Now enhanced with style-specific camera language
     const camera = IMAGE_PROMPT_GENERATOR.buildCameraDescription(vb);
+    const cameraWithStyle = styleEnhancement.camera
+      ? `${camera}, ${styleEnhancement.camera}`
+      : camera;
 
     // STEP 4: Build environment layers (FG/MG/BG)
     const environment = IMAGE_PROMPT_GENERATOR.buildEnvironmentDescription(vb);
 
     // STEP 5: Build lighting design
+    // Now enhanced with style-specific lighting
     const lighting = IMAGE_PROMPT_GENERATOR.buildLightingDescription(vb);
+    const lightingWithStyle = styleEnhancement.lighting
+      ? `${lighting}, ${styleEnhancement.lighting}`
+      : lighting;
 
     // STEP 6: Build atmosphere and particles
     const atmosphere = IMAGE_PROMPT_GENERATOR.buildAtmosphereDescription(vb);
@@ -38994,34 +39591,55 @@ const IMAGE_PROMPT_GENERATOR = {
     // STEP 7: Build style and film look
     const style = IMAGE_PROMPT_GENERATOR.buildStyleDescription(vb, styleBible, genre);
 
-    // STEP 8: Technical quality specs
-    const technical = IMAGE_PROMPT_GENERATOR.buildTechnicalDescription(styleBible);
+    // STEP 8: Technical quality specs - NOW USING STYLE-SPECIFIC SPECS
+    const technical = styleEnhancement.suffix || IMAGE_PROMPT_GENERATOR.buildTechnicalDescription(styleBible);
+
+    // STEP 8.5: Add skin rendering for human subjects
+    const skinRendering = hasHumanSubject && styleEnhancement.skinText
+      ? styleEnhancement.skinText
+      : '';
 
     // STEP 9: Compile into Hollywood-quality flowing prompt
-    const prompt = IMAGE_PROMPT_GENERATOR.compileHollywoodPrompt({
+    // CRITICAL: Style prefix MUST come FIRST for maximum impact
+    const basePrompt = IMAGE_PROMPT_GENERATOR.compileHollywoodPrompt({
       subject,
-      camera,
+      camera: cameraWithStyle,
       environment,
-      lighting,
+      lighting: lightingWithStyle,
       atmosphere,
       style,
       technical
     });
 
-    // Build negative prompt
-    const negative = styleBible?.technicalSpecs?.negative ||
-      'blurry, low quality, distorted, amateur, cartoon, anime, illustration, painting, drawing, text, watermark, signature, ugly, deformed';
+    // CRITICAL: Prepend the VISUAL_STYLE_DNA prefix to the prompt
+    // This is what makes the difference between stylized 3D and photorealistic output
+    const finalPrompt = `${styleEnhancement.prefix} ${skinRendering ? skinRendering + ', ' : ''}${basePrompt}`;
+
+    // Build negative prompt - USE STYLE-SPECIFIC NEGATIVES
+    // This is equally important to prevent unwanted rendering styles
+    const negative = styleEnhancement.negative ||
+      styleBible?.technicalSpecs?.negative ||
+      'blurry, low quality, distorted, amateur, text, watermark, signature, ugly, deformed';
+
+    console.log(`[IMAGE_PROMPT_GENERATOR] Final prompt length: ${finalPrompt.length} chars`);
+    console.log(`[IMAGE_PROMPT_GENERATOR] Negative prompt length: ${negative.length} chars`);
 
     return {
-      prompt,
+      prompt: finalPrompt,
       negativePrompt: negative,
+      visualStyleMode: visualStyleMode,
       metadata: {
         shotType: vb.shotType,
         cameraAngle: vb.cameraAngle,
         cameraMovement: vb.cameraMovement,
         mood: vb.mood,
         lightingSetup: vb.lightingSetup,
-        filmLook: vb.filmLook
+        filmLook: vb.filmLook,
+        styleEnhancement: {
+          mode: visualStyleMode,
+          hasHumanSubject,
+          referenceFilms: styleEnhancement.referenceFilms
+        }
       }
     };
   },
@@ -39578,19 +40196,28 @@ const IMAGE_PROMPT_GENERATOR = {
 
   /**
    * Enhanced prompt generation with genre-specific adjustments
-   * UPGRADED: Now passes genre and productionMode to generateFromScene for blueprint extraction
+   * UPGRADED: Now passes genre, productionMode, AND visualStyleMode to generateFromScene
+   *
+   * @param {string} visualStyleMode - VISUAL_STYLE_DNA mode (photorealistic, cinematic, stylized_3d, etc.)
    */
-  generateWithGenre: (scene, styleBible, characterBible, genre, productionMode) => {
+  generateWithGenre: (scene, styleBible, characterBible, genre, productionMode, visualStyleMode = 'photorealistic') => {
     // generateFromScene now uses genre/productionMode for blueprint extraction
-    const basePrompt = IMAGE_PROMPT_GENERATOR.generateFromScene(scene, styleBible, characterBible, genre, productionMode);
+    // AND visualStyleMode for VISUAL_STYLE_DNA integration
+    const basePrompt = IMAGE_PROMPT_GENERATOR.generateFromScene(scene, styleBible, characterBible, genre, productionMode, visualStyleMode);
 
     // Apply additional genre-specific enhancements as prefix/suffix
     const genreEnhancements = IMAGE_PROMPT_GENERATOR.getGenreEnhancements(genre, productionMode);
 
     if (genreEnhancements) {
       // Add genre enhancements to the already Hollywood-quality prompt
-      basePrompt.prompt = `${genreEnhancements.prefix}, ${basePrompt.prompt}, ${genreEnhancements.suffix}`;
-      basePrompt.negativePrompt = `${basePrompt.negativePrompt}, ${genreEnhancements.negative}`;
+      // Note: Style prefix is already at the start from generateFromScene
+      basePrompt.prompt = `${basePrompt.prompt}, ${genreEnhancements.suffix}`;
+      // Merge negatives, avoiding duplicates
+      const existingNegatives = new Set(basePrompt.negativePrompt.split(', ').map(s => s.trim()));
+      const genreNegatives = genreEnhancements.negative.split(', ').filter(n => !existingNegatives.has(n.trim()));
+      if (genreNegatives.length > 0) {
+        basePrompt.negativePrompt = `${basePrompt.negativePrompt}, ${genreNegatives.join(', ')}`;
+      }
     }
 
     return basePrompt;
@@ -40471,13 +41098,15 @@ const SCENE_PIPELINE = {
       results.steps[results.steps.length - 1].status = 'completed';
 
       // STEP 2: Generate Image Prompt
+      // Now passes visualStyleMode for VISUAL_STYLE_DNA integration
       results.steps.push({ step: 'generate_image_prompt', status: 'starting' });
       const imagePromptResult = IMAGE_PROMPT_GENERATOR.generateWithGenre(
         sceneScript,
         context.styleBible,
         context.characterBible,
         context.genre,
-        context.productionMode
+        context.productionMode,
+        context.visualStyleMode || 'photorealistic'
       );
       results.imagePrompt = imagePromptResult;
       results.steps[results.steps.length - 1].status = 'completed';
@@ -40923,29 +41552,32 @@ Be specific and cinematic. This should feel like premium Hollywood production.`;
 
 /**
  * creationWizardGenerateImagePrompt - Generates optimized image prompt from blueprint
+ * Now supports visualStyleMode for VISUAL_STYLE_DNA integration
  */
 exports.creationWizardGenerateImagePrompt = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { scene, styleBible, characterBible, genre, productionMode } = data;
+  const { scene, styleBible, characterBible, genre, productionMode, visualStyleMode } = data;
 
   if (!scene) {
     throw new functions.https.HttpsError('invalid-argument', 'Scene data required');
   }
 
   try {
-    // Generate image prompt using the engine
+    // Generate image prompt using the engine with VISUAL_STYLE_DNA
     const promptResult = IMAGE_PROMPT_GENERATOR.generateWithGenre(
       scene,
       styleBible,
       characterBible,
       genre,
-      productionMode
+      productionMode,
+      visualStyleMode || 'photorealistic'
     );
 
     return {
       success: true,
       imagePrompt: promptResult.prompt,
       negativePrompt: promptResult.negativePrompt,
+      visualStyleMode: promptResult.visualStyleMode,
       metadata: promptResult.metadata
     };
 
@@ -49986,6 +50618,7 @@ exports.creationWizardDecomposeSceneToShots = functions
 /**
  * creationWizardGenerateAllShotsForScene - Generates images for all shots in a decomposed scene
  * Maintains visual consistency by using the first shot as anchor
+ * NOW SUPPORTS visualStyleMode for VISUAL_STYLE_DNA integration
  */
 exports.creationWizardGenerateAllShotsForScene = functions
   .runWith({
@@ -50000,8 +50633,13 @@ exports.creationWizardGenerateAllShotsForScene = functions
     consistencyAnchors, // Visual consistency requirements
     model,              // Image generation model
     aspectRatio,
-    characterReference  // Optional character reference image
+    characterReference, // Optional character reference image
+    visualStyleMode     // VISUAL_STYLE_DNA mode (photorealistic, cinematic, etc.)
   } = data;
+
+  // Log visual style mode for debugging
+  console.log(`[creationWizardGenerateAllShotsForScene] Using visual style mode: ${visualStyleMode || 'photorealistic (default)'}`);
+  const effectiveStyleMode = visualStyleMode || 'photorealistic';
 
   if (!shots || !Array.isArray(shots) || shots.length === 0) {
     throw new functions.https.HttpsError('invalid-argument', 'Shots array required');
@@ -50044,6 +50682,7 @@ exports.creationWizardGenerateAllShotsForScene = functions
         } : null;
 
         // Build the enhanced narrative prompt using NANOBANANA_PROMPT_BUILDER
+        // NOW WITH VISUAL_STYLE_DNA integration for jaw-dropping results
         let enhancedPrompt = NANOBANANA_PROMPT_BUILDER.buildShotPrompt(
           {
             shotType: shot.shotType || 'medium',
@@ -50053,7 +50692,8 @@ exports.creationWizardGenerateAllShotsForScene = functions
           },
           promptContext,
           shotCharacterBible,
-          shotStyleBible
+          shotStyleBible,
+          effectiveStyleMode  // VISUAL_STYLE_DNA mode
         );
 
         // Append the original prompt content for specifics
@@ -51410,6 +52050,7 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
  * creationWizardBatchGenerateShotImages - Generate images for all shots across all scenes
  *
  * Uses the first generated image as a style anchor for subsequent images.
+ * NOW SUPPORTS visualStyleMode for VISUAL_STYLE_DNA integration
  */
 exports.creationWizardBatchGenerateShotImages = functions
   .runWith({
@@ -51425,8 +52066,13 @@ exports.creationWizardBatchGenerateShotImages = functions
     characterReference, // Optional character reference image (base64) for face consistency
     characterBible,     // Optional character bible with names/descriptions for prompt building
     locationBible,      // Optional location bible with location references for background consistency
-    globalVisualProfile // From batch decomposition
+    globalVisualProfile, // From batch decomposition
+    visualStyleMode     // VISUAL_STYLE_DNA mode (photorealistic, cinematic, etc.)
   } = data;
+
+  // Log visual style mode for debugging
+  console.log(`[creationWizardBatchGenerateShotImages] Using visual style mode: ${visualStyleMode || 'photorealistic (default)'}`);
+  const effectiveStyleMode = visualStyleMode || 'photorealistic';
 
   if (!decomposedScenes || !Array.isArray(decomposedScenes) || decomposedScenes.length === 0) {
     throw new functions.https.HttpsError('invalid-argument', 'Decomposed scenes array is required');
@@ -51493,6 +52139,8 @@ exports.creationWizardBatchGenerateShotImages = functions
       // Build the enhanced narrative prompt using NANOBANANA_PROMPT_BUILDER
       // Pass characterBible for character descriptions in prompts (names, attire, physical features)
       // Character reference image (base64) is passed separately to Gemini for face consistency
+      // Build the enhanced narrative prompt using NANOBANANA_PROMPT_BUILDER
+      // NOW WITH VISUAL_STYLE_DNA integration for jaw-dropping results
       let enhancedPrompt = NANOBANANA_PROMPT_BUILDER.buildShotPrompt(
         {
           shotType: shot.shotType || 'medium',
@@ -51502,7 +52150,8 @@ exports.creationWizardBatchGenerateShotImages = functions
         },
         promptContext,
         characterBible, // Pass character bible for descriptions in prompt
-        batchStyleBible
+        batchStyleBible,
+        effectiveStyleMode  // VISUAL_STYLE_DNA mode
       );
 
       // Append original prompt content for scene-specific details
