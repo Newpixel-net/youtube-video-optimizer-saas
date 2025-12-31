@@ -42029,6 +42029,492 @@ const CINEMATIC_PHYSICS_ENGINE = {
   }
 };
 
+// =============================================================================
+// CHARACTER_REFERENCE_ENGINE - Visual Consistency Across Shots
+// =============================================================================
+/**
+ * CHARACTER_REFERENCE_ENGINE
+ *
+ * Maintains character visual consistency across shots using anchor images and
+ * reference sheets. Based on 2025 AI filmmaking best practices:
+ * - LoRA training concepts (20-50 images with angle variety)
+ * - Character sheets (front, side, expression views)
+ * - First-shot anchoring (use first appearance as reference)
+ *
+ * The engine:
+ * 1. Extracts character visual anchors from concept/bible data
+ * 2. Generates pose/expression reference sheets
+ * 3. Provides per-shot character consistency hints
+ * 4. Tracks character appearances across scenes
+ */
+const CHARACTER_REFERENCE_ENGINE = {
+
+  /**
+   * Extract character anchors from scene/project data
+   * @param {Object} characterBible - Character bible array
+   * @param {Object} sceneMemory - Scene memory with character descriptions
+   * @param {Object} enrichmentData - Concept enrichment data
+   * @returns {Object} Character anchor data
+   */
+  extractCharacterAnchors(characterBible, sceneMemory, enrichmentData) {
+    const anchors = {};
+
+    // Extract from character bible (primary source)
+    if (characterBible && Array.isArray(characterBible)) {
+      characterBible.forEach((char, idx) => {
+        const name = char.name || char.archetype || `Character_${idx + 1}`;
+        anchors[name] = {
+          id: `char_${idx}`,
+          name: name,
+          source: 'characterBible',
+          // Visual description
+          visualDescription: char.visualDescription || char.appearance || null,
+          archetype: char.archetype || null,
+          role: char.role || 'supporting',
+          // Physical attributes (extracted or inferred)
+          physicalAttributes: this.extractPhysicalAttributes(char),
+          // Clothing/costume
+          costume: this.extractCostume(char),
+          // Distinguishing features
+          distinguishingFeatures: this.extractDistinguishingFeatures(char),
+          // Reference images (if available)
+          referenceImages: {
+            primary: char.referenceImage || char.imageUrl || null,
+            poses: [],
+            expressions: []
+          },
+          // Scene appearances (to be populated)
+          appearances: [],
+          firstAppearanceShot: null
+        };
+      });
+    }
+
+    // Enrich from scene memory
+    if (sceneMemory?.characterDescriptions) {
+      sceneMemory.characterDescriptions.forEach(desc => {
+        const name = desc.name || desc.character;
+        if (name && anchors[name]) {
+          anchors[name].visualDescription = anchors[name].visualDescription || desc.description;
+          if (desc.sceneId) {
+            anchors[name].appearances.push(desc.sceneId);
+          }
+        }
+      });
+    }
+
+    // Enrich from concept data
+    if (enrichmentData?.characters) {
+      enrichmentData.characters.forEach(char => {
+        const name = char.name || char.archetype;
+        if (name) {
+          if (!anchors[name]) {
+            anchors[name] = {
+              id: `char_enriched_${Object.keys(anchors).length}`,
+              name: name,
+              source: 'enrichment',
+              visualDescription: null,
+              archetype: char.archetype,
+              role: char.role,
+              physicalAttributes: {},
+              costume: {},
+              distinguishingFeatures: [],
+              referenceImages: { primary: null, poses: [], expressions: [] },
+              appearances: [],
+              firstAppearanceShot: null
+            };
+          }
+          // Merge enrichment data
+          anchors[name].archetype = anchors[name].archetype || char.archetype;
+          anchors[name].role = anchors[name].role || char.role;
+        }
+      });
+    }
+
+    return anchors;
+  },
+
+  /**
+   * Extract physical attributes from character data
+   */
+  extractPhysicalAttributes(char) {
+    const desc = (char.visualDescription || char.appearance || '').toLowerCase();
+    const attributes = {
+      gender: null,
+      age: null,
+      build: null,
+      height: null,
+      hairColor: null,
+      hairStyle: null,
+      eyeColor: null,
+      skinTone: null
+    };
+
+    // Gender detection
+    if (/\b(woman|female|she|her|girl|lady)\b/i.test(desc)) attributes.gender = 'female';
+    else if (/\b(man|male|he|his|boy|guy)\b/i.test(desc)) attributes.gender = 'male';
+
+    // Age detection
+    if (/\b(young|youth|teen|adolescent)\b/i.test(desc)) attributes.age = 'young';
+    else if (/\b(middle.?aged?|mature)\b/i.test(desc)) attributes.age = 'middle-aged';
+    else if (/\b(old|elderly|aged|ancient|wizened)\b/i.test(desc)) attributes.age = 'elderly';
+    else if (/\b(child|kid|little)\b/i.test(desc)) attributes.age = 'child';
+
+    // Build detection
+    if (/\b(muscular|athletic|strong|powerful|built)\b/i.test(desc)) attributes.build = 'athletic';
+    else if (/\b(slim|slender|thin|lean|lithe)\b/i.test(desc)) attributes.build = 'slim';
+    else if (/\b(large|heavy|stocky|broad)\b/i.test(desc)) attributes.build = 'large';
+
+    // Hair color
+    const hairColorMatch = desc.match(/\b(black|dark|brown|blonde|blond|red|auburn|grey|gray|white|silver|golden)\s*hair\b/i);
+    if (hairColorMatch) attributes.hairColor = hairColorMatch[1];
+
+    // Hair style
+    const hairStyleMatch = desc.match(/\b(long|short|cropped|braided|curly|straight|wavy|shaved|bald)\s*hair\b/i);
+    if (hairStyleMatch) attributes.hairStyle = hairStyleMatch[1];
+
+    // Eye color
+    const eyeColorMatch = desc.match(/\b(blue|green|brown|hazel|grey|gray|golden|amber|dark|black)\s*eyes?\b/i);
+    if (eyeColorMatch) attributes.eyeColor = eyeColorMatch[1];
+
+    return attributes;
+  },
+
+  /**
+   * Extract costume/clothing details
+   */
+  extractCostume(char) {
+    const desc = (char.visualDescription || char.appearance || '').toLowerCase();
+    const costume = {
+      type: null,
+      colors: [],
+      material: null,
+      accessories: []
+    };
+
+    // Clothing type
+    if (/\b(armor|armour|plate)\b/i.test(desc)) costume.type = 'armor';
+    else if (/\b(robe|robes|cloak|cape)\b/i.test(desc)) costume.type = 'robes';
+    else if (/\b(dress|gown)\b/i.test(desc)) costume.type = 'dress';
+    else if (/\b(suit|formal|tuxedo)\b/i.test(desc)) costume.type = 'formal';
+    else if (/\b(casual|jeans|t-?shirt)\b/i.test(desc)) costume.type = 'casual';
+    else if (/\b(uniform|military)\b/i.test(desc)) costume.type = 'uniform';
+    else if (/\b(traditional|kimono|hanbok|sari)\b/i.test(desc)) costume.type = 'traditional';
+
+    // Colors in clothing
+    const colorMatches = desc.match(/\b(red|blue|green|black|white|gold|silver|purple|crimson|azure|emerald|onyx|ivory)\b/gi);
+    if (colorMatches) costume.colors = [...new Set(colorMatches.map(c => c.toLowerCase()))];
+
+    // Materials
+    if (/\b(leather)\b/i.test(desc)) costume.material = 'leather';
+    else if (/\b(silk|satin)\b/i.test(desc)) costume.material = 'silk';
+    else if (/\b(wool|woolen)\b/i.test(desc)) costume.material = 'wool';
+    else if (/\b(metal|steel|iron)\b/i.test(desc)) costume.material = 'metal';
+
+    // Accessories
+    const accessoryPatterns = [
+      /\b(sword|blade|weapon)\b/i,
+      /\b(staff|wand)\b/i,
+      /\b(crown|tiara|circlet)\b/i,
+      /\b(necklace|pendant|amulet)\b/i,
+      /\b(ring|rings)\b/i,
+      /\b(gloves|gauntlets)\b/i,
+      /\b(boots|sandals)\b/i,
+      /\b(mask)\b/i,
+      /\b(glasses|spectacles)\b/i,
+      /\b(hat|hood|helm|helmet)\b/i
+    ];
+    accessoryPatterns.forEach(pattern => {
+      const match = desc.match(pattern);
+      if (match) costume.accessories.push(match[1].toLowerCase());
+    });
+
+    return costume;
+  },
+
+  /**
+   * Extract distinguishing features
+   */
+  extractDistinguishingFeatures(char) {
+    const desc = (char.visualDescription || char.appearance || '').toLowerCase();
+    const features = [];
+
+    // Scars, tattoos, marks
+    if (/\bscar\b/i.test(desc)) features.push('scar');
+    if (/\btattoo\b/i.test(desc)) features.push('tattoo');
+    if (/\bmark|birthmark\b/i.test(desc)) features.push('distinctive mark');
+
+    // Facial features
+    if (/\bbeard\b/i.test(desc)) features.push('beard');
+    if (/\bmustache\b/i.test(desc)) features.push('mustache');
+    if (/\bfreckles\b/i.test(desc)) features.push('freckles');
+
+    // Physical traits
+    if (/\beye.?patch\b/i.test(desc)) features.push('eyepatch');
+    if (/\bprosthetic|mechanical|cybernetic\b/i.test(desc)) features.push('prosthetic');
+    if (/\bwings\b/i.test(desc)) features.push('wings');
+    if (/\btail\b/i.test(desc)) features.push('tail');
+    if (/\bhorns\b/i.test(desc)) features.push('horns');
+    if (/\bpointed ears|elf ears\b/i.test(desc)) features.push('pointed ears');
+
+    return features;
+  },
+
+  /**
+   * Generate character reference sheet for a specific character
+   * Returns structured data for AI image/video consistency
+   */
+  generateReferenceSheet(characterAnchor) {
+    if (!characterAnchor) return null;
+
+    const sheet = {
+      characterId: characterAnchor.id,
+      characterName: characterAnchor.name,
+
+      // Core visual identity (MUST be consistent)
+      coreIdentity: {
+        physicalBuild: this.buildPhysicalDescription(characterAnchor.physicalAttributes),
+        facialFeatures: this.buildFacialDescription(characterAnchor.physicalAttributes),
+        distinguishingMarks: characterAnchor.distinguishingFeatures.join(', ') || 'none',
+        primaryCostume: this.buildCostumeDescription(characterAnchor.costume)
+      },
+
+      // Pose reference positions (for AI video consistency)
+      poseGuide: {
+        neutral: 'Standing straight, arms relaxed at sides, weight evenly distributed',
+        walking: 'Mid-stride, arms swinging naturally, looking ahead',
+        action: 'Dynamic pose, weight forward, ready for movement',
+        emotional: 'Posture reflects emotional state while maintaining physical characteristics'
+      },
+
+      // Expression range (for AI video consistency)
+      expressionGuide: {
+        neutral: 'Relaxed face, natural expression, characteristic features visible',
+        focused: 'Slight brow furrow, determined eyes, jaw set',
+        emotional: 'Clear expression while maintaining facial structure',
+        speaking: 'Natural mouth movement, characteristic expressions'
+      },
+
+      // AI video prompt helper
+      videoPromptTemplate: this.buildVideoPromptTemplate(characterAnchor),
+
+      // Consistency checklist
+      consistencyChecklist: [
+        `Hair: ${characterAnchor.physicalAttributes.hairColor || 'as established'} ${characterAnchor.physicalAttributes.hairStyle || ''} hair`,
+        `Eyes: ${characterAnchor.physicalAttributes.eyeColor || 'as established'} eyes`,
+        `Build: ${characterAnchor.physicalAttributes.build || 'as established'} build`,
+        `Costume: ${characterAnchor.costume.type || 'as established'} in ${characterAnchor.costume.colors.join('/') || 'established colors'}`,
+        ...characterAnchor.distinguishingFeatures.map(f => `Feature: ${f} visible when relevant`)
+      ]
+    };
+
+    return sheet;
+  },
+
+  /**
+   * Build physical description string
+   */
+  buildPhysicalDescription(attrs) {
+    const parts = [];
+    if (attrs.gender) parts.push(attrs.gender);
+    if (attrs.age) parts.push(attrs.age);
+    if (attrs.build) parts.push(`${attrs.build} build`);
+    if (attrs.height) parts.push(attrs.height);
+    return parts.join(', ') || 'as established in reference';
+  },
+
+  /**
+   * Build facial description string
+   */
+  buildFacialDescription(attrs) {
+    const parts = [];
+    if (attrs.hairColor || attrs.hairStyle) {
+      parts.push(`${attrs.hairColor || ''} ${attrs.hairStyle || ''} hair`.trim());
+    }
+    if (attrs.eyeColor) parts.push(`${attrs.eyeColor} eyes`);
+    if (attrs.skinTone) parts.push(`${attrs.skinTone} skin`);
+    return parts.join(', ') || 'as established in reference';
+  },
+
+  /**
+   * Build costume description string
+   */
+  buildCostumeDescription(costume) {
+    const parts = [];
+    if (costume.colors.length > 0) parts.push(costume.colors.join(' and '));
+    if (costume.material) parts.push(costume.material);
+    if (costume.type) parts.push(costume.type);
+    if (costume.accessories.length > 0) parts.push(`with ${costume.accessories.join(', ')}`);
+    return parts.join(' ') || 'as established in reference';
+  },
+
+  /**
+   * Build video prompt template for character
+   */
+  buildVideoPromptTemplate(anchor) {
+    const parts = [];
+
+    // Core identity
+    if (anchor.name) parts.push(`[${anchor.name}]`);
+
+    // Physical description
+    const physical = [];
+    if (anchor.physicalAttributes.gender) physical.push(anchor.physicalAttributes.gender);
+    if (anchor.physicalAttributes.age) physical.push(anchor.physicalAttributes.age);
+    if (anchor.physicalAttributes.build) physical.push(`${anchor.physicalAttributes.build} build`);
+    if (physical.length > 0) parts.push(physical.join(' '));
+
+    // Hair and face
+    const face = [];
+    if (anchor.physicalAttributes.hairColor) {
+      face.push(`${anchor.physicalAttributes.hairColor} ${anchor.physicalAttributes.hairStyle || ''} hair`.trim());
+    }
+    if (anchor.physicalAttributes.eyeColor) face.push(`${anchor.physicalAttributes.eyeColor} eyes`);
+    if (face.length > 0) parts.push(face.join(', '));
+
+    // Costume
+    if (anchor.costume.type || anchor.costume.colors.length > 0) {
+      const costumeStr = this.buildCostumeDescription(anchor.costume);
+      if (costumeStr) parts.push(`wearing ${costumeStr}`);
+    }
+
+    // Distinguishing features
+    if (anchor.distinguishingFeatures.length > 0) {
+      parts.push(`with ${anchor.distinguishingFeatures.join(', ')}`);
+    }
+
+    return parts.join(', ') || anchor.visualDescription || 'character as established';
+  },
+
+  /**
+   * Get per-shot character reference hints
+   * @param {Object} shot - Shot data
+   * @param {Object} scene - Scene data
+   * @param {Object} characterAnchors - All character anchors
+   * @returns {Object} Character reference hints for this shot
+   */
+  getShotCharacterHints(shot, scene, characterAnchors) {
+    const hints = {
+      charactersInShot: [],
+      consistencyRequirements: [],
+      referenceNotes: [],
+      promptEnhancement: ''
+    };
+
+    // Detect characters from scene/shot data
+    const charactersInScene = scene?.charactersInScene || [];
+    const shotPrompt = (shot?.videoPrompt || shot?.prompt || '').toLowerCase();
+
+    // Check each anchor against the shot
+    Object.values(characterAnchors).forEach(anchor => {
+      const name = anchor.name.toLowerCase();
+      const isInScene = charactersInScene.some(c =>
+        (c.toLowerCase && c.toLowerCase().includes(name)) || c === anchor.name
+      );
+      const isInPrompt = shotPrompt.includes(name);
+
+      if (isInScene || isInPrompt) {
+        hints.charactersInShot.push({
+          name: anchor.name,
+          referenceSheet: this.generateReferenceSheet(anchor),
+          promptTemplate: this.buildVideoPromptTemplate(anchor)
+        });
+
+        // Add consistency requirements
+        hints.consistencyRequirements.push(
+          `${anchor.name}: Maintain exact visual appearance as established`
+        );
+
+        if (anchor.distinguishingFeatures.length > 0) {
+          hints.consistencyRequirements.push(
+            `${anchor.name} features: ${anchor.distinguishingFeatures.join(', ')} must be visible when character is shown`
+          );
+        }
+      }
+    });
+
+    // Build prompt enhancement
+    if (hints.charactersInShot.length > 0) {
+      const charDescriptions = hints.charactersInShot
+        .map(c => c.promptTemplate)
+        .join('; ');
+      hints.promptEnhancement = `[CHARACTER CONSISTENCY] ${charDescriptions}`;
+    }
+
+    return hints;
+  },
+
+  /**
+   * Register first appearance of a character
+   */
+  registerFirstAppearance(characterName, shotId, imageUrl, anchors) {
+    if (anchors[characterName]) {
+      if (!anchors[characterName].firstAppearanceShot) {
+        anchors[characterName].firstAppearanceShot = shotId;
+      }
+      if (imageUrl && !anchors[characterName].referenceImages.primary) {
+        anchors[characterName].referenceImages.primary = imageUrl;
+      }
+    }
+    return anchors;
+  },
+
+  /**
+   * Generate character consistency enhancement for video prompt
+   * @param {Object} scene - Scene data
+   * @param {Object} shot - Shot data
+   * @param {Object} characterBible - Character bible data
+   * @returns {string} Character consistency text to append to video prompt
+   */
+  generateCharacterEnhancement(scene, shot, characterBible) {
+    // Extract anchors
+    const anchors = this.extractCharacterAnchors(characterBible, null, null);
+
+    // Get shot-specific hints
+    const hints = this.getShotCharacterHints(shot, scene, anchors);
+
+    if (hints.charactersInShot.length === 0) {
+      return '';
+    }
+
+    const lines = [];
+    lines.push('[CHARACTER CONSISTENCY]');
+
+    hints.charactersInShot.forEach(char => {
+      const sheet = char.referenceSheet;
+      if (sheet) {
+        lines.push(`${char.name}: ${sheet.coreIdentity.physicalBuild}, ${sheet.coreIdentity.facialFeatures}`);
+        if (sheet.coreIdentity.primaryCostume) {
+          lines.push(`  Costume: ${sheet.coreIdentity.primaryCostume}`);
+        }
+        if (sheet.coreIdentity.distinguishingMarks !== 'none') {
+          lines.push(`  Features: ${sheet.coreIdentity.distinguishingMarks}`);
+        }
+      }
+    });
+
+    lines.push('MAINTAIN: Same face, same build, same costume across all shots');
+
+    return lines.join('\n');
+  },
+
+  /**
+   * Get character reference summary for metadata
+   */
+  getCharacterSummary(characterBible, scene, shot) {
+    const anchors = this.extractCharacterAnchors(characterBible, null, null);
+    const hints = this.getShotCharacterHints(shot, scene, anchors);
+
+    return {
+      totalCharacters: Object.keys(anchors).length,
+      charactersInShot: hints.charactersInShot.length,
+      characterNames: hints.charactersInShot.map(c => c.name),
+      hasConsistencyRequirements: hints.consistencyRequirements.length > 0,
+      anchorsWithImages: Object.values(anchors).filter(a => a.referenceImages.primary).length
+    };
+  }
+};
+
 /**
  * ENVIRONMENT_RESPONSE_SYSTEM
  * Environment reacts to character actions and emotions
@@ -47505,11 +47991,55 @@ exports.creationWizardDecomposeSceneToShots = functions
 
     console.log(`[creationWizardDecomposeSceneToShots] Cinematic Physics applied to ${physicsEnhancedShots.filter(s => s.cinematicPhysics?.applied).length}/${physicsEnhancedShots.length} shots`);
 
+    // STEP 5.96: CHARACTER REFERENCE ENHANCEMENT
+    // Add character consistency hints to video prompts
+    // Based on 2025 AI filmmaking: "Character consistency is the #1 priority"
+    const characterEnhancedShots = physicsEnhancedShots.map((shot, idx) => {
+      try {
+        // Generate character enhancement
+        const characterEnhancement = CHARACTER_REFERENCE_ENGINE.generateCharacterEnhancement(
+          scene,
+          shot,
+          characterBible || []
+        );
+
+        // Get character summary for metadata
+        const characterSummary = CHARACTER_REFERENCE_ENGINE.getCharacterSummary(
+          characterBible || [],
+          scene,
+          shot
+        );
+
+        // Enhance the video prompt with character consistency layer
+        const existingVideoPrompt = shot.videoPrompt || '';
+        const enhancedVideoPrompt = characterEnhancement
+          ? `${existingVideoPrompt}\n\n${characterEnhancement}`
+          : existingVideoPrompt;
+
+        return {
+          ...shot,
+          videoPrompt: enhancedVideoPrompt,
+          characterReference: {
+            applied: characterEnhancement.length > 0,
+            ...characterSummary
+          }
+        };
+      } catch (charError) {
+        console.warn(`[creationWizardDecomposeSceneToShots] Character enhancement failed for shot ${idx + 1}:`, charError.message);
+        return {
+          ...shot,
+          characterReference: { applied: false, error: charError.message }
+        };
+      }
+    });
+
+    console.log(`[creationWizardDecomposeSceneToShots] Character Reference applied to ${characterEnhancedShots.filter(s => s.characterReference?.applied).length}/${characterEnhancedShots.length} shots`);
+
     // STEP 6: Normalize shots with all required fields
     // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, and visualContinuity
-    // IMPORTANT: Use physicsEnhancedShots (with World-First + Physics) for final normalization
-    const normalizedShots = physicsEnhancedShots.map((shot, idx) => {
-      const isLast = idx === physicsEnhancedShots.length - 1;
+    // IMPORTANT: Use characterEnhancedShots (with World-First + Physics + Character) for final normalization
+    const normalizedShots = characterEnhancedShots.map((shot, idx) => {
+      const isLast = idx === characterEnhancedShots.length - 1;
       const isFirst = idx === 0;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
@@ -47562,6 +48092,10 @@ exports.creationWizardDecomposeSceneToShots = functions
         // NEW: Cinematic Physics (force/momentum layer)
         cinematicPhysics: shot.cinematicPhysics || null,
         hasPhysicsEnhancement: shot.cinematicPhysics?.applied || false,
+        // NEW: Character Reference (visual consistency)
+        characterReference: shot.characterReference || null,
+        hasCharacterConsistency: shot.characterReference?.applied || false,
+        charactersInShot: shot.characterReference?.characterNames || [],
         // Generation status
         // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
         // This ensures when user regenerates scene image, Shot 1 stays in sync
@@ -47649,6 +48183,14 @@ exports.creationWizardDecomposeSceneToShots = functions
           hasContactPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasContactPhysics),
           hasCauseEffectChains: normalizedShots.some(s => s.cinematicPhysics?.causeEffectChains > 0)
         }
+      },
+      // Character Reference System status
+      characterReferenceSystem: {
+        applied: characterEnhancedShots.some(s => s.characterReference?.applied),
+        shotsWithCharacterConsistency: normalizedShots.filter(s => s.hasCharacterConsistency).length,
+        totalCharacters: characterBible?.length || 0,
+        characterAnchorsExtracted: normalizedShots.some(s => s.characterReference?.totalCharacters > 0),
+        charactersTracked: [...new Set(normalizedShots.flatMap(s => s.charactersInShot || []))]
       }
     };
 
