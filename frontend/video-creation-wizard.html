@@ -6784,7 +6784,8 @@
                     genre: state.content.genre || null,
                     productionMode: state.content.productionMode || 'standard',
                     videoModel: state.content.videoModel?.duration === '10s' ? 'minimax' : 'minimax',
-                    projectId: state.project.id || null
+                    projectId: state.project.id || null,
+                    visualStyleMode: state.content.visualStyleMode || 'photorealistic'
                 });
 
                 if (result.data.success) {
