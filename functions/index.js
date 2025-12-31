@@ -24525,8 +24525,27 @@ exports.creationWizardGenerateScript = functions
     // Video Model Configuration (for scene duration optimization)
     videoModel = { duration: '10s', resolution: '768p' },  // 10s default for richer action, 768p (1080p only for 6s)
     // Phase 5: AI Concept Enhancement - Deep Story Architecture
-    conceptEnrichment = null
+    conceptEnrichment = null,
+    // Phase 3F: Narrative Structure Intelligence
+    narrativePreset = null,    // 'youtube-standard' | 'tiktok-viral' | 'cinematic-short' | 'documentary-feature' | etc.
+    storyArc = null,           // 'three-act' | 'five-act' | 'heros-journey' | 'dan-harmon-circle' | etc.
+    emotionalJourney = null,   // 'triumph' | 'redemption' | 'cinderella' | 'tragedy' | 'thriller' | etc.
+    tensionCurve = null,       // 'steady-build' | 'waves' | 'slow-burn' | 'flat-with-spikes'
+    // Step 1: Production Type Context
+    productionType = null,     // From Step 1: 'narrative' | 'educational' | 'commercial' | etc.
+    productionSubType = null,  // From Step 1: 'action' | 'drama' | 'thriller' | 'explainer' | etc.
+    // Visual Style Mode
+    visualStyleMode = 'photorealistic' // 'photorealistic' | 'cinematic' | 'stylized_3d' | 'illustrated' | 'anime' | 'noir'
   } = config;
+
+  // Log new parameters for debugging
+  console.log('[creationWizardGenerateScript] Narrative settings:', { narrativePreset, storyArc, emotionalJourney, tensionCurve });
+  console.log('[creationWizardGenerateScript] Production context:', { productionType, productionSubType, visualStyleMode });
+
+  // Use productionSubType as genre fallback when genre isn't explicitly set
+  // This allows the new Step 1 flow (selecting Action/Drama/Thriller) to influence script generation
+  const effectiveGenre = genre || (productionSubType ? `entertainment-${productionSubType}` : null);
+  console.log('[creationWizardGenerateScript] Effective genre:', effectiveGenre);
 
   if (!topic || topic.trim().length < 3) {
     throw new functions.https.HttpsError('invalid-argument', 'Topic must be at least 3 characters');
@@ -25102,7 +25121,8 @@ exports.creationWizardGenerateScript = functions
     ];
 
     // Get genre settings if specified
-    const genreKey = config.genre || null;
+    // Uses effectiveGenre which falls back to productionSubType when genre isn't explicitly set
+    const genreKey = effectiveGenre || null;
     const genreSettings = genreKey ? GENRE_REFERENCE_LIBRARY[genreKey] : null;
     const formatKey = config.contentFormat || 'medium-form';
     const formatSettings = CONTENT_FORMATS[formatKey] || CONTENT_FORMATS['medium-form'];
@@ -27012,6 +27032,34 @@ CRITICAL TIMING RULE: You MUST write narrations with the EXACT word count specif
 Count your words carefully. Too few words = awkward pauses. Too many words = rushed audio.
 Always return valid JSON exactly matching the requested structure.`;
 
+    // Build user-selected narrative structure guidance (Phase 3F)
+    // This uses the NARRATIVE_STRUCTURE system when user makes specific selections
+    let userNarrativeGuidance = '';
+    if (storyArc && NARRATIVE_STRUCTURE?.storyArcs?.[storyArc]) {
+      const arc = NARRATIVE_STRUCTURE.storyArcs[storyArc];
+      userNarrativeGuidance += `\n\n=== USER-SELECTED STORY ARC: ${arc.name.toUpperCase()} ===\n${arc.description}\nStructure your ${sceneCount} scenes to follow this arc:\n`;
+      arc.acts.forEach((act, i) => {
+        const actScenes = Math.max(1, Math.round(sceneCount * (act.percentage / 100)));
+        userNarrativeGuidance += `- ${act.name} (~${act.percentage}% = ${actScenes} scene${actScenes > 1 ? 's' : ''}): ${act.purpose}\n`;
+      });
+    }
+    if (emotionalJourney && NARRATIVE_STRUCTURE?.emotionalJourneys?.[emotionalJourney]) {
+      const journey = NARRATIVE_STRUCTURE.emotionalJourneys[emotionalJourney];
+      userNarrativeGuidance += `\n=== EMOTIONAL JOURNEY: ${journey.name.toUpperCase()} ===\n${journey.description}\nEmotional arc: ${journey.emotionalArc?.join(' → ') || 'Build to climax'}\n`;
+    }
+    if (tensionCurve) {
+      const tensionDescriptions = {
+        'steady-build': 'Start low, steadily increase tension to climax, brief resolution',
+        'waves': 'Oscillate between tension and release, creating breathing room',
+        'slow-burn': 'Maintain low tension that gradually creeps up to explosive climax',
+        'flat-with-spikes': 'Mostly even pacing with sudden dramatic spikes at key moments'
+      };
+      userNarrativeGuidance += `\n=== TENSION CURVE: ${tensionCurve.toUpperCase().replace(/-/g, ' ')} ===\n${tensionDescriptions[tensionCurve] || 'Follow natural dramatic tension'}\n`;
+    }
+    if (productionType && productionSubType) {
+      userNarrativeGuidance += `\n=== PRODUCTION CONTEXT ===\nThis is a ${productionType} → ${productionSubType} production. Tailor the script style accordingly.\n`;
+    }
+
     // Build production-specific narrative structure
     const narrativeStructure = productionMode === 'standard' ? `
 - Scene 1 (HOOK): Surprising fact, provocative question, or bold statement that demands attention
@@ -27092,6 +27140,7 @@ ${contentRequirements.length > 0 ? contentRequirements.map((req, i) => `${i + 1}
 ${productionSettings.specialInstructions ? `\nPRODUCTION SPECIAL: ${productionSettings.specialInstructions}` : ''}
 
 === ${productionSettings.name.toUpperCase()} NARRATIVE STRUCTURE ===${narrativeStructure}
+${userNarrativeGuidance}
 
 === CINEMATIC PRODUCTION REQUIREMENTS ===
 1. OPENING: ${productionSettings.openingStyle}
@@ -28450,10 +28499,25 @@ function buildVisualPrompt(basePrompt, options = {}) {
     visualSettings = {},
     style = 'cinematic',
     // Phase 4: Scene Memory System
-    sceneMemory = null
+    sceneMemory = null,
+    // VISUAL_STYLE_DNA: Visual rendering style (photorealistic, cinematic, anime, etc.)
+    visualStyleMode = null,
+    styleEnhancement = null
   } = options;
 
   const promptParts = [];
+
+  // ===== VISUAL_STYLE_DNA: PREPEND STYLE PREFIX (CRITICAL for rendering style) =====
+  // This MUST come FIRST to establish the rendering style (photorealistic vs anime vs 3D, etc.)
+  if (styleEnhancement?.prefix) {
+    promptParts.push(styleEnhancement.prefix);
+    console.log('[buildVisualPrompt] Applied VISUAL_STYLE_DNA prefix for mode:', visualStyleMode);
+  }
+
+  // Add skin rendering guidance for human subjects
+  if (styleEnhancement?.skinText) {
+    promptParts.push(styleEnhancement.skinText);
+  }
 
   // ===== PHASE 4: SCENE MEMORY 4-LAYER ARCHITECTURE =====
 
@@ -28524,11 +28588,21 @@ function buildVisualPrompt(basePrompt, options = {}) {
   let negativePrompt = '';
   if (sceneMemory?.technicalSpecs?.enabled && sceneMemory.technicalSpecs.negative) {
     negativePrompt = sceneMemory.technicalSpecs.negative;
+    // Also add VISUAL_STYLE_DNA negatives to user's negative prompt
+    if (styleEnhancement?.negative) {
+      negativePrompt = `${styleEnhancement.negative}, ${negativePrompt}`;
+    }
   } else {
     // Default negative prompt
     const negativeParts = [
       'blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur'
     ];
+
+    // VISUAL_STYLE_DNA: Add style-specific negatives (CRITICAL for preventing wrong rendering)
+    // e.g., photorealistic adds "3D render, CGI, cartoon, anime" to negatives
+    if (styleEnhancement?.negative) {
+      negativeParts.unshift(styleEnhancement.negative);
+    }
 
     if (!sceneMemory?.styleBible?.enabled) {
       const genreVisual = VISUAL_INTELLIGENCE.genreVisuals[genre] ||
@@ -28592,8 +28666,12 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
     mood = null,
     visualSettings = {},
     // Phase 4: Scene Memory System parameters
-    sceneMemory = null
+    sceneMemory = null,
+    // VISUAL_STYLE_DNA: Controls rendering style (photorealistic, cinematic, anime, etc.)
+    visualStyleMode = 'photorealistic'
   } = data;
+
+  console.log('[creationWizardGenerateSceneImage] Visual style mode:', visualStyleMode);
 
   if (!prompt || prompt.trim().length < 10) {
     throw new functions.https.HttpsError('invalid-argument', 'Image prompt is required (min 10 chars)');
@@ -28605,6 +28683,14 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
   }
 
   try {
+    // Get VISUAL_STYLE_DNA enhancement for the selected style mode
+    const hasHumanSubject = prompt.toLowerCase().includes('person') ||
+                           prompt.toLowerCase().includes('man') ||
+                           prompt.toLowerCase().includes('woman') ||
+                           prompt.toLowerCase().includes('character') ||
+                           sceneMemory?.characterDescriptions?.length > 0;
+    const styleEnhancement = VISUAL_STYLE_DNA.buildStyleEnhancement(visualStyleMode, hasHumanSubject);
+
     // Phase 3B + Phase 4: Use Visual Intelligence + Scene Memory to build enhanced prompt
     const visualResult = buildVisualPrompt(prompt, {
       genre,
@@ -28612,7 +28698,10 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
       mood,
       visualSettings,
       style,
-      sceneMemory  // Phase 4: Scene Memory data
+      sceneMemory,  // Phase 4: Scene Memory data
+      // VISUAL_STYLE_DNA integration
+      visualStyleMode,
+      styleEnhancement
     });
 
     const enhancedPrompt = visualResult.enhancedPrompt;
