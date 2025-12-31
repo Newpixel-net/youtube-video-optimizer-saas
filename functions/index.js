@@ -46236,10 +46236,25 @@ The FIRST SHOT must flow naturally from this ending.
     const visualContext = sceneContext.visualPrompt || '';
     const narration = sceneContext.narration || '';
 
-    const prompt = `You are a cinematic AI video director creating MOTION-DENSE shot sequences for Minimax AI video generation.
+    const prompt = `You are a cinematic AI video director creating CINEMATOGRAPHIC SHOT VARIATIONS for Minimax AI video generation.
 
-CRITICAL: Each shot is ${clipDuration} SECONDS of continuous motion - NOT a static frame!
-${clipDuration} seconds is substantial. Characters breathe, shift, gesture. Environment moves. Camera flows.
+=== CRITICAL FRAME CHAIN CONSTRAINT ===
+This is for a FRAME CHAIN workflow where:
+- Each shot starts from a CAPTURED FRAME of the previous shot
+- The AI video generator receives an INPUT FRAME and your prompt
+- If your prompt describes DIFFERENT subjects/location than the input frame, the result will be JARRING and BROKEN
+
+ABSOLUTE RULE: ALL ${shotCount} SHOTS MUST SHOW THE EXACT SAME:
+✓ SAME characters (identical people/beings throughout)
+✓ SAME location (identical environment/setting throughout)
+✓ SAME core moment (the same narrative beat, NOT story progression)
+✓ ONLY the CAMERA ANGLE, FRAMING, and MICRO-DETAILS change
+
+DO NOT create story progression across shots!
+DO NOT introduce new characters or locations in later shots!
+DO NOT describe a different narrative moment in each shot!
+
+Each shot is ${clipDuration} SECONDS of continuous motion - NOT a static frame!
 
 === SCENE DATA ===
 SCENE ACTION: "${sceneAction}"
@@ -46251,41 +46266,38 @@ ${crossSceneSection}
 ${actionLibraryReference}
 
 === YOUR TASK ===
-Create ${shotCount} MOTION-DENSE video prompts. Each prompt describes ${clipDuration} seconds of CONTINUOUS ACTION.
+Create ${shotCount} CINEMATOGRAPHIC VARIATIONS of the SAME MOMENT.
+Each shot shows the SAME subject from a DIFFERENT camera perspective with rich motion detail.
 
-=== MOTION-DENSE REQUIREMENTS ===
+Think of it like a film crew with ${shotCount} cameras capturing the SAME scene simultaneously:
+- Camera 1: Wide establishing shot
+- Camera 2: Medium shot focusing on main subject
+- Camera 3: Close-up on face/hands/key detail
+- Camera 4: Over-shoulder or reaction angle
 
-1. CHARACTER MOTION (required in every shot):
-   - Breathing patterns (slow/quickening/deep)
-   - Body shifts (weight transfer, posture changes)
-   - Micro-gestures (fingers, shoulders, head tilts)
-   - Facial progression (expressions evolving)
-   - Eye movement (scanning, focusing, meeting)
-   Example: "Kai breathes slowly, tension visible in shoulders. His eyes scan the room, brow furrowing with concentration."
+=== CINEMATOGRAPHIC REQUIREMENTS ===
 
-2. ENVIRONMENT ANIMATION (required in every shot):
-   - Light changes (flickering, pulsing, shifting)
-   - Atmospheric motion (smoke drifting, rain falling, dust floating)
-   - Tech elements (displays scrolling, holograms rotating)
-   - Natural elements (flames dancing, water rippling, leaves rustling)
-   Example: "Holographic displays pulse and rotate around them. Rain streaks down windows, city lights blurring."
+1. SAME SUBJECT RULE (CRITICAL - all shots must include):
+   - Identical character(s) in every shot
+   - Identical environment in every shot
+   - Identical core action in every shot
+   - Example: If Shot 1 shows "Kai at the temple", ALL shots show "Kai at the temple"
 
-3. CAMERA MOVEMENT (choose appropriate):
-   - "Slow push in" - building intensity/focus
-   - "Smooth tracking" - following action
-   - "Gradual pull back" - revealing/concluding
-   - "Static with subtle drift" - contemplative
-   Include the camera direction at START of each prompt.
+2. CAMERA VARIATION (how shots differ):
+   - Wide/Establishing → Medium → Close-up → Detail/Reaction
+   - Each shot uses a different camera angle on the SAME scene
+   - Different framing reveals different aspects of the SAME moment
+   Shot types to use: WIDE, MEDIUM, CLOSE-UP, EXTREME CLOSE-UP, OVER-SHOULDER, LOW ANGLE, HIGH ANGLE
 
-4. EMOTIONAL PROGRESSION (each shot has an arc):
-   - Beginning state → development → end state
-   - Tension builds OR releases within each shot
-   Example: Shot moves from "concentration" through "realization" to "shock"
+3. RICH MOTION WITHIN EACH SHOT:
+   - Character: Breathing, micro-gestures, expression shifts, eye movement
+   - Environment: Light changes, atmospheric motion, subtle ambient movement
+   - Each ${clipDuration}-second shot should feel alive with motion
 
-5. CONTINUITY PHRASES (shots 2+ must include):
-   - "Continuing seamlessly from previous frame"
-   - References to previous shot's end position
-   - Smooth transitions in action and camera
+4. CONTINUITY PHRASES (shots 2+ must include):
+   - "Same scene, different angle:"
+   - "Continuing from the same moment:"
+   - Reference the SAME character(s) and SAME location
 
 === OUTPUT FORMAT ===
 Return ONLY valid JSON:
@@ -46293,26 +46305,38 @@ Return ONLY valid JSON:
   "shots": [
     {
       "shotIndex": 0,
-      "cameraMovement": "Slow push in",
-      "motionPrompt": "Full motion-dense prompt for Minimax. Include camera, character actions, environment animation, quality keywords. ${clipDuration} seconds of continuous motion.",
-      "characterActions": "Brief: what characters physically do",
-      "environmentAnimation": "Brief: what moves in environment",
-      "emotionalArc": "starting emotion → ending emotion",
+      "shotType": "WIDE/MEDIUM/CLOSE-UP/etc",
+      "cameraMovement": "Slow push in/tracking/static/etc",
+      "motionPrompt": "Full prompt describing the SAME scene from this camera angle. Include character identity, location, action, camera movement, quality keywords.",
+      "subjectDescription": "Brief: WHO is in frame (must be same in all shots)",
+      "locationDescription": "Brief: WHERE this takes place (must be same in all shots)",
+      "cameraAngle": "What makes this shot's perspective unique",
+      "emotionalArc": "micro-emotion progression within this shot",
       "endState": "Exact pose/position for frame capture",
       "captureStability": "high/medium/low"
     }
   ],
+  "sceneSubject": "The character(s) that appear in ALL shots",
+  "sceneLocation": "The location that appears in ALL shots",
   "sceneEndState": "Final state of last shot - passed to next scene",
-  "chainLogic": "How the shots connect narratively"
+  "chainLogic": "How the shots show the same moment from different angles"
 }
 
-=== EXAMPLE MOTION PROMPT ===
-"Slow push in. Kai's eyes scan left to right across holographic data, brow furrowing with concentration. His breathing becomes visible, quickening slightly. Fingers tap against thigh in unconscious rhythm. Holographic displays rotate and pulse around him, data streams flowing. Rain streaks down windows in background, city lights blurring. His posture gradually stiffens as realization begins. Expression shifts from focus to dawning recognition. Cinematic, photorealistic, smooth fluid motion, natural lifelike movement."
+=== EXAMPLE - CORRECT (Same subject, different angles) ===
+Scene: "Kai discovers the ancient artifact in the temple"
+- Shot 1 (WIDE): "Wide shot of dimly lit ancient temple. Kai stands before a glowing pedestal, his silhouette illuminated by ethereal light. Stone pillars rise around him, dust motes floating in light beams."
+- Shot 2 (MEDIUM): "Same temple, medium shot. Kai reaches toward the glowing artifact on the pedestal, eyes wide with wonder. His breathing visible in the cold air, expression shifting from curiosity to awe."
+- Shot 3 (CLOSE-UP): "Same moment, close-up on Kai's face. His eyes reflect the artifact's glow, pupils dilating. Micro-expressions show growing recognition. Temple's ancient carvings visible blurred in background."
+
+=== EXAMPLE - WRONG (Story progression - DO NOT DO THIS) ===
+- Shot 1: "Kai enters the temple"
+- Shot 2: "Kai finds the artifact"
+- Shot 3: "A guardian appears to challenge Kai" ← WRONG! Different subject introduced!
 
 === QUALITY KEYWORDS (append to each prompt) ===
 "Cinematic, photorealistic, smooth fluid motion, natural lifelike movement, seamless animation, professional cinematography quality."
 
-Create ${shotCount} shots now:`;
+Create ${shotCount} cinematographic variations now:`;
 
     try {
       console.log(`[STORY_BEAT_DECOMPOSER] Using AI decomposition for ${shotCount} motion-dense shots`);
@@ -46322,7 +46346,7 @@ Create ${shotCount} shots now:`;
         messages: [
           {
             role: 'system',
-            content: 'You are a cinematic AI video director. You create MOTION-DENSE shot sequences where every second is filled with character movement, environmental animation, and camera flow. Never describe static frames - describe continuous action over time. Always return valid JSON.'
+            content: 'You are a cinematic AI video director. You create CINEMATOGRAPHIC VARIATIONS where multiple camera angles capture the SAME moment with the SAME subjects in the SAME location. NEVER create story progression across shots - only camera angle variations. The richness comes from different perspectives on the SAME scene, not from different narrative events. Always return valid JSON.'
           },
           { role: 'user', content: prompt }
         ],
@@ -46348,17 +46372,27 @@ Create ${shotCount} shots now:`;
         return this.decomposeIntoShots(sceneAction, shotCount, sceneContext);
       }
 
-      // Convert AI response to standard shot format with motion-dense prompts
+      // Extract scene-wide consistency anchors (same subject/location for ALL shots)
+      const sceneSubject = parsed.sceneSubject || parsed.shots[0]?.subjectDescription || 'main character';
+      const sceneLocation = parsed.sceneLocation || parsed.shots[0]?.locationDescription || 'scene location';
+
+      console.log(`[STORY_BEAT_DECOMPOSER] Visual continuity anchor - Subject: "${sceneSubject}", Location: "${sceneLocation}"`);
+
+      // Convert AI response to standard shot format with VISUAL CONTINUITY enforced
       const shots = parsed.shots.map((shot, idx) => {
         const isFirst = idx === 0;
         const isLast = idx === parsed.shots.length - 1;
 
-        // Build the final video prompt for Minimax
+        // Build the final video prompt for Minimax with VISUAL CONTINUITY
         let videoPrompt = shot.motionPrompt || '';
 
-        // Ensure continuity phrase for shots after first
-        if (!isFirst && !videoPrompt.toLowerCase().includes('continuing')) {
-          videoPrompt = `Continuing seamlessly from previous frame. ${videoPrompt}`;
+        // CRITICAL: Enforce same subject/location in every shot prompt
+        // For shots 2+, prepend a strong continuity anchor
+        if (!isFirst) {
+          const continuityPrefix = `Same ${sceneSubject} in same ${sceneLocation}, different angle. `;
+          if (!videoPrompt.toLowerCase().includes('same ')) {
+            videoPrompt = continuityPrefix + videoPrompt;
+          }
         }
 
         // Ensure quality keywords are present
@@ -46370,15 +46404,20 @@ Create ${shotCount} shots now:`;
           shotIndex: idx,
           isFirst,
           isLast,
+          shotType: shot.shotType || (isFirst ? 'WIDE' : idx === 1 ? 'MEDIUM' : 'CLOSE-UP'),
           cameraMovement: shot.cameraMovement || 'Smooth tracking',
+          cameraAngle: shot.cameraAngle || '',
           videoPrompt,
-          characterActions: shot.characterActions || '',
-          environmentAnimation: shot.environmentAnimation || '',
+          // Visual continuity anchors - same in ALL shots
+          subjectDescription: sceneSubject,
+          locationDescription: sceneLocation,
+          // Per-shot details
           emotionalArc: shot.emotionalArc || '',
           endState: shot.endState || '',
           captureDescription: shot.endState,
           aiGenerated: true,
           motionDense: true,
+          cinematographicVariation: true, // Flag indicating this uses the new continuity-safe approach
           captureSuggestion: {
             timing: `${clipDuration - 2}-${clipDuration} seconds`,
             reason: 'End of motion sequence at stable pose',
@@ -46397,14 +46436,17 @@ Create ${shotCount} shots now:`;
       const sceneEndState = parsed.sceneEndState || lastShot?.endState;
       const suggestedNextSceneTransition = parsed.suggestedNextSceneTransition || 'cut';
 
-      console.log(`[STORY_BEAT_DECOMPOSER] Motion-dense decomposition successful: ${shots.length} shots`);
-      console.log(`[STORY_BEAT_DECOMPOSER] Chain logic: ${parsed.chainLogic || 'Not provided'}`);
+      console.log(`[STORY_BEAT_DECOMPOSER] Cinematographic variation decomposition successful: ${shots.length} shots`);
+      console.log(`[STORY_BEAT_DECOMPOSER] All shots show: "${sceneSubject}" in "${sceneLocation}"`);
+      console.log(`[STORY_BEAT_DECOMPOSER] Chain logic: ${parsed.chainLogic || 'Camera angle variations on same moment'}`);
 
       return {
         shots,
+        sceneSubject,
+        sceneLocation,
         sceneEndState,
         suggestedNextSceneTransition,
-        chainLogic: parsed.chainLogic
+        chainLogic: parsed.chainLogic || 'Cinematographic variations - same subject/location, different angles'
       };
 
     } catch (error) {
@@ -46527,11 +46569,13 @@ Create ${shotCount} shots now:`;
   },
 
   /**
-   * Decompose sceneAction into shot beats with END STATES (RULE-BASED FALLBACK)
+   * Decompose sceneAction into CINEMATOGRAPHIC VARIATIONS (RULE-BASED FALLBACK)
+   * CRITICAL: All shots show the SAME subject in the SAME location
+   * Only camera angle and framing vary - NOT story content
    * @param {string} sceneAction - Rich action sequence for the scene
    * @param {number} shotCount - Number of shots to create
    * @param {object} sceneContext - { visualPrompt, narration, characters }
-   * @returns {Array} Array of shot beats with start/action/end
+   * @returns {Object} { shots, sceneSubject, sceneLocation, ... }
    */
   decomposeIntoShots(sceneAction, shotCount, sceneContext = {}) {
     if (!sceneAction || sceneAction.trim().length < 20) {
@@ -46539,17 +46583,171 @@ Create ${shotCount} shots now:`;
       return this.fallbackDecomposition(sceneContext.visualPrompt, shotCount, sceneContext);
     }
 
-    // Parse sceneAction into sentences/action segments
-    const actionSegments = this.parseActionSegments(sceneAction);
+    // Extract the SINGLE core subject and location from the scene
+    // This will be the SAME in ALL shots
+    const sceneSubject = this.extractSceneSubject(sceneAction, sceneContext);
+    const sceneLocation = this.extractSceneLocation(sceneAction, sceneContext);
+    const coreAction = this.extractCoreAction(sceneAction);
 
-    // Distribute segments across shots
-    const shotBeats = this.distributeToShots(actionSegments, shotCount);
+    console.log(`[STORY_BEAT_DECOMPOSER] Rule-based fallback - Subject: "${sceneSubject}", Location: "${sceneLocation}"`);
 
-    // Define END STATES for each shot (capture points)
-    const shotsWithEndStates = this.defineEndStates(shotBeats, sceneContext);
+    // Generate cinematographic variations (same content, different angles)
+    const shotTypes = this.getCinematographicSequence(shotCount);
 
-    // Generate video prompts with START → ACTION → END structure
-    return this.generateShotPrompts(shotsWithEndStates, sceneContext);
+    const shots = shotTypes.map((shotType, idx) => {
+      const isFirst = idx === 0;
+      const isLast = idx === shotTypes.length - 1;
+
+      // Build a video prompt that maintains visual continuity
+      const videoPrompt = this.buildCinematographicPrompt(
+        sceneSubject, sceneLocation, coreAction, shotType, isFirst, isLast, sceneContext
+      );
+
+      return {
+        shotIndex: idx,
+        isFirst,
+        isLast,
+        shotType,
+        cameraMovement: this.getCameraMovementForType(shotType),
+        videoPrompt,
+        // Visual continuity anchors - SAME in ALL shots
+        subjectDescription: sceneSubject,
+        locationDescription: sceneLocation,
+        coreAction,
+        endState: isLast ? `${sceneSubject} in ${sceneLocation}, scene concludes` : `${sceneSubject} in ${sceneLocation}, ready for next angle`,
+        captureDescription: `${shotType} of ${sceneSubject}`,
+        cinematographicVariation: true,
+        captureSuggestion: {
+          timing: 'last 2 seconds',
+          reason: 'End of camera movement at stable pose',
+          stability: 'medium',
+          timingSeconds: { start: 8, end: 10, recommended: 9 }
+        }
+      };
+    });
+
+    return {
+      shots,
+      sceneSubject,
+      sceneLocation,
+      sceneEndState: `${sceneSubject} in ${sceneLocation}`,
+      chainLogic: 'Cinematographic variations - same subject/location, different camera angles'
+    };
+  },
+
+  /**
+   * Extract the main subject from scene action
+   */
+  extractSceneSubject(sceneAction, sceneContext) {
+    // Try to find character names (capitalized words)
+    const charMatch = sceneAction.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/);
+    if (charMatch && !['The', 'A', 'An', 'In', 'On', 'At', 'With'].includes(charMatch[1])) {
+      return charMatch[1];
+    }
+    // Fall back to generic subject
+    if (sceneContext.characters?.length > 0) {
+      return sceneContext.characters[0].name || 'the character';
+    }
+    return 'the main character';
+  },
+
+  /**
+   * Extract the location from scene action
+   */
+  extractSceneLocation(sceneAction, sceneContext) {
+    // Look for location indicators
+    const locMatch = sceneAction.match(/(?:in|at|on|inside|within|before|near)\s+(?:the\s+)?([a-z]+(?:\s+[a-z]+)?)/i);
+    if (locMatch) {
+      return `the ${locMatch[1]}`;
+    }
+    // Try visual prompt for location
+    if (sceneContext.visualPrompt) {
+      const envMatch = sceneContext.visualPrompt.match(/(?:in|at|inside|within)\s+(?:a|an|the)\s+([a-z]+(?:\s+[a-z]+)?)/i);
+      if (envMatch) {
+        return `the ${envMatch[1]}`;
+      }
+    }
+    return 'the scene';
+  },
+
+  /**
+   * Extract the core action from scene action (simplified single action)
+   */
+  extractCoreAction(sceneAction) {
+    // Take the first main action clause
+    const firstSentence = sceneAction.split(/[.!?]/)[0];
+    // Simplify to a core verb phrase
+    const verbMatch = firstSentence.match(/(?:is\s+)?([a-z]+ing\s+[^,.]+)/i);
+    if (verbMatch) {
+      return verbMatch[1];
+    }
+    return firstSentence.substring(0, 100);
+  },
+
+  /**
+   * Get cinematographic shot sequence for given count
+   */
+  getCinematographicSequence(shotCount) {
+    const sequences = {
+      2: ['WIDE', 'CLOSE-UP'],
+      3: ['WIDE', 'MEDIUM', 'CLOSE-UP'],
+      4: ['WIDE', 'MEDIUM', 'CLOSE-UP', 'DETAIL'],
+      5: ['ESTABLISHING', 'WIDE', 'MEDIUM', 'CLOSE-UP', 'REACTION'],
+      6: ['ESTABLISHING', 'WIDE', 'MEDIUM', 'CLOSE-UP', 'EXTREME CLOSE-UP', 'WIDE PULL-BACK']
+    };
+    return sequences[shotCount] || sequences[3].slice(0, shotCount);
+  },
+
+  /**
+   * Get camera movement for shot type
+   */
+  getCameraMovementForType(shotType) {
+    const movements = {
+      'ESTABLISHING': 'Slow pan across',
+      'WIDE': 'Static with subtle drift',
+      'MEDIUM': 'Slow push in',
+      'CLOSE-UP': 'Gentle push in',
+      'EXTREME CLOSE-UP': 'Very slow drift',
+      'DETAIL': 'Subtle tracking',
+      'REACTION': 'Static hold',
+      'WIDE PULL-BACK': 'Gradual pull back'
+    };
+    return movements[shotType] || 'Smooth tracking';
+  },
+
+  /**
+   * Build a cinematographic prompt maintaining visual continuity
+   */
+  buildCinematographicPrompt(subject, location, action, shotType, isFirst, isLast, sceneContext) {
+    const parts = [];
+
+    // Camera movement first
+    parts.push(`${this.getCameraMovementForType(shotType)}.`);
+
+    // Shot type and subject (SAME subject in every shot)
+    parts.push(`${shotType} shot.`);
+    parts.push(`${subject} in ${location}.`);
+
+    // Core action (SAME action in every shot)
+    if (action) {
+      parts.push(action + '.');
+    }
+
+    // Continuity anchor for shots after first
+    if (!isFirst) {
+      parts.push('Same scene, different angle.');
+    }
+
+    // Environmental detail from context
+    const envDetail = this.getEnvironmentAnimation(sceneContext.visualPrompt, isLast);
+    if (envDetail) {
+      parts.push(envDetail);
+    }
+
+    // Quality keywords
+    parts.push('Cinematic, photorealistic, smooth fluid motion, natural lifelike movement.');
+
+    return parts.join(' ');
   },
 
   /**
