@@ -6116,6 +6116,7 @@
         }
 
         // Get location reference data for scene generation
+        // PRIORITY: 1) Specific scene assignment  2) "Apply to all" fallback
         function getLocationReferenceForScene(sceneId) {
             if (!state.storyboard.locationBible?.enabled) {
                 console.log('[getLocationReferenceForScene] Location Bible disabled');
@@ -6124,41 +6125,77 @@
 
             const allLocations = state.storyboard.locationBible.locations || [];
 
-            // Find location assigned to this scene
-            const location = allLocations.find(loc => {
-                const includeInAll = !loc.appliedToScenes || loc.appliedToScenes.length === 0;
-                const includeInScene = loc.appliedToScenes && loc.appliedToScenes.includes(sceneId);
-                return (includeInAll || includeInScene) &&
-                       loc.referenceImageBase64 &&
-                       loc.referenceImageStatus === 'ready';
-            });
+            // Filter to only locations with ready reference images
+            const readyLocations = allLocations.filter(loc =>
+                loc.referenceImageBase64 && loc.referenceImageStatus === 'ready'
+            );
 
-            if (location) {
-                console.log(`[getLocationReferenceForScene] Scene "${sceneId}" using location: "${location.name}"`);
-                return {
-                    base64: location.referenceImageBase64,
-                    mimeType: location.referenceImageMimeType || 'image/png',
-                    locationName: location.name,
-                    locationDescription: location.description,
-                    lightingStyle: location.lightingStyle,
-                    timeOfDay: location.timeOfDay,
-                    weather: location.weather,
-                    mood: location.mood
-                };
+            if (readyLocations.length === 0) {
+                console.log(`[getLocationReferenceForScene] No locations with ready reference images`);
+                return null;
+            }
+
+            // PRIORITY 1: Look for location with SPECIFIC scene assignment for this scene
+            // (non-empty appliedToScenes array that includes this sceneId)
+            const specificLocation = readyLocations.find(loc =>
+                loc.appliedToScenes &&
+                loc.appliedToScenes.length > 0 &&
+                loc.appliedToScenes.includes(sceneId)
+            );
+
+            if (specificLocation) {
+                console.log(`[getLocationReferenceForScene] Scene "${sceneId}" using SPECIFIC location: "${specificLocation.name}"`);
+                return formatLocationRef(specificLocation);
+            }
+
+            // PRIORITY 2: Fall back to "apply to all" locations (empty appliedToScenes)
+            const globalLocation = readyLocations.find(loc =>
+                !loc.appliedToScenes || loc.appliedToScenes.length === 0
+            );
+
+            if (globalLocation) {
+                console.log(`[getLocationReferenceForScene] Scene "${sceneId}" using GLOBAL location: "${globalLocation.name}"`);
+                return formatLocationRef(globalLocation);
             }
 
             console.log(`[getLocationReferenceForScene] No location reference for scene "${sceneId}"`);
             return null;
         }
 
+        // Helper to format location reference object
+        function formatLocationRef(location) {
+            return {
+                base64: location.referenceImageBase64,
+                mimeType: location.referenceImageMimeType || 'image/png',
+                locationName: location.name,
+                locationDescription: location.description,
+                lightingStyle: location.lightingStyle,
+                timeOfDay: location.timeOfDay,
+                weather: location.weather,
+                mood: location.mood
+            };
+        }
+
         // Get all locations assigned to a scene
+        // Returns array sorted by priority: specific assignments first, then "apply to all"
         function getLocationsForScene(sceneId) {
             if (!state.storyboard.locationBible?.enabled) return [];
             const locations = state.storyboard.locationBible.locations || [];
-            return locations.filter(loc => {
+
+            // Get all matching locations
+            const matching = locations.filter(loc => {
                 const includeInAll = !loc.appliedToScenes || loc.appliedToScenes.length === 0;
                 const includeInScene = loc.appliedToScenes && loc.appliedToScenes.includes(sceneId);
                 return includeInAll || includeInScene;
+            });
+
+            // Sort by priority: specific assignments first, then "apply to all"
+            return matching.sort((a, b) => {
+                const aSpecific = a.appliedToScenes && a.appliedToScenes.length > 0 && a.appliedToScenes.includes(sceneId);
+                const bSpecific = b.appliedToScenes && b.appliedToScenes.length > 0 && b.appliedToScenes.includes(sceneId);
+                if (aSpecific && !bSpecific) return -1; // a has priority
+                if (!aSpecific && bSpecific) return 1;  // b has priority
+                return 0; // same priority, keep original order
             });
         }
 
@@ -6766,14 +6803,25 @@
             }
 
             // Layer 3B: If no scene.location but Location Bible is enabled,
-            // find any location that applies to this scene
+            // find the best matching location for this scene
+            // PRIORITY: 1) Specific scene assignment  2) "Apply to all" fallback
             if (!scene.location && state.storyboard.locationBible?.enabled) {
                 const sceneId = scene.id;
-                const matchingLoc = state.storyboard.locationBible.locations?.find(loc => {
-                    const includeInAll = !loc.appliedToScenes || loc.appliedToScenes.length === 0;
-                    const includeInScene = loc.appliedToScenes?.includes(sceneId);
-                    return includeInAll || includeInScene;
-                });
+                const allLocs = state.storyboard.locationBible.locations || [];
+
+                // PRIORITY 1: Location with SPECIFIC scene assignment
+                let matchingLoc = allLocs.find(loc =>
+                    loc.appliedToScenes &&
+                    loc.appliedToScenes.length > 0 &&
+                    loc.appliedToScenes.includes(sceneId)
+                );
+
+                // PRIORITY 2: Fall back to "apply to all" location
+                if (!matchingLoc) {
+                    matchingLoc = allLocs.find(loc =>
+                        !loc.appliedToScenes || loc.appliedToScenes.length === 0
+                    );
+                }
 
                 if (matchingLoc) {
                     const locParts = [`LOCATION: ${matchingLoc.name}`];
