@@ -13964,7 +13964,33 @@
             ];
             const selectedVisualStyle = state.content.visualStyleMode || 'photorealistic';
 
-            html += \`
+            // Build visual style cards HTML
+            let visualStyleCardsHtml = '';
+            visualStyleModes.forEach(style => {
+                const isSelected = selectedVisualStyle === style.id;
+                visualStyleCardsHtml += `
+                    <div onclick="setVisualStyleMode('${style.id}')"
+                         style="padding: 0.6rem; border-radius: 0.5rem; border: 2px solid ${isSelected ? style.color : 'rgba(255,255,255,0.1)'}; background: ${isSelected ? style.color + '20' : 'rgba(255,255,255,0.03)'}; cursor: pointer; transition: all 0.2s; text-align: center;">
+                        <div style="font-size: 1.2rem;">${style.icon}</div>
+                        <div style="font-size: 0.7rem; color: ${isSelected ? style.color : 'white'}; font-weight: 600; margin-top: 0.25rem;">${style.name}</div>
+                        <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5); margin-top: 0.2rem; line-height: 1.3;">${style.description}</div>
+                    </div>
+                `;
+            });
+
+            // Get selected style info
+            const selectedStyleInfo = visualStyleModes.find(s => s.id === selectedVisualStyle);
+            const styleColor = selectedStyleInfo?.color || '#10b981';
+            const bestForText = {
+                'photorealistic': '✅ Best for: Real stories, documentaries, live-action films with actual people',
+                'cinematic': '✅ Best for: Hollywood-style dramatic films, blockbusters, music videos',
+                'stylized_3d': '✅ Best for: Family content, animation projects, stylized characters',
+                'illustrated': '✅ Best for: Artistic content, concept videos, unique visual narratives',
+                'anime': '✅ Best for: Anime-style content, manga adaptations, Japanese aesthetics',
+                'noir': '✅ Best for: Crime dramas, mysteries, dark atmospheric content'
+            }[selectedVisualStyle] || '';
+
+            html += `
                 <div class="content-card">
                     <div class="content-card-header">
                         <div class="content-card-icon">🎨</div>
@@ -13977,31 +14003,19 @@
 
                     <!-- Visual Style Grid -->
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
-                        \${visualStyleModes.map(style => \`
-                            <div onclick="setVisualStyleMode('\${style.id}')"
-                                 style="padding: 0.6rem; border-radius: 0.5rem; border: 2px solid \${selectedVisualStyle === style.id ? style.color : 'rgba(255,255,255,0.1)'}; background: \${selectedVisualStyle === style.id ? style.color + '20' : 'rgba(255,255,255,0.03)'}; cursor: pointer; transition: all 0.2s; text-align: center;">
-                                <div style="font-size: 1.2rem;">\${style.icon}</div>
-                                <div style="font-size: 0.7rem; color: \${selectedVisualStyle === style.id ? style.color : 'white'}; font-weight: 600; margin-top: 0.25rem;">\${style.name}</div>
-                                <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5); margin-top: 0.2rem; line-height: 1.3;">\${style.description}</div>
-                            </div>
-                        \`).join('')}
+                        ${visualStyleCardsHtml}
                     </div>
 
                     <!-- Selected Style Info -->
-                    \${selectedVisualStyle ? \`
-                        <div style="margin-top: 0.75rem; padding: 0.6rem; background: \${visualStyleModes.find(s => s.id === selectedVisualStyle)?.color || '#10b981'}15; border-radius: 0.4rem; border: 1px solid \${visualStyleModes.find(s => s.id === selectedVisualStyle)?.color || '#10b981'}40;">
-                            <div style="font-size: 0.7rem; color: \${visualStyleModes.find(s => s.id === selectedVisualStyle)?.color || '#10b981'}; font-weight: 600;">
-                                \${selectedVisualStyle === 'photorealistic' ? '✅ Best for: Real stories, documentaries, live-action films with actual people' :
-                                  selectedVisualStyle === 'cinematic' ? '✅ Best for: Hollywood-style dramatic films, blockbusters, music videos' :
-                                  selectedVisualStyle === 'stylized_3d' ? '✅ Best for: Family content, animation projects, stylized characters' :
-                                  selectedVisualStyle === 'illustrated' ? '✅ Best for: Artistic content, concept videos, unique visual narratives' :
-                                  selectedVisualStyle === 'anime' ? '✅ Best for: Anime-style content, manga adaptations, Japanese aesthetics' :
-                                  selectedVisualStyle === 'noir' ? '✅ Best for: Crime dramas, mysteries, dark atmospheric content' : ''}
+                    ${selectedVisualStyle ? `
+                        <div style="margin-top: 0.75rem; padding: 0.6rem; background: ${styleColor}15; border-radius: 0.4rem; border: 1px solid ${styleColor}40;">
+                            <div style="font-size: 0.7rem; color: ${styleColor}; font-weight: 600;">
+                                ${bestForText}
                             </div>
                         </div>
-                    \` : ''}
+                    ` : ''}
                 </div>
-            \`;
+            `;
 
             // Phase 3F: Narrative Structure Intelligence Card
             const narrativePreset = state.content.narrativePreset || '';
