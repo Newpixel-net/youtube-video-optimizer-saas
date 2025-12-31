@@ -41658,11 +41658,14 @@ exports.creationWizardAnalyzeTransition = functions.https.onCall(async (data, co
  */
 exports.creationWizardProcessSceneChain = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { scene, nextScene, styleBible, characterBible, genre, productionMode, videoModel } = data;
+  const { scene, nextScene, styleBible, characterBible, genre, productionMode, videoModel, visualStyleMode } = data;
 
   if (!scene) {
     throw new functions.https.HttpsError('invalid-argument', 'Scene data required');
   }
+
+  // Log visual style mode for debugging
+  console.log('[creationWizardProcessSceneChain] Visual style mode:', visualStyleMode || 'photorealistic (default)');
 
   try {
     // Process scene through the complete pipeline
@@ -41672,7 +41675,8 @@ exports.creationWizardProcessSceneChain = functions.https.onCall(async (data, co
       genre,
       productionMode,
       videoModel: videoModel || 'minimax',
-      nextScene
+      nextScene,
+      visualStyleMode: visualStyleMode || 'photorealistic'
     });
 
     return {
@@ -41698,11 +41702,14 @@ exports.creationWizardProcessSceneChain = functions.https.onCall(async (data, co
  */
 exports.creationWizardProcessAllScenes = functions.runWith({ timeoutSeconds: 300 }).https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { scenes, styleBible, characterBible, genre, productionMode, videoModel, projectId } = data;
+  const { scenes, styleBible, characterBible, genre, productionMode, videoModel, projectId, visualStyleMode } = data;
 
   if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
     throw new functions.https.HttpsError('invalid-argument', 'Scenes array required');
   }
+
+  // Log visual style mode for debugging
+  console.log('[creationWizardProcessAllScenes] Visual style mode:', visualStyleMode || 'photorealistic (default)');
 
   try {
     // Process all scenes through the pipeline
@@ -41711,7 +41718,8 @@ exports.creationWizardProcessAllScenes = functions.runWith({ timeoutSeconds: 300
       characterBible,
       genre,
       productionMode,
-      videoModel: videoModel || 'minimax'
+      videoModel: videoModel || 'minimax',
+      visualStyleMode: visualStyleMode || 'photorealistic'
     });
 
     // If projectId provided, save results
