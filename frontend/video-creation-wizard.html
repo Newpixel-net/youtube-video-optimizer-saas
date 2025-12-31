@@ -10142,6 +10142,7 @@
 
         /**
          * Open large preview modal for a shot's image or video
+         * Supports sequential auto-play through consecutive shots with videos
          */
         function openShotPreviewModal(sceneId, shotIndex) {
             const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
@@ -10160,6 +10161,31 @@
                 return;
             }
 
+            // Calculate sequential playback info (shots with videos from current onwards)
+            const shotsWithVideos = [];
+            for (let i = shotIndex; i < decomposed.shots.length; i++) {
+                const s = decomposed.shots[i];
+                if (s.videoStatus === 'ready' && s.videoUrl) {
+                    shotsWithVideos.push({ index: i, shot: s });
+                } else {
+                    break; // Stop at first shot without video (consecutive only)
+                }
+            }
+            const hasSequentialPlayback = shotsWithVideos.length > 1;
+            const currentPositionInSequence = 1;
+            const totalInSequence = shotsWithVideos.length;
+
+            // Store context for sequential playback
+            window.shotPreviewContext = {
+                sceneId,
+                currentShotIndex: shotIndex,
+                decomposed,
+                shotsWithVideos,
+                currentPositionInSequence,
+                totalInSequence,
+                isAutoPlaying: false
+            };
+
             const modal = document.createElement('div');
             modal.id = 'shot-preview-modal';
             modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: flex; align-items: center; justify-content: center; z-index: 10001; padding: 1rem;';
@@ -10169,13 +10195,19 @@
                     <!-- Header -->
                     <div style="padding: 1rem 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
                         <div>
-                            <div style="font-size: 1.1rem; font-weight: 700; color: white; display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="background: rgba(139, 92, 246, 0.3); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.9rem;">${shotIndex + 1}</span>
-                                Shot Preview - ${shot.shotType || 'Shot'}
+                            <div id="shot-preview-title" style="font-size: 1.1rem; font-weight: 700; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="shot-number-badge" style="background: rgba(139, 92, 246, 0.3); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.9rem;">${shotIndex + 1}</span>
+                                <span id="shot-type-label">Shot Preview - ${shot.shotType || 'Shot'}</span>
+                                ${hasSequentialPlayback ? `
+                                    <span id="autoplay-indicator" style="display: none; background: linear-gradient(135deg, #06b6d4, #8b5cf6); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 600; animation: pulse 2s infinite;">
+                                        ▶ Auto-playing: <span id="autoplay-position">1</span> of ${totalInSequence}
+                                    </span>
+                                ` : ''}
                             </div>
-                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">
-                                ${shot.cameraMovement || 'static'} • ${shot.duration || 6}s
+                            <div id="shot-preview-subtitle" style="font-size: 0.8rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem;">
+                                <span id="shot-camera-info">${shot.cameraMovement || 'static'} • ${shot.duration || 6}s</span>
                                 ${shot.transferredFrom !== undefined ? ` • 🔗 Frame from Shot ${shot.transferredFrom + 1}` : ''}
+                                ${hasSequentialPlayback ? ` • <span style="color: #67e8f9;">${totalInSequence} consecutive shots ready</span>` : ''}
                             </div>
                         </div>
                         <button onclick="closeShotPreviewModal()" style="background: none; border: none; color: rgba(255,255,255,0.5); font-size: 1.5rem; cursor: pointer; padding: 0.5rem; transition: color 0.2s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.5)'">&times;</button>
@@ -10196,11 +10228,11 @@
                         ` : ''}
 
                         <!-- Preview Container -->
-                        <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(0,0,0,0.3); min-height: 400px;">
+                        <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(0,0,0,0.3); min-height: 280px; max-height: 50vh; overflow: hidden;">
                             <!-- Image Preview -->
                             <div id="preview-content-image" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;">
                                 ${hasImage ? `
-                                    <img src="${shot.imageUrl}" style="max-width: 100%; max-height: 60vh; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+                                    <img src="${shot.imageUrl}" style="max-width: 100%; max-height: 48vh; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
                                 ` : `
                                     <div style="text-align: center; color: rgba(255,255,255,0.4);">
                                         <span style="font-size: 3rem;">🖼️</span>
@@ -10211,7 +10243,7 @@
                             <!-- Video Preview (hidden by default) -->
                             <div id="preview-content-video" style="display: none; align-items: center; justify-content: center; width: 100%; height: 100%;">
                                 ${hasVideo ? `
-                                    <video src="${shot.videoUrl}" controls autoplay loop style="max-width: 100%; max-height: 60vh; border-radius: 0.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.5);"></video>
+                                    <video id="shot-preview-video" src="${shot.videoUrl}" controls autoplay style="max-width: 100%; max-height: 48vh; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.5);"></video>
                                 ` : isGeneratingVideo ? `
                                     <div style="text-align: center; color: rgba(255,255,255,0.6);">
                                         <div style="width: 48px; height: 48px; margin: 0 auto 1rem; border: 3px solid rgba(6, 182, 212, 0.2); border-top-color: #06b6d4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
@@ -10301,6 +10333,109 @@
                     closeShotPreviewModal();
                 }
             });
+
+            // Setup sequential playback if video exists and has consecutive shots
+            if (hasVideo && hasSequentialPlayback) {
+                const video = document.getElementById('shot-preview-video');
+                if (video) {
+                    video.addEventListener('ended', handleVideoEnded);
+                    video.addEventListener('play', () => {
+                        window.shotPreviewContext.isAutoPlaying = true;
+                        const indicator = document.getElementById('autoplay-indicator');
+                        if (indicator) indicator.style.display = 'inline-flex';
+                    });
+                }
+            }
+        }
+
+        /**
+         * Handle video ended - advance to next shot in sequence
+         */
+        function handleVideoEnded() {
+            const ctx = window.shotPreviewContext;
+            if (!ctx || !ctx.shotsWithVideos || ctx.shotsWithVideos.length <= 1) return;
+
+            // Find current position in sequence
+            const currentIdx = ctx.shotsWithVideos.findIndex(s => s.index === ctx.currentShotIndex);
+            const nextIdx = currentIdx + 1;
+
+            if (nextIdx < ctx.shotsWithVideos.length) {
+                // Advance to next shot
+                const nextShot = ctx.shotsWithVideos[nextIdx];
+                ctx.currentShotIndex = nextShot.index;
+                ctx.currentPositionInSequence = nextIdx + 1;
+
+                // Update modal content without closing
+                updateShotPreviewContent(nextShot.index, nextShot.shot, ctx);
+            } else {
+                // Reached end of sequence
+                window.shotPreviewContext.isAutoPlaying = false;
+                const indicator = document.getElementById('autoplay-indicator');
+                if (indicator) {
+                    indicator.innerHTML = '✓ Sequence Complete';
+                    indicator.style.background = 'rgba(16, 185, 129, 0.5)';
+                }
+            }
+        }
+
+        /**
+         * Update shot preview content without closing the modal (for sequential playback)
+         */
+        function updateShotPreviewContent(shotIndex, shot, ctx) {
+            // Update header
+            const badge = document.getElementById('shot-number-badge');
+            const typeLabel = document.getElementById('shot-type-label');
+            const cameraInfo = document.getElementById('shot-camera-info');
+            const positionIndicator = document.getElementById('autoplay-position');
+
+            if (badge) badge.textContent = shotIndex + 1;
+            if (typeLabel) typeLabel.textContent = `Shot Preview - ${shot.shotType || 'Shot'}`;
+            if (cameraInfo) cameraInfo.textContent = `${shot.cameraMovement || 'static'} • ${shot.duration || 6}s`;
+            if (positionIndicator) positionIndicator.textContent = ctx.currentPositionInSequence;
+
+            // Update video source
+            const video = document.getElementById('shot-preview-video');
+            if (video && shot.videoUrl) {
+                video.src = shot.videoUrl;
+                video.play();
+            }
+
+            // Update image if exists
+            const imageContent = document.getElementById('preview-content-image');
+            if (imageContent && shot.imageUrl) {
+                imageContent.innerHTML = `
+                    <img src="${shot.imageUrl}" style="max-width: 100%; max-height: 48vh; object-fit: contain; border-radius: 0.5rem; box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+                `;
+            }
+
+            // Update prompts section
+            updateShotPreviewPrompts(shot);
+        }
+
+        /**
+         * Update the prompts section in the preview modal
+         */
+        function updateShotPreviewPrompts(shot) {
+            // Find and update the prompts container (simplified update)
+            const promptsContainer = document.querySelector('#shot-preview-modal [style*="grid-template-columns: 1fr 1fr"]');
+            if (promptsContainer) {
+                promptsContainer.innerHTML = `
+                    <!-- Image Prompt -->
+                    <div>
+                        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem;">🖼️ IMAGE PROMPT</div>
+                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.7); line-height: 1.4; max-height: 60px; overflow-y: auto;">
+                            ${shot.imagePrompt || shot.prompt || 'No prompt'}
+                        </div>
+                    </div>
+                    <!-- Video Prompt -->
+                    <div>
+                        <div style="font-size: 0.65rem; color: rgba(6, 182, 212, 0.8); margin-bottom: 0.25rem;">🎬 VIDEO PROMPT</div>
+                        <div style="font-size: 0.75rem; color: rgba(103, 232, 249, 0.9); line-height: 1.4; max-height: 60px; overflow-y: auto;">
+                            ${shot.videoPrompt || 'Action prompt will be generated from scene data'}
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         /**
@@ -10309,6 +10444,8 @@
         function closeShotPreviewModal() {
             const modal = document.getElementById('shot-preview-modal');
             if (modal) modal.remove();
+            // Clean up context
+            window.shotPreviewContext = null;
         }
 
         /**
