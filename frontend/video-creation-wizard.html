@@ -7422,6 +7422,136 @@
             render();
         }
 
+        // ==========================================
+        // FULL SCRIPT VIEWER MODAL
+        // Shows the complete script in a readable format
+        // ==========================================
+        function openFullScriptModal() {
+            const script = state.script;
+            if (!script || !script.scenes || script.scenes.length === 0) {
+                showToast('No script available to view', 'error');
+                return;
+            }
+
+            // Build the full script text from all components
+            let fullScriptText = '';
+
+            // Title
+            if (script.title) {
+                fullScriptText += `# ${script.title}\n\n`;
+            }
+
+            // Hook
+            if (script.hook) {
+                fullScriptText += `## HOOK\n${script.hook}\n\n`;
+            }
+
+            // Metadata
+            if (script.metadata) {
+                fullScriptText += `---\n`;
+                if (script.metadata.targetAudience) fullScriptText += `Target Audience: ${script.metadata.targetAudience}\n`;
+                if (script.metadata.keyMessage) fullScriptText += `Key Message: ${script.metadata.keyMessage}\n`;
+                if (script.metadata.suggestedMusic) fullScriptText += `Suggested Music: ${script.metadata.suggestedMusic}\n`;
+                fullScriptText += `---\n\n`;
+            }
+
+            // Scenes
+            script.scenes.forEach((scene, index) => {
+                fullScriptText += `## SCENE ${index + 1}`;
+                if (scene.duration || scene.visualDuration) {
+                    fullScriptText += ` (${scene.duration || scene.visualDuration}s)`;
+                }
+                fullScriptText += `\n\n`;
+
+                // Narration
+                if (scene.narration && scene.narration.trim()) {
+                    fullScriptText += `### Narration:\n${scene.narration}\n\n`;
+                } else {
+                    fullScriptText += `### Narration:\n🎵 Music only (no voiceover)\n\n`;
+                }
+
+                // Visual
+                if (scene.visual) {
+                    fullScriptText += `### Visual:\n${scene.visual}\n\n`;
+                }
+
+                // Action (if present)
+                if (scene.action) {
+                    fullScriptText += `### Action:\n${scene.action}\n\n`;
+                }
+
+                fullScriptText += `---\n\n`;
+            });
+
+            // CTA
+            if (script.cta) {
+                fullScriptText += `## CALL TO ACTION\n${script.cta}\n`;
+            }
+
+            // Create modal
+            const modal = document.createElement('div');
+            modal.id = 'full-script-modal';
+            modal.innerHTML = `
+                <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1rem;" onclick="if(event.target === this) closeFullScriptModal()">
+                    <div style="background: linear-gradient(145deg, #1a1a2e, #16213e); border-radius: 1rem; max-width: 900px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; border: 1px solid rgba(139, 92, 246, 0.3); box-shadow: 0 25px 50px rgba(0,0,0,0.5);">
+                        <!-- Header -->
+                        <div style="padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <h2 style="margin: 0; color: white; font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem;">
+                                    📜 Full Script
+                                </h2>
+                                <p style="margin: 0.3rem 0 0 0; color: rgba(255,255,255,0.5); font-size: 0.8rem;">
+                                    ${script.scenes.length} scenes • ${script.scenes.reduce((sum, s) => sum + (s.visualDuration || s.duration || 0), 0)}s total duration
+                                </p>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button onclick="copyFullScript()" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.5rem; padding: 0.5rem 1rem; color: white; cursor: pointer; font-size: 0.8rem;">
+                                    📋 Copy
+                                </button>
+                                <button onclick="closeFullScriptModal()" style="background: rgba(255,255,255,0.1); border: none; border-radius: 0.5rem; width: 36px; height: 36px; color: white; cursor: pointer; font-size: 1.2rem;">
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Script Content -->
+                        <div style="flex: 1; overflow-y: auto; padding: 1.5rem;">
+                            <pre id="full-script-content" style="white-space: pre-wrap; word-wrap: break-word; font-family: 'Georgia', serif; font-size: 0.95rem; line-height: 1.7; color: rgba(255,255,255,0.9); margin: 0;">${escapeHtml(fullScriptText)}</pre>
+                        </div>
+
+                        <!-- Footer -->
+                        <div style="padding: 1rem 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
+                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.4); text-align: center;">
+                                💡 Tip: Copy this script to review with your team or use as a reference while editing scenes
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function closeFullScriptModal() {
+            const modal = document.getElementById('full-script-modal');
+            if (modal) modal.remove();
+        }
+
+        function copyFullScript() {
+            const content = document.getElementById('full-script-content');
+            if (content) {
+                navigator.clipboard.writeText(content.textContent)
+                    .then(() => showToast('Script copied to clipboard!', 'success'))
+                    .catch(() => showToast('Failed to copy script', 'error'));
+            }
+        }
+
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         async function regenerateFullScript() {
             if (!confirm('This will replace your current script. Continue?')) return;
 
@@ -14430,6 +14560,10 @@
                                    style="background: none; border: none; color: white; font-size: 1.1rem; font-weight: 700; width: 100%; outline: none;">
                             <div class="content-card-subtitle">${script.scenes.length} scenes • Target: ${formatDuration(targetDuration)}</div>
                         </div>
+                        <button onclick="openFullScriptModal()"
+                                style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.5rem; padding: 0.5rem 1rem; color: white; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem;">
+                            <span>📜</span> Full Script
+                        </button>
                         <button onclick="regenerateFullScript()"
                                 style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; padding: 0.5rem 1rem; color: white; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 0.3rem;">
                             <span>🔄</span> Regenerate
