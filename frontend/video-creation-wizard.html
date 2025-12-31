@@ -8775,6 +8775,14 @@
                 }
             }
 
+            // CRITICAL: Get location reference for this scene
+            const locationRef = getLocationReferenceForScene(sceneId);
+            if (locationRef) {
+                console.log(`[generateAllShotsForScene] Using location: "${locationRef.locationName}" for scene ${sceneId}`);
+            } else {
+                console.log(`[generateAllShotsForScene] No location reference for scene ${sceneId}`);
+            }
+
             // Generate each shot sequentially for better consistency
             for (let i = 0; i < decomposed.shots.length; i++) {
                 const shot = decomposed.shots[i];
@@ -8784,6 +8792,20 @@
                     let enhancedPrompt = shot.prompt;
                     if (decomposed.consistencyAnchors) {
                         enhancedPrompt += `\n\nCONSISTENCY: Lighting=${decomposed.consistencyAnchors.lighting || 'cinematic'}, Colors=${decomposed.consistencyAnchors.colorPalette || 'scene palette'}, Atmosphere=${decomposed.consistencyAnchors.atmosphere || 'consistent'}`;
+                    }
+
+                    // CRITICAL: Add location context to prompt if available
+                    if (locationRef) {
+                        enhancedPrompt += `\n\nLOCATION: ${locationRef.locationName}${locationRef.locationDescription ? ' - ' + locationRef.locationDescription : ''}`;
+                        if (locationRef.lightingStyle) {
+                            enhancedPrompt += `. Lighting: ${locationRef.lightingStyle}`;
+                        }
+                        if (locationRef.timeOfDay && locationRef.timeOfDay !== 'day') {
+                            enhancedPrompt += `. Time: ${locationRef.timeOfDay}`;
+                        }
+                        if (locationRef.mood && locationRef.mood !== 'neutral') {
+                            enhancedPrompt += `. Mood: ${locationRef.mood}`;
+                        }
                     }
 
                     // Call image generation
@@ -8796,8 +8818,18 @@
                         quality: 'hd'
                     };
 
+                    // Add character reference if available
                     if (characterReference) {
                         requestData.characterReference = characterReference;
+                    }
+
+                    // CRITICAL: Add location reference image as style reference
+                    if (locationRef && locationRef.base64) {
+                        requestData.styleReference = {
+                            base64: locationRef.base64,
+                            mimeType: locationRef.mimeType || 'image/png'
+                        };
+                        console.log(`[generateAllShotsForScene] Shot ${i + 1}: Added location style reference`);
                     }
 
                     const result = await generateFn(requestData);
@@ -8856,14 +8888,38 @@
                     enhancedPrompt += `\n\nCONSISTENCY: Lighting=${decomposed.consistencyAnchors.lighting || 'cinematic'}, Colors=${decomposed.consistencyAnchors.colorPalette || 'scene palette'}`;
                 }
 
+                // Get location reference for this scene
+                const locationRef = getLocationReferenceForScene(sceneId);
+                if (locationRef) {
+                    enhancedPrompt += `\n\nLOCATION: ${locationRef.locationName}${locationRef.locationDescription ? ' - ' + locationRef.locationDescription : ''}`;
+                    if (locationRef.lightingStyle) enhancedPrompt += `. Lighting: ${locationRef.lightingStyle}`;
+                }
+
+                // Get character reference if available
+                let characterReference = null;
+                if (state.storyboard.characterBible?.enabled) {
+                    const charWithRef = state.storyboard.characterBible.characters.find(c => c.referenceImageBase64);
+                    if (charWithRef) {
+                        characterReference = { base64: charWithRef.referenceImageBase64, mimeType: 'image/png' };
+                    }
+                }
+
                 const generateFn = functions.httpsCallable('generateCreativeImage', { timeout: 300000 });
-                const result = await generateFn({
+                const requestData = {
                     prompt: enhancedPrompt,
                     model: state.storyboard.imageModel || 'nanobanana-pro',
                     quantity: 1,
                     aspectRatio: state.platform.aspectRatio || '16:9',
                     quality: 'hd'
-                });
+                };
+
+                // Add references
+                if (characterReference) requestData.characterReference = characterReference;
+                if (locationRef && locationRef.base64) {
+                    requestData.styleReference = { base64: locationRef.base64, mimeType: locationRef.mimeType || 'image/png' };
+                }
+
+                const result = await generateFn(requestData);
 
                 if (result.data.success && result.data.images && result.data.images.length > 0) {
                     shot.imageUrl = result.data.images[0].url;

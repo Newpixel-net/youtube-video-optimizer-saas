@@ -49298,18 +49298,19 @@ exports.creationWizardDecomposeSceneToShots = functions
         // Get physics summary for metadata
         const physicsSummary = CINEMATIC_PHYSICS_ENGINE.getPhysicsSummary(scene, shot, intensity);
 
-        // Enhance the video prompt with physics layer
+        // CRITICAL: Store full physics enhancement as METADATA only (not in video prompt)
+        // Video prompts must stay short for Minimax API (limit ~1500 chars)
+        // The video prompt focuses on MOTION, not detailed physics descriptions
         const existingVideoPrompt = shot.videoPrompt || '';
-        const enhancedVideoPrompt = physicsEnhancement
-          ? `${existingVideoPrompt}\n\n${physicsEnhancement}`
-          : existingVideoPrompt;
 
         return {
           ...shot,
-          videoPrompt: enhancedVideoPrompt,
+          videoPrompt: existingVideoPrompt, // Keep original - don't append full physics text
+          videoPromptPhysicsHint: physicsEnhancement ? physicsEnhancement.substring(0, 200) : '', // Short hint only
           cinematicPhysics: {
             applied: true,
             intensity,
+            fullEnhancement: physicsEnhancement, // Store full text as metadata
             ...physicsSummary
           }
         };
@@ -49343,17 +49344,17 @@ exports.creationWizardDecomposeSceneToShots = functions
           shot
         );
 
-        // Enhance the video prompt with character consistency layer
+        // CRITICAL: Store full character enhancement as METADATA only (not in video prompt)
+        // Video prompts must stay short for Minimax API (limit ~1500 chars)
         const existingVideoPrompt = shot.videoPrompt || '';
-        const enhancedVideoPrompt = characterEnhancement
-          ? `${existingVideoPrompt}\n\n${characterEnhancement}`
-          : existingVideoPrompt;
 
         return {
           ...shot,
-          videoPrompt: enhancedVideoPrompt,
+          videoPrompt: existingVideoPrompt, // Keep original - don't append full character text
+          videoPromptCharacterHint: characterEnhancement ? characterEnhancement.substring(0, 200) : '', // Short hint only
           characterReference: {
             applied: characterEnhancement.length > 0,
+            fullEnhancement: characterEnhancement, // Store full text as metadata
             ...characterSummary
           }
         };
@@ -49387,18 +49388,18 @@ exports.creationWizardDecomposeSceneToShots = functions
         // Get audio summary for metadata
         const audioSummary = AUDIO_BEAT_ENGINE.getAudioSummary(scene, shot, beatIndex);
 
-        // Enhance the video prompt with audio layer
+        // CRITICAL: Store full audio enhancement as METADATA only (not in video prompt)
+        // Video prompts must stay short for Minimax API (limit ~1500 chars)
         const existingVideoPrompt = shot.videoPrompt || '';
-        const enhancedVideoPrompt = audioEnhancement
-          ? `${existingVideoPrompt}\n\n${audioEnhancement}`
-          : existingVideoPrompt;
 
         return {
           ...shot,
-          videoPrompt: enhancedVideoPrompt,
+          videoPrompt: existingVideoPrompt, // Keep original - don't append full audio text
+          videoPromptAudioHint: audioEnhancement ? audioEnhancement.substring(0, 150) : '', // Short hint only
           audioBeat: {
             applied: true,
             beatIndex,
+            fullEnhancement: audioEnhancement, // Store full text as metadata
             ...audioSummary
           }
         };
