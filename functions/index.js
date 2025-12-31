@@ -23507,6 +23507,10 @@ exports.creationWizardSaveProject = functions.https.onCall(async (data, context)
       name: projectData.name || 'Untitled Video',
       status: projectData.status || 'draft',
 
+      // CRITICAL: Save wizard step progress for proper restoration
+      currentStep: projectData.currentStep || 1,
+      maxReachedStep: projectData.maxReachedStep || 1,
+
       // Platform configuration - complete
       platform: projectData.platform ? {
         selected: projectData.platform.selected || null,
@@ -23709,8 +23713,16 @@ exports.creationWizardLoadProject = functions.https.onCall(async (data, context)
         id: projectDoc.id,
         name: project.name,
         status: project.status,
+        // CRITICAL: Include step progress for proper restoration
+        currentStep: project.currentStep || null,
+        maxReachedStep: project.maxReachedStep || null,
         platform: project.platform,
         content: project.content,
+        // NEW WIZARD FLOW: Include production, concept, characterIntelligence
+        production: project.production || null,
+        concept: project.concept || null,
+        characterIntelligence: project.characterIntelligence || null,
+        // End new wizard flow fields
         script: project.script,
         storyboard: project.storyboard,
         animation: project.animation,
@@ -24110,8 +24122,81 @@ exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, con
     styleReference,
     production: production?.type,
     hasEnrichment: !!enrichment,
-    uid
+    uid,
+    creativeSeed: Date.now() % 1000000 // Log seed for debugging
   });
+
+  // === CREATIVE DIVERSITY INJECTION ===
+  // Generate random creative "seeds" to force unique outputs each time
+  const creativeSeed = Date.now() % 1000000; // 6-digit random seed
+
+  // Random character name pools from different cultures/eras
+  const namePools = [
+    ['Kai', 'Zara', 'Marcus', 'Yuki', 'Elena', 'Dmitri', 'Amara', 'Finn'],
+    ['Nova', 'Jax', 'Priya', 'Alejandro', 'Mei', 'Kofi', 'Ingrid', 'Rashid'],
+    ['Atlas', 'Seraphina', 'Rowan', 'Nadia', 'Cedric', 'Xiomara', 'Dante', 'Isolde'],
+    ['Phoenix', 'Cassius', 'Thalia', 'Magnus', 'Zuri', 'Orion', 'Kira', 'Ajax'],
+    ['River', 'Octavia', 'Soren', 'Valentina', 'Malik', 'Astrid', 'Joaquin', 'Neve']
+  ];
+
+  // Random setting flavors
+  const settingFlavors = [
+    ['neon-lit', 'ancient', 'floating', 'underground', 'abandoned', 'sacred'],
+    ['crystalline', 'war-torn', 'utopian', 'decaying', 'frontier', 'forbidden'],
+    ['oceanic', 'volcanic', 'arctic', 'desert', 'jungle', 'mountain'],
+    ['steampunk', 'biopunk', 'solarpunk', 'retrofuture', 'post-collapse', 'alternate']
+  ];
+
+  // Random story hooks
+  const storyHooks = [
+    'What if the hero discovers they are the prophecied villain?',
+    'What if every choice creates a parallel version that the characters can glimpse?',
+    'What if the magical system is actually ancient technology misunderstood?',
+    'What if the enemy they must defeat was once their greatest ally?',
+    'What if winning the battle would cause a worse catastrophe?',
+    'What if the world is a simulation and some characters suspect it?',
+    'What if memories can be transferred but with unintended consequences?',
+    'What if time moves differently for different characters?',
+    'What if the monster they hunt is actually protecting something precious?',
+    'What if the power comes at a cost that escalates with each use?'
+  ];
+
+  // Random genre mashups
+  const genreMashups = [
+    ['noir', 'fantasy'], ['horror', 'comedy'], ['western', 'sci-fi'],
+    ['romance', 'thriller'], ['mystery', 'supernatural'], ['war', 'coming-of-age'],
+    ['heist', 'period drama'], ['survival', 'philosophical'], ['sports', 'crime'],
+    ['disaster', 'family drama'], ['espionage', 'supernatural'], ['revenge', 'redemption']
+  ];
+
+  // Select random elements based on seed
+  const selectedNamePool = namePools[creativeSeed % namePools.length];
+  const selectedSettings = settingFlavors[creativeSeed % settingFlavors.length];
+  const selectedHook = storyHooks[creativeSeed % storyHooks.length];
+  const selectedMashup = genreMashups[creativeSeed % genreMashups.length];
+
+  // Creative divergence prompt section
+  const creativeDivergence = `
+=== CREATIVE DIVERGENCE SEED: ${creativeSeed} ===
+To ensure MAXIMUM CREATIVITY, consider these random inspirations (adapt freely):
+
+SUGGESTED CHARACTER NAME POOL (use or transform): ${selectedNamePool.join(', ')}
+SETTING TEXTURE IDEAS: ${selectedSettings.join(', ')}
+UNEXPECTED TWIST TO CONSIDER: "${selectedHook}"
+GENRE FUSION POSSIBILITY: ${selectedMashup.join(' + ')}
+
+IMPORTANT: These are STARTING POINTS. Transform them. Surprise the user.
+DO NOT create the same story you created last time.
+Each generation should feel like a FRESH creative mind is approaching the concept.
+
+MANDATORY VARIATION RULES:
+1. If the user input mentions "action" - one concept must subvert action tropes
+2. If mentioned "sci-fi" - one concept should ground sci-fi in intimate human drama
+3. If mentioned "fantasy" - one concept should feel grounded/realistic despite fantasy elements
+4. Make characters SPECIFIC (age, background, specific flaw) not generic
+5. Give at least one character an UNUSUAL profession or background
+6. Include at least one SURPRISING character dynamic (enemies forced to cooperate, etc.)
+`;
 
   // Build the prompt for concept generation
   const productionContext = production ? `
@@ -24215,10 +24300,12 @@ INVALID (too similar):
 
   const prompt = `You are a Hollywood showrunner who creates diverse, sophisticated stories.
 You understand that the best pitches offer RADICALLY DIFFERENT approaches to the same core idea.
+CRITICAL: You MUST generate FRESH, UNIQUE content every time. Never repeat patterns from previous generations.
 
 USER'S CORE IDEA:
 ${rawInput || 'Create something engaging and original'}
 
+${creativeDivergence}
 ${productionContext}
 ${enrichmentContext}
 ${narrativeDiversityGuide}
@@ -24228,6 +24315,7 @@ ${avoidList}
 YOUR TASK:
 Generate 3 concepts that are GENUINELY DIFFERENT in structure and approach.
 Each concept should explore the user's idea through a DIFFERENT LENS.
+Use the CREATIVE DIVERGENCE SEED above to inspire fresh, unexpected directions.
 
 REQUIREMENTS:
 1. Each concept uses a DIFFERENT narrative structure (mandatory!)
@@ -24302,13 +24390,25 @@ CRITICAL DIVERSITY CHECK before responding:
         messages: [
           {
             role: 'system',
-            content: 'You are a showrunner known for creating diverse, acclaimed series. You NEVER pitch the same story structure twice - each concept explores fundamentally different narrative territory (ensemble vs single protagonist, mystery vs character study, etc.). You create rich multi-character stories with clear archetypes, relationships, and world rules. Always return valid JSON with genuinely diverse concepts.'
+            content: `You are a showrunner known for creating diverse, acclaimed series. You approach every brief with FRESH EYES.
+
+CORE MANDATE: Generate genuinely NEW, SURPRISING content each time:
+- NEVER use the same character archetypes in the same configuration twice
+- NEVER default to the "obvious" interpretation of a genre
+- ALWAYS include at least one element that subverts expectations
+- VARY character names, ages, backgrounds, and professions
+- Each concept should feel like it came from a DIFFERENT creative mind
+
+You NEVER pitch the same story structure twice - each concept explores fundamentally different narrative territory (ensemble vs single protagonist, mystery vs character study, etc.). You create rich multi-character stories with clear archetypes, relationships, and world rules.
+
+When given a creative seed, use it as a launching point for UNEXPECTED directions.
+Always return valid JSON with genuinely diverse, surprising concepts.`
           },
           { role: 'user', content: prompt }
         ],
         response_format: { type: 'json_object' }, // Force valid JSON output
         max_tokens: 4000,
-        temperature: 0.95
+        temperature: 1.0 // Increased from 0.95 for more creativity
       })
     });
 
