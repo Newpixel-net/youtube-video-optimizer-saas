@@ -52444,34 +52444,64 @@ exports.creationWizardFixCharacterFaces = functions
         console.log(`[creationWizardFixCharacterFaces] Added character reference ${idx + 1}: ${charRef.name}`);
       });
 
-      // 3. Build detailed face correction prompt
+      // 3. Build detailed face correction prompt with LIGHTING PRESERVATION
       const characterDescriptions = characterReferences.map((c, idx) => {
         const charNum = idx + 2; // +2 because image 1 is the scene
         return `- Image ${charNum}: ${c.name}${c.description ? ` (${c.description})` : ''}`;
       }).join('\n');
 
       const faceFixPrompt = `
-FACE CORRECTION TASK:
+FACE CORRECTION TASK - LIGHTING CRITICAL:
 
 You have been given ${characterReferences.length + 1} images:
 - Image 1: The SCENE to preserve (composition, lighting, poses, background, clothing, everything EXCEPT faces)
 ${characterDescriptions}
 
+=== CRITICAL LIGHTING PRESERVATION ===
+BEFORE making ANY changes, ANALYZE Image 1's lighting:
+1. Color temperature (warm/cool/neutral)
+2. Light direction (front/side/back/above)
+3. Light intensity (bright/dim/dramatic shadows)
+4. Color grading (teal/orange, cool blues, warm ambers, etc.)
+5. Atmospheric effects (fog, haze, smoke, neon glow, volumetric light)
+6. Shadow depth and placement
+7. Rim lighting or backlight effects
+8. Any colored light sources (neon, fire, screens)
+
+The corrected faces MUST match ALL these lighting characteristics EXACTLY.
+The face should look like it was FILMED IN THAT SCENE, not pasted in from a studio.
+
 YOUR TASK:
-1. KEEP the exact scene from Image 1 - same composition, poses, camera angle, lighting, background, clothing, body positions
-2. REPLACE the faces in Image 1 with the correct faces from the character reference images
-3. Match each character in the scene to their reference portrait based on position/role
-4. Ensure the faces blend naturally with the lighting and style of the scene
-5. Maintain the exact aspect ratio: ${aspectRatio}
+1. PRESERVE the EXACT scene from Image 1:
+   - Same composition, poses, camera angle, background, clothing, body positions
+   - Same color grading and color temperature
+   - Same atmospheric effects (fog, haze, smoke if present)
+   - Same lighting direction and shadow patterns
+   - Same overall mood and cinematic look
 
-CRITICAL REQUIREMENTS:
-- Do NOT change the scene composition, poses, or background
-- Do NOT change clothing, hair style/color (unless to match reference), or body positions
-- ONLY replace the facial features (eyes, nose, mouth, face shape, skin tone) with those from the reference portraits
-- Ensure faces look natural and match the scene's lighting conditions
-- Preserve any expressions that fit the scene's narrative context
+2. REPLACE only the facial features with those from the character references:
+   - Eyes, nose, mouth, face shape, skin tone FROM the reference
+   - BUT the lighting ON the face must match Image 1's lighting EXACTLY
+   - Shadows should fall in the same direction as Image 1
+   - Skin should reflect the same color cast as Image 1
+   - If Image 1 has blue/cyan lighting, the face must have that blue/cyan tint
+   - If Image 1 has warm golden lighting, the face must have that warm glow
 
-Output a single corrected image with the fixed character faces.
+CRITICAL DO NOT:
+- Do NOT flatten the lighting or make it look like studio lighting
+- Do NOT remove atmospheric effects (fog, haze, smoke, dust particles)
+- Do NOT change the color grading or color temperature
+- Do NOT create a "pasted on" look where the face doesn't match the environment
+- Do NOT make the face brighter or more evenly lit than the original
+
+CRITICAL DO:
+- Apply the SAME shadows to the new face that were on the original face
+- Match any rim light or backlight effects from the original
+- Preserve any color tints from environment lighting (neon, fire, etc.)
+- Keep the atmospheric density consistent
+- Maintain ${aspectRatio} aspect ratio
+
+Output a single corrected image where the face blends SEAMLESSLY with the scene's lighting.
 `.trim();
 
       contentParts.push({ text: faceFixPrompt });
@@ -52492,8 +52522,8 @@ Output a single corrected image with the fixed character faces.
             await new Promise(resolve => setTimeout(resolve, retry * 2000));
           }
 
-          // Add aspect ratio hint to prompt
-          const aspectInstruction = `[Generate in ${aspectRatio} aspect ratio. High quality, cinematic, detailed faces.]\n\n`;
+          // Add aspect ratio and lighting preservation hint to prompt
+          const aspectInstruction = `[LIGHTING MATCH CRITICAL: The corrected face MUST have the EXACT same lighting as the original scene - same shadows, same color temperature, same atmospheric effects. Generate in ${aspectRatio} aspect ratio. Cinematic quality. The face must look like it belongs in this specific lighting environment, NOT like it was shot in a studio.]\n\n`;
           const enhancedParts = contentParts.map((part, idx) => {
             if (part.text) {
               return { text: aspectInstruction + part.text };
