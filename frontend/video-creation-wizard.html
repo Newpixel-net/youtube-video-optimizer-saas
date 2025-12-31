@@ -4123,6 +4123,9 @@
                 const projectData = {
                     name: state.project.name || generateProjectName(),
                     status: state.project.status,
+                    // CRITICAL: Save current step and max reached step for proper restoration
+                    currentStep: state.currentStep,
+                    maxReachedStep: state.maxReachedStep,
                     platform: state.platform,
                     content: state.content,
                     // NEW WIZARD FLOW: Production + Concept + Character Intelligence
@@ -4260,11 +4263,16 @@
                         state.export = { ...state.export, ...project.export };
                     }
 
-                    // Calculate max reached step based on completed data
-                    state.maxReachedStep = calculateMaxReachedStep();
-
-                    // CRITICAL: Navigate to the appropriate step
-                    state.currentStep = state.maxReachedStep;
+                    // CRITICAL: Restore step progress from saved data, or calculate from completed data
+                    if (project.currentStep && project.maxReachedStep) {
+                        // Use saved step values (preferred - preserves exact user position)
+                        state.currentStep = project.currentStep;
+                        state.maxReachedStep = project.maxReachedStep;
+                    } else {
+                        // Fallback: Calculate from completed data (for older projects)
+                        state.maxReachedStep = calculateMaxReachedStep();
+                        state.currentStep = state.maxReachedStep;
+                    }
 
                     showToast('Project loaded', 'success');
                 }
@@ -4318,14 +4326,26 @@
         }
 
         function calculateMaxReachedStep() {
-            // Step 6 is now the final step (Edit and Export)
+            // Step 6 is the final step (Edit and Export)
+            // This function calculates the furthest step reached based on completed data
+
+            // Check from highest step down to lowest
             if (state.export.status === 'complete') return 6;
             if (state.assembly.status === 'ready') return 6;
             if (state.animation.scenes.length > 0) return 6;
             if (state.storyboard.scenes.length > 0) return 5;
             if (state.script.scenes.length > 0) return 4;
+
+            // NEW WIZARD FLOW: Check concept and character intelligence (Step 3)
+            if (state.concept?.refinedConcept || state.concept?.selectedIdea !== undefined) return 3;
+            if (state.characterIntelligence?.characters?.length > 0) return 3;
             if (state.content.niche && state.content.style) return 3;
+
+            // Check production setup (Step 2)
+            if (state.production?.format && state.production?.type) return 2;
             if (state.platform.selected) return 2;
+
+            // Default to step 1
             return 1;
         }
 
@@ -10075,6 +10095,7 @@
 
         /**
          * Transfer captured frame to the next shot as its starting image
+         * Handles both data URLs (from canvas capture) and regular URLs (from face correction)
          */
         async function transferFrameToNextShot() {
             const ctx = state.frameCaptureContext;
@@ -10096,39 +10117,51 @@
             showToast('Transferring frame to next shot...', 'info');
 
             try {
-                // Upload the captured frame as an image
-                const uploadFn = functions.httpsCallable('uploadBase64Image', { timeout: 60000 });
-                const result = await uploadFn({
-                    imageBase64: ctx.capturedFrame.split(',')[1], // Remove data:image/png;base64, prefix
-                    mimeType: 'image/png',
-                    filename: `shot_${nextShotIndex + 1}_transferred_frame.png`
-                });
+                let finalImageUrl;
 
-                if (result.data.success && result.data.url) {
-                    // Update next shot with the transferred frame
-                    nextShot.imageUrl = result.data.url;
-                    nextShot.status = 'ready';
-                    nextShot.transferredFrom = ctx.shotIndex; // Mark that this was transferred
+                // Check if capturedFrame is a data URL or a regular URL
+                if (ctx.capturedFrame.startsWith('data:')) {
+                    // It's a data URL from canvas capture - upload it
+                    const uploadFn = functions.httpsCallable('uploadBase64Image', { timeout: 60000 });
+                    const result = await uploadFn({
+                        imageBase64: ctx.capturedFrame.split(',')[1], // Remove data:image/png;base64, prefix
+                        mimeType: 'image/png',
+                        filename: `shot_${nextShotIndex + 1}_transferred_frame.png`
+                    });
 
-                    // Update preview in modal
-                    const nextPreview = document.getElementById('next-shot-preview');
-                    if (nextPreview) {
-                        nextPreview.innerHTML = `
-                            <img src="${result.data.url}" style="width: 100%; height: 100%; object-fit: cover;">
-                            <div style="position: absolute; bottom: 0.25rem; right: 0.25rem; background: rgba(16, 185, 129, 0.9); color: white; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem;">
-                                ✓ Transferred
-                            </div>
-                        `;
+                    if (result.data.success && result.data.url) {
+                        finalImageUrl = result.data.url;
+                    } else {
+                        throw new Error('Upload failed');
                     }
-
-                    showToast(`Frame transferred to Shot ${nextShotIndex + 1}! Visual continuity established.`, 'success');
-
-                    // Re-render the main modal
-                    renderShotDecompositionModal();
-                    scheduleAutoSave();
+                } else if (ctx.capturedFrame.startsWith('http')) {
+                    // It's already a URL (from face correction) - use it directly
+                    finalImageUrl = ctx.capturedFrame;
                 } else {
-                    throw new Error('Upload failed');
+                    throw new Error('Invalid frame format');
                 }
+
+                // Update next shot with the transferred frame
+                nextShot.imageUrl = finalImageUrl;
+                nextShot.status = 'ready';
+                nextShot.transferredFrom = ctx.shotIndex; // Mark that this was transferred
+
+                // Update preview in modal
+                const nextPreview = document.getElementById('next-shot-preview');
+                if (nextPreview) {
+                    nextPreview.innerHTML = `
+                        <img src="${finalImageUrl}" style="width: 100%; height: 100%; object-fit: cover;">
+                        <div style="position: absolute; bottom: 0.25rem; right: 0.25rem; background: rgba(16, 185, 129, 0.9); color: white; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.6rem;">
+                            ✓ Transferred
+                        </div>
+                    `;
+                }
+
+                showToast(`Frame transferred to Shot ${nextShotIndex + 1}! Visual continuity established.`, 'success');
+
+                // Re-render the main modal
+                renderShotDecompositionModal();
+                scheduleAutoSave();
 
             } catch (error) {
                 console.error('Frame transfer error:', error);
