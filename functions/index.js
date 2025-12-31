@@ -42126,6 +42126,31 @@ const CINEMATIC_PHYSICS_ENGINE = {
       cameraStyle: physics.cameraPhysics.style,
       temporalPhases: Object.keys(physics.temporalPhysics)
     };
+  },
+
+  /**
+   * Generate CONDENSED physics hint for video prompt (max 120 chars)
+   * Full enhancement stored separately as metadata
+   */
+  generateCondensedHint(scene, shot, intensity = 0.5) {
+    const physics = this.analyzeScenePhysics(scene, shot, intensity);
+    const hints = [];
+
+    // Most important: materials and their motion
+    if (physics.materialPhysics.length > 0) {
+      const materials = physics.materialPhysics.slice(0, 2).map(m => m.type).join(', ');
+      hints.push(materials + ' motion');
+    }
+
+    // Environmental forces
+    if (physics.environmentalForces.length > 0) {
+      hints.push(physics.environmentalForces[0].type);
+    }
+
+    // Camera style
+    hints.push(physics.cameraPhysics.style);
+
+    return hints.length > 0 ? `[Physics: ${hints.join(', ')}]` : '';
   }
 };
 
@@ -42612,6 +42637,26 @@ const CHARACTER_REFERENCE_ENGINE = {
       hasConsistencyRequirements: hints.consistencyRequirements.length > 0,
       anchorsWithImages: Object.values(anchors).filter(a => a.referenceImages.primary).length
     };
+  },
+
+  /**
+   * Generate CONDENSED character hint for video prompt (max 100 chars)
+   * Full enhancement stored separately as metadata
+   */
+  generateCondensedHint(scene, shot, characterBible) {
+    const anchors = this.extractCharacterAnchors(characterBible, null, null);
+    const hints = this.getShotCharacterHints(shot, scene, anchors);
+
+    if (hints.charactersInShot.length === 0) return '';
+
+    // Just character names and key visual feature
+    const charSummary = hints.charactersInShot.slice(0, 2).map(c => {
+      const anchor = anchors[c.name];
+      const keyFeature = anchor?.physical?.hair || anchor?.physical?.build || '';
+      return keyFeature ? `${c.name} (${keyFeature})` : c.name;
+    }).join(', ');
+
+    return `[Characters: ${charSummary}]`;
   }
 };
 
@@ -43165,6 +43210,32 @@ const AUDIO_BEAT_ENGINE = {
       emotionalIntensity: audio.emotionalAudio.intensity,
       beatPhase: audio.beatTiming.audioFocus
     };
+  },
+
+  /**
+   * Generate CONDENSED audio hint for video prompt (max 80 chars)
+   * Full enhancement stored separately as metadata
+   */
+  generateCondensedHint(scene, shot, beatIndex = 0) {
+    const audio = this.analyzeAudioCues(scene, shot, beatIndex);
+    const hints = [];
+
+    // Most important: dialogue type if present
+    if (audio.dialogue.hasDialogue) {
+      hints.push(audio.dialogue.dialogueType);
+    }
+
+    // Mood/atmosphere
+    if (audio.musicCues.mood && audio.musicCues.mood !== 'neutral') {
+      hints.push(audio.musicCues.mood + ' mood');
+    }
+
+    // Ambience type
+    if (audio.ambience.primary && audio.ambience.primary !== 'general') {
+      hints.push(audio.ambience.primary);
+    }
+
+    return hints.length > 0 ? `[Audio: ${hints.join(', ')}]` : '';
   }
 };
 
@@ -49298,19 +49369,22 @@ exports.creationWizardDecomposeSceneToShots = functions
         // Get physics summary for metadata
         const physicsSummary = CINEMATIC_PHYSICS_ENGINE.getPhysicsSummary(scene, shot, intensity);
 
-        // CRITICAL: Store full physics enhancement as METADATA only (not in video prompt)
-        // Video prompts must stay short for Minimax API (limit ~1500 chars)
-        // The video prompt focuses on MOTION, not detailed physics descriptions
+        // CRITICAL: Add CONDENSED physics hint to video prompt (keeps quality, stays short)
+        // Full enhancement stored as metadata for reference
         const existingVideoPrompt = shot.videoPrompt || '';
+        const condensedPhysicsHint = CINEMATIC_PHYSICS_ENGINE.generateCondensedHint(scene, shot, intensity);
+        const enhancedVideoPrompt = condensedPhysicsHint
+          ? `${existingVideoPrompt} ${condensedPhysicsHint}`
+          : existingVideoPrompt;
 
         return {
           ...shot,
-          videoPrompt: existingVideoPrompt, // Keep original - don't append full physics text
-          videoPromptPhysicsHint: physicsEnhancement ? physicsEnhancement.substring(0, 200) : '', // Short hint only
+          videoPrompt: enhancedVideoPrompt, // Add condensed hint (max ~120 chars)
           cinematicPhysics: {
             applied: true,
             intensity,
             fullEnhancement: physicsEnhancement, // Store full text as metadata
+            condensedHint: condensedPhysicsHint,
             ...physicsSummary
           }
         };
@@ -49344,17 +49418,21 @@ exports.creationWizardDecomposeSceneToShots = functions
           shot
         );
 
-        // CRITICAL: Store full character enhancement as METADATA only (not in video prompt)
-        // Video prompts must stay short for Minimax API (limit ~1500 chars)
+        // CRITICAL: Add CONDENSED character hint to video prompt (keeps consistency, stays short)
+        // Full enhancement stored as metadata for reference
         const existingVideoPrompt = shot.videoPrompt || '';
+        const condensedCharacterHint = CHARACTER_REFERENCE_ENGINE.generateCondensedHint(scene, shot, characterBible || []);
+        const enhancedVideoPrompt = condensedCharacterHint
+          ? `${existingVideoPrompt} ${condensedCharacterHint}`
+          : existingVideoPrompt;
 
         return {
           ...shot,
-          videoPrompt: existingVideoPrompt, // Keep original - don't append full character text
-          videoPromptCharacterHint: characterEnhancement ? characterEnhancement.substring(0, 200) : '', // Short hint only
+          videoPrompt: enhancedVideoPrompt, // Add condensed hint (max ~100 chars)
           characterReference: {
             applied: characterEnhancement.length > 0,
             fullEnhancement: characterEnhancement, // Store full text as metadata
+            condensedHint: condensedCharacterHint,
             ...characterSummary
           }
         };
@@ -49388,18 +49466,22 @@ exports.creationWizardDecomposeSceneToShots = functions
         // Get audio summary for metadata
         const audioSummary = AUDIO_BEAT_ENGINE.getAudioSummary(scene, shot, beatIndex);
 
-        // CRITICAL: Store full audio enhancement as METADATA only (not in video prompt)
-        // Video prompts must stay short for Minimax API (limit ~1500 chars)
+        // CRITICAL: Add CONDENSED audio hint to video prompt (keeps mood/sound context, stays short)
+        // Full enhancement stored as metadata for reference
         const existingVideoPrompt = shot.videoPrompt || '';
+        const condensedAudioHint = AUDIO_BEAT_ENGINE.generateCondensedHint(scene, shot, beatIndex);
+        const enhancedVideoPrompt = condensedAudioHint
+          ? `${existingVideoPrompt} ${condensedAudioHint}`
+          : existingVideoPrompt;
 
         return {
           ...shot,
-          videoPrompt: existingVideoPrompt, // Keep original - don't append full audio text
-          videoPromptAudioHint: audioEnhancement ? audioEnhancement.substring(0, 150) : '', // Short hint only
+          videoPrompt: enhancedVideoPrompt, // Add condensed hint (max ~80 chars)
           audioBeat: {
             applied: true,
             beatIndex,
             fullEnhancement: audioEnhancement, // Store full text as metadata
+            condensedHint: condensedAudioHint,
             ...audioSummary
           }
         };
