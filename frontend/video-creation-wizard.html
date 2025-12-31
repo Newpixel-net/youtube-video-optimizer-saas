@@ -8479,7 +8479,7 @@
                                         <div>
                                             <div style="font-size: 0.9rem; color: white; font-weight: 600;">Shot Timeline</div>
                                             <div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem;">
-                                                🔗 Frame Chain: Capture last frame → Transfer to next shot for continuity
+                                                🔗 Frame Chain: Scene image → Shot 1 video → Last frame → Shot 2 video → ...
                                             </div>
                                         </div>
                                         <div style="display: flex; gap: 0.5rem; align-items: center;">
@@ -8632,20 +8632,42 @@
                                                                     🔄 Retry Animation
                                                                 </button>
                                                             ` : shot.status !== 'generating' && !isGeneratingVideo ? `
-                                                                <!-- Row 1: Image Generation -->
-                                                                <button onclick="generateSingleShotImage(${sceneId}, ${idx})"
-                                                                        style="width: 100%; padding: 0.3rem; background: ${hasImage ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(6, 182, 212, 0.4))'}; border: 1px solid ${hasImage ? 'rgba(255,255,255,0.15)' : 'rgba(139, 92, 246, 0.5)'}; border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
-                                                                    ${hasImage ? '🔄 Regen' : '🎨 Generate'}
-                                                                </button>
+                                                                <!-- FRAME CHAIN WORKFLOW: No standalone image generation -->
+                                                                <!-- Shot 1: Uses scene image (auto-synced) -->
+                                                                <!-- Shots 2+: Get image via frame transfer from previous shot's video -->
+
+                                                                ${idx === 0 ? `
+                                                                    <!-- Shot 1: Scene Image Status -->
+                                                                    ${hasImage ? `
+                                                                        <div style="text-align: center; padding: 0.25rem; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.3rem;">
+                                                                            <div style="font-size: 0.55rem; color: #10b981;">🔗 Scene image</div>
+                                                                        </div>
+                                                                    ` : `
+                                                                        <div style="text-align: center; padding: 0.25rem; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 0.3rem;">
+                                                                            <div style="font-size: 0.55rem; color: #f59e0b;">⚠️ Generate scene image first</div>
+                                                                        </div>
+                                                                    `}
+                                                                ` : `
+                                                                    <!-- Shots 2+: Frame Transfer Status -->
+                                                                    ${!hasImage ? `
+                                                                        <div style="text-align: center; padding: 0.25rem; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem;">
+                                                                            <div style="font-size: 0.55rem; color: #a78bfa;">⏳ Waiting for frame from Shot ${idx}</div>
+                                                                        </div>
+                                                                    ` : wasTransferred ? `
+                                                                        <div style="text-align: center; padding: 0.25rem; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.3rem;">
+                                                                            <div style="font-size: 0.55rem; color: #10b981;">🔗 Frame from Shot ${shot.transferredFrom + 1}</div>
+                                                                        </div>
+                                                                    ` : ''}
+                                                                `}
 
                                                                 ${hasImage && hasVideo ? `
-                                                                    <!-- Row 2: Play Video -->
+                                                                    <!-- Play Video -->
                                                                     <button onclick="openShotPreviewModal(${sceneId}, ${idx}); setTimeout(() => switchPreviewTab('video'), 100);"
                                                                             style="width: 100%; padding: 0.3rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(6, 182, 212, 0.3)); border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
                                                                         ▶️ Play Video
                                                                     </button>
                                                                 ` : hasImage ? `
-                                                                    <!-- Row 2: Video Generation -->
+                                                                    <!-- Video Generation -->
                                                                     <button onclick="generateSingleShotVideo(${sceneId}, ${idx})"
                                                                             style="width: 100%; padding: 0.3rem; background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3)); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
                                                                         🎬 Animate
@@ -8653,7 +8675,7 @@
                                                                 ` : ''}
 
                                                                 ${hasVideo && !isLastShot ? `
-                                                                    <!-- Row 3: Frame Capture & Transfer -->
+                                                                    <!-- Frame Capture & Transfer to Next Shot -->
                                                                     <button onclick="openFrameCaptureModal(${sceneId}, ${idx})"
                                                                             style="width: 100%; padding: 0.3rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.3)); border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
                                                                         🎯 Capture → Shot ${idx + 2}
@@ -8661,7 +8683,7 @@
                                                                 ` : ''}
 
                                                                 ${hasVideo ? `
-                                                                    <!-- Row 4: Re-animate option -->
+                                                                    <!-- Re-animate option -->
                                                                     <button onclick="generateSingleShotVideo(${sceneId}, ${idx})"
                                                                             style="width: 100%; padding: 0.25rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.3rem; color: rgba(255,255,255,0.6); cursor: pointer; font-size: 0.55rem;">
                                                                         🔄 Re-Animate
@@ -10383,12 +10405,20 @@
                         </div>
                     </div>
 
-                    <!-- Actions Footer -->
+                    <!-- Actions Footer - Frame Chain Workflow -->
                     <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 0.75rem; flex-wrap: wrap; flex-shrink: 0;">
-                        <button onclick="generateSingleShotImage(${sceneId}, ${shotIndex}); closeShotPreviewModal();"
-                                style="flex: 1; min-width: 120px; padding: 0.6rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
-                            ${hasImage ? '🔄 Regenerate Image' : '🎨 Generate Image'}
-                        </button>
+                        <!-- Image Source Status (no generate button - frame chain only) -->
+                        ${shotIndex === 0 ? `
+                            <div style="flex: 1; min-width: 120px; padding: 0.6rem; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; text-align: center;">
+                                <span style="color: #10b981; font-size: 0.85rem;">🔗 Uses Scene Image</span>
+                            </div>
+                        ` : `
+                            <div style="flex: 1; min-width: 120px; padding: 0.6rem; background: ${hasImage ? 'rgba(16, 185, 129, 0.15)' : 'rgba(139, 92, 246, 0.15)'}; border: 1px solid ${hasImage ? 'rgba(16, 185, 129, 0.3)' : 'rgba(139, 92, 246, 0.3)'}; border-radius: 0.5rem; text-align: center;">
+                                <span style="color: ${hasImage ? '#10b981' : '#a78bfa'}; font-size: 0.85rem;">
+                                    ${hasImage ? '🔗 Frame Chain Image' : '⏳ Awaiting Frame Transfer'}
+                                </span>
+                            </div>
+                        `}
                         ${hasImage ? `
                             <button onclick="generateSingleShotVideo(${sceneId}, ${shotIndex}); closeShotPreviewModal();"
                                     style="flex: 1; min-width: 120px; padding: 0.6rem; background: ${hasVideo ? 'rgba(6, 182, 212, 0.15)' : 'linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))'}; border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.5rem; color: white; cursor: pointer; font-size: 0.85rem; font-weight: 500;">
@@ -10627,16 +10657,7 @@
                             ${videosProcessing > 0 ? `<span style="color: #f59e0b;">• ${videosProcessing} ⏳</span>` : ''}
                         </span>
                         <div style="display: flex; gap: 0.25rem;">
-                            <button onclick="generateAllShotsForScene(${sceneId})"
-                                    style="padding: 0.2rem 0.4rem; font-size: 0.55rem; background: linear-gradient(135deg, rgba(139,92,246,0.3), rgba(6,182,212,0.3)); border: 1px solid rgba(139,92,246,0.4); border-radius: 0.3rem; color: white; cursor: pointer;">
-                                🎨 Images
-                            </button>
-                            ${imagesReady > 0 ? `
-                                <button onclick="generateAllShotVideosForScene(${sceneId})"
-                                        style="padding: 0.2rem 0.4rem; font-size: 0.55rem; background: linear-gradient(135deg, rgba(6,182,212,0.3), rgba(16,185,129,0.3)); border: 1px solid rgba(6,182,212,0.4); border-radius: 0.3rem; color: white; cursor: pointer;">
-                                    🎬 Videos
-                                </button>
-                            ` : ''}
+                            <!-- Frame Chain Workflow: Images come from scene (shot 1) or frame transfer (shots 2+) -->
                             ${videosReady > 0 ? `
                                 <button onclick="previewSceneVideoSequence(${sceneId})"
                                         style="padding: 0.2rem 0.4rem; font-size: 0.55rem; background: linear-gradient(135deg, rgba(16,185,129,0.3), rgba(34,197,94,0.3)); border: 1px solid rgba(16,185,129,0.4); border-radius: 0.3rem; color: white; cursor: pointer;">
@@ -10669,9 +10690,8 @@
                                         <div class="animate-spin" style="width: 12px; height: 12px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%;"></div>
                                     </div>
                                 ` : `
-                                    <div onclick="event.stopPropagation(); generateSingleShot(${sceneId}, ${idx})"
-                                         style="width: 100%; height: 35px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); font-size: 0.8rem; color: rgba(255,255,255,0.4);">
-                                        ${shot.status === 'error' ? '⚠️' : '🎨'}
+                                    <div style="width: 100%; height: 35px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); font-size: 0.7rem; color: rgba(255,255,255,0.4);">
+                                        ${shot.status === 'error' ? '⚠️' : idx === 0 ? '🔗' : '⏳'}
                                     </div>
                                 `}
                                 <div style="font-size: 0.45rem; text-align: center; padding: 0.1rem; color: rgba(255,255,255,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: rgba(0,0,0,0.5);">
