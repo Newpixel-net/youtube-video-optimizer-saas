@@ -7316,7 +7316,19 @@
                     additionalInstructions,
                     // Phase 5: AI Concept Enhancement Data - Deep Story Architecture
                     // Includes: improvedData + selectedConcept + characterIntelligence
-                    conceptEnrichment: hasEnrichment ? conceptEnrichment : null
+                    conceptEnrichment: hasEnrichment ? conceptEnrichment : null,
+                    // Phase 3F: Narrative Structure Intelligence
+                    // These control story arc, emotional journey, and tension curves
+                    narrativePreset: state.content.narrativePreset || null,
+                    storyArc: state.content.storyArc || null,
+                    emotionalJourney: state.content.emotionalJourney || null,
+                    tensionCurve: state.content.tensionCurve || null,
+                    // Step 1: Production Type Context
+                    // These provide context about what kind of production the user selected
+                    productionType: state.production.type || null,
+                    productionSubType: state.production.subType || null,
+                    // Visual Style Mode for consistent prompt generation
+                    visualStyleMode: state.content.visualStyleMode || 'photorealistic'
                 };
 
                 const result = await generateScriptFn({
