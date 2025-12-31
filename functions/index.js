@@ -41492,6 +41492,2262 @@ const PHYSICS_LAYER = {
   }
 };
 
+// =============================================================================
+// CINEMATIC_PHYSICS_ENGINE - Hollywood-Level Force & Momentum Physics
+// =============================================================================
+/**
+ * CINEMATIC_PHYSICS_ENGINE
+ *
+ * Adds Hollywood-quality physics descriptions to video prompts.
+ * Based on 2025 AI filmmaking research: "Stop describing what things look like—
+ * start describing the forces acting on them."
+ *
+ * Modern AI video models (Runway Gen-4, Sora 2, Kling 2.6) now understand:
+ * - Weight and momentum
+ * - Cause-and-effect chains
+ * - Material physics (fabric, hair, liquid)
+ * - Environmental forces
+ *
+ * This engine generates physics-aware prompt enhancements.
+ */
+const CINEMATIC_PHYSICS_ENGINE = {
+
+  /**
+   * Analyze scene context and generate comprehensive physics layer
+   * @param {Object} scene - Scene data with visualPrompt, sceneAction, etc.
+   * @param {Object} shot - Shot data with shotType, cameraMovement, etc.
+   * @param {number} intensity - Scene intensity (0.0-1.0)
+   * @returns {Object} Complete physics analysis for video prompt enhancement
+   */
+  analyzeScenePhysics(scene, shot, intensity = 0.5) {
+    const visualPrompt = scene?.visualPrompt || '';
+    const sceneAction = scene?.sceneAction || '';
+    const combinedText = `${visualPrompt} ${sceneAction}`.toLowerCase();
+
+    return {
+      // Core physics systems
+      objectPhysics: this.detectObjectPhysics(combinedText, intensity),
+      environmentalForces: this.detectEnvironmentalForces(combinedText),
+      materialPhysics: this.detectMaterialPhysics(combinedText),
+      contactPhysics: this.detectContactPhysics(combinedText, intensity),
+      causeAndEffect: this.generateCauseEffectChains(combinedText, intensity),
+
+      // Physics-aware camera hints
+      cameraPhysics: this.getCameraPhysicsHints(shot?.cameraMovement, intensity),
+
+      // Temporal physics (how physics evolves over shot duration)
+      temporalPhysics: this.getTemporalPhysicsProgression(intensity)
+    };
+  },
+
+  /**
+   * Detect objects and their physics properties
+   */
+  detectObjectPhysics(text, intensity) {
+    const objects = {
+      heavy: [],
+      light: [],
+      fluid: [],
+      particles: []
+    };
+
+    // Heavy objects (have weight, momentum, impact)
+    const heavyPatterns = [
+      { pattern: /sword|blade|weapon/i, physics: 'steel weight, momentum on swing, slicing arc' },
+      { pattern: /door|gate/i, physics: 'heavy swing, slow momentum, solid impact' },
+      { pattern: /boulder|rock|stone/i, physics: 'massive weight, crushing force, ground shake on impact' },
+      { pattern: /body|bodies|corpse/i, physics: 'limp weight, gravity pull, ragdoll physics' },
+      { pattern: /armor|shield/i, physics: 'metal weight, clanking on movement, protective mass' },
+      { pattern: /staff|pole/i, physics: 'balanced weight, sweeping momentum, whooshing arcs' },
+      { pattern: /book|tome|scroll/i, physics: 'paper weight, pages flutter, binding creak' },
+      { pattern: /chest|box|crate/i, physics: 'solid mass, scraping on floor, heavy thud' }
+    ];
+
+    // Light objects (affected by air, quick movement)
+    const lightPatterns = [
+      { pattern: /leaf|leaves/i, physics: 'weightless drift, spiral descent, wind-carried' },
+      { pattern: /feather/i, physics: 'floating descent, air resistance, gentle landing' },
+      { pattern: /paper|parchment/i, physics: 'flutter and fold, caught by air currents' },
+      { pattern: /petal|petals|flower/i, physics: 'delicate drift, scatter pattern, soft landing' },
+      { pattern: /ash|ashes/i, physics: 'rising thermals, grey drift, settling slowly' },
+      { pattern: /snow|snowflake/i, physics: 'lazy descent, wind-swirled, accumulating softly' }
+    ];
+
+    // Fluid objects (flow, splash, wave)
+    const fluidPatterns = [
+      { pattern: /water|river|stream|ocean|sea/i, physics: 'flowing current, wave motion, splash dynamics' },
+      { pattern: /blood/i, physics: 'viscous flow, splatter pattern, drip trajectory' },
+      { pattern: /rain/i, physics: 'vertical streaks, splash on impact, surface ripples' },
+      { pattern: /tear|tears/i, physics: 'welling, slow roll down cheek, drop formation' },
+      { pattern: /liquid|potion/i, physics: 'sloshing movement, pour arc, surface tension' },
+      { pattern: /lava|magma/i, physics: 'thick slow flow, cooling crust, heat shimmer above' }
+    ];
+
+    // Particle objects (many small elements)
+    const particlePatterns = [
+      { pattern: /dust|motes/i, physics: 'suspended particles, caught in light beams, slow drift' },
+      { pattern: /spark|sparks/i, physics: 'quick scatter, fade trajectory, brief illumination' },
+      { pattern: /ember|embers/i, physics: 'rising glow, cooling arc, floating upward' },
+      { pattern: /smoke/i, physics: 'rising curl, dissipation pattern, air current response' },
+      { pattern: /mist|fog/i, physics: 'low-lying blanket, swirl around movement, density variation' },
+      { pattern: /sand/i, physics: 'granular flow, wind-blown scatter, settling pattern' },
+      { pattern: /debris/i, physics: 'scatter pattern, various weights, settling sequence' }
+    ];
+
+    heavyPatterns.forEach(p => { if (p.pattern.test(text)) objects.heavy.push(p.physics); });
+    lightPatterns.forEach(p => { if (p.pattern.test(text)) objects.light.push(p.physics); });
+    fluidPatterns.forEach(p => { if (p.pattern.test(text)) objects.fluid.push(p.physics); });
+    particlePatterns.forEach(p => { if (p.pattern.test(text)) objects.particles.push(p.physics); });
+
+    return objects;
+  },
+
+  /**
+   * Detect environmental forces acting on the scene
+   */
+  detectEnvironmentalForces(text) {
+    const forces = [];
+
+    // Wind forces
+    if (/wind|breeze|gust|storm|gale/i.test(text)) {
+      if (/storm|gale|fierce|strong/i.test(text)) {
+        forces.push({
+          type: 'wind',
+          strength: 'strong',
+          effect: 'clothing pressed against body, hair streaming, difficult movement'
+        });
+      } else if (/breeze|gentle|soft/i.test(text)) {
+        forces.push({
+          type: 'wind',
+          strength: 'gentle',
+          effect: 'subtle fabric flutter, hair wisps lifting, leaves stirring'
+        });
+      } else {
+        forces.push({
+          type: 'wind',
+          strength: 'moderate',
+          effect: 'clothing rippling, hair flowing, objects may shift'
+        });
+      }
+    }
+
+    // Gravity variations
+    if (/fall|falling|drop|descend|plunge/i.test(text)) {
+      forces.push({
+        type: 'gravity',
+        strength: 'normal',
+        effect: 'acceleration downward, increasing speed, impact anticipation'
+      });
+    }
+    if (/float|hover|weightless|zero.?g/i.test(text)) {
+      forces.push({
+        type: 'gravity',
+        strength: 'reduced',
+        effect: 'slow drift, objects suspended, hair floating upward'
+      });
+    }
+
+    // Water resistance
+    if (/underwater|submerged|swimming|diving/i.test(text)) {
+      forces.push({
+        type: 'water_resistance',
+        strength: 'full',
+        effect: 'slowed movement, hair floating, bubbles rising, light refraction'
+      });
+    }
+
+    // Heat/thermal
+    if (/fire|flame|heat|hot|burning/i.test(text)) {
+      forces.push({
+        type: 'thermal',
+        strength: 'high',
+        effect: 'rising heat shimmer, sweat forming, light flickering upward'
+      });
+    }
+    if (/cold|ice|frost|frozen|freezing/i.test(text)) {
+      forces.push({
+        type: 'thermal',
+        strength: 'low',
+        effect: 'visible breath, condensation, stiff movement, frost spreading'
+      });
+    }
+
+    // Magical/energy forces
+    if (/energy|power|force|magic|glow|aura/i.test(text)) {
+      forces.push({
+        type: 'energy',
+        strength: 'variable',
+        effect: 'crackling arcs, pulsing waves, objects responding to invisible force'
+      });
+    }
+
+    return forces;
+  },
+
+  /**
+   * Detect materials and their physics behaviors
+   */
+  detectMaterialPhysics(text) {
+    const materials = [];
+
+    // Fabric/clothing
+    if (/cloak|cape|robe|coat|dress|gown|fabric|cloth|veil|banner|flag/i.test(text)) {
+      materials.push({
+        type: 'fabric',
+        behavior: 'wave and billow with movement, settle when still, catch wind and light',
+        detail: 'fabric ripples follow body motion with slight delay, hem trails behind turns'
+      });
+    }
+
+    // Hair
+    if (/hair|locks|mane|braid|ponytail/i.test(text)) {
+      materials.push({
+        type: 'hair',
+        behavior: 'flows opposite to movement direction, bounces on impact, affected by wind',
+        detail: 'strands separate and rejoin, volume responds to humidity/wetness'
+      });
+    }
+
+    // Metal
+    if (/metal|steel|iron|gold|silver|bronze|armor|sword|chain/i.test(text)) {
+      materials.push({
+        type: 'metal',
+        behavior: 'rigid movement, reflects light sharply, rings or clanks on contact',
+        detail: 'catches light as angle changes, slight flex on thin pieces, weight affects swing'
+      });
+    }
+
+    // Glass/crystal
+    if (/glass|crystal|gem|jewel|mirror/i.test(text)) {
+      materials.push({
+        type: 'glass',
+        behavior: 'refracts light, casts prismatic reflections, shatters dramatically',
+        detail: 'internal light play, rainbow edges, sharp fragmentation pattern'
+      });
+    }
+
+    // Leather
+    if (/leather|hide|strap|belt|boot/i.test(text)) {
+      materials.push({
+        type: 'leather',
+        behavior: 'creaks with movement, flexes but holds shape, ages with wear',
+        detail: 'subtle sound on flex, worn areas lighter, stiff until warmed'
+      });
+    }
+
+    // Wood
+    if (/wood|wooden|timber|branch|tree/i.test(text)) {
+      materials.push({
+        type: 'wood',
+        behavior: 'solid but can splinter, grain visible, creaks under stress',
+        detail: 'flex before break, splinters scatter on impact, hollow vs solid sounds'
+      });
+    }
+
+    return materials;
+  },
+
+  /**
+   * Detect and describe contact/impact physics
+   */
+  detectContactPhysics(text, intensity) {
+    const contacts = [];
+
+    // Footsteps
+    if (/walk|step|run|stride|pace/i.test(text)) {
+      const weight = intensity > 0.7 ? 'heavy, purposeful' : 'measured, deliberate';
+      contacts.push({
+        type: 'footsteps',
+        description: `${weight} footfalls, ground compression, subtle dust rise`,
+        timing: 'rhythmic, matching movement pace'
+      });
+    }
+
+    // Combat/strikes
+    if (/hit|strike|punch|kick|slash|stab|clash|fight/i.test(text)) {
+      contacts.push({
+        type: 'combat_impact',
+        description: 'impact force transfer, target recoil, attacker follow-through',
+        timing: 'sharp impact moment, brief freeze, momentum continuation'
+      });
+    }
+
+    // Landing/falling
+    if (/land|jump|leap|fall|drop/i.test(text)) {
+      contacts.push({
+        type: 'landing',
+        description: 'leg absorption, body compression, balance recovery',
+        timing: 'impact → absorption → stabilization (0.3s → 0.5s → settle)'
+      });
+    }
+
+    // Touch/grasp
+    if (/touch|grab|grasp|hold|reach|hand/i.test(text)) {
+      contacts.push({
+        type: 'touch',
+        description: 'finger contact pressure, object response to grip',
+        timing: 'approach → contact → grip adjustment'
+      });
+    }
+
+    // Collision
+    if (/crash|collide|smash|shatter|break/i.test(text)) {
+      contacts.push({
+        type: 'collision',
+        description: 'sudden momentum transfer, debris scatter, settling aftermath',
+        timing: 'impact spike → scatter → settle (instant → 1s → 2s)'
+      });
+    }
+
+    return contacts;
+  },
+
+  /**
+   * Generate cause-and-effect physics chains
+   */
+  generateCauseEffectChains(text, intensity) {
+    const chains = [];
+
+    // Movement → environment reaction
+    if (/walk|run|move|stride/i.test(text)) {
+      chains.push({
+        cause: 'character movement',
+        effects: [
+          'clothing follows body with 0.1s delay',
+          'hair trails movement direction',
+          'nearby light particles scatter',
+          'fabric settles after stopping'
+        ]
+      });
+    }
+
+    // Turn → cascade effect
+    if (/turn|spin|pivot|rotate/i.test(text)) {
+      chains.push({
+        cause: 'character rotation',
+        effects: [
+          'cape/coat swings outward (centrifugal)',
+          'hair arcs in rotation direction',
+          'weight shifts to outer foot',
+          'eyes lead the turn'
+        ]
+      });
+    }
+
+    // Impact → reaction chain
+    if (/hit|strike|impact|clash/i.test(text)) {
+      chains.push({
+        cause: 'physical impact',
+        effects: [
+          'shock wave through contact point',
+          'receiver body deformation/recoil',
+          'attacker follow-through momentum',
+          'environmental particle scatter',
+          'settling return to equilibrium'
+        ]
+      });
+    }
+
+    // Emotional → physical manifestation
+    if (intensity > 0.7) {
+      chains.push({
+        cause: 'high emotional intensity',
+        effects: [
+          'breathing visible and quickened',
+          'micro-tremors in extremities',
+          'posture tension visible',
+          'environment seems to respond (pathetic fallacy)'
+        ]
+      });
+    }
+
+    return chains;
+  },
+
+  /**
+   * Get camera physics hints (how camera movement affects perception)
+   */
+  getCameraPhysicsHints(cameraMovement, intensity) {
+    const movement = (cameraMovement || '').toLowerCase();
+
+    if (movement.includes('handheld') || movement.includes('shaky')) {
+      return {
+        style: 'handheld',
+        physics: 'organic micro-movements, breathing rhythm, human imperfection',
+        effect: 'visceral, immediate, documentary feel'
+      };
+    }
+
+    if (movement.includes('dolly') || movement.includes('track')) {
+      return {
+        style: 'tracking',
+        physics: 'smooth glide, parallax on background layers, steady pursuit',
+        effect: 'professional, deliberate, following action'
+      };
+    }
+
+    if (movement.includes('crane') || movement.includes('jib')) {
+      return {
+        style: 'crane',
+        physics: 'sweeping arc, reveal physics, grandeur movement',
+        effect: 'epic, establishing, god-like perspective'
+      };
+    }
+
+    if (movement.includes('zoom')) {
+      return {
+        style: 'zoom',
+        physics: 'optical compression, background squeeze, no parallax',
+        effect: 'emotional punch, isolation, focus shift'
+      };
+    }
+
+    if (movement.includes('static') || movement.includes('locked')) {
+      return {
+        style: 'static',
+        physics: 'stable frame, motion exists only in subjects',
+        effect: 'theatrical, observational, tension through stillness'
+      };
+    }
+
+    return {
+      style: 'neutral',
+      physics: 'subtle stabilization, natural float',
+      effect: 'cinematic, professional, unobtrusive'
+    };
+  },
+
+  /**
+   * Get temporal physics progression (how physics evolves over the shot)
+   */
+  getTemporalPhysicsProgression(intensity) {
+    // Physics changes over a 10-second shot
+    return {
+      seconds_0_2: {
+        phase: 'initiation',
+        description: 'Forces begin to act, momentum building, initial states',
+        physicsNote: 'Objects at rest or in established motion, forces accumulating'
+      },
+      seconds_2_5: {
+        phase: 'development',
+        description: 'Physics in full effect, cause-effect chains playing out',
+        physicsNote: 'Peak momentum, maximum force expression, cascading effects'
+      },
+      seconds_5_8: {
+        phase: 'peak_or_transfer',
+        description: intensity > 0.7
+          ? 'Maximum energy expression, potential energy release'
+          : 'Energy transfer between elements, momentum shifts',
+        physicsNote: 'Key physics moments - impacts, releases, transformations'
+      },
+      seconds_8_10: {
+        phase: 'resolution',
+        description: 'Energy dissipation, settling, new equilibrium forming',
+        physicsNote: 'Motion dampening, particles settling, fabric falling still'
+      }
+    };
+  },
+
+  /**
+   * Generate complete physics enhancement for a video prompt
+   * @param {Object} scene - Scene data
+   * @param {Object} shot - Shot data
+   * @param {number} intensity - Intensity value 0.0-1.0
+   * @returns {string} Physics enhancement text to append to video prompt
+   */
+  generatePhysicsEnhancement(scene, shot, intensity = 0.5) {
+    const physics = this.analyzeScenePhysics(scene, shot, intensity);
+    const lines = [];
+
+    lines.push('[PHYSICS LAYER - Force & Momentum]');
+
+    // Object physics
+    const allObjects = [
+      ...physics.objectPhysics.heavy,
+      ...physics.objectPhysics.light,
+      ...physics.objectPhysics.fluid,
+      ...physics.objectPhysics.particles
+    ];
+    if (allObjects.length > 0) {
+      lines.push(`Objects: ${allObjects.slice(0, 3).join('; ')}`);
+    }
+
+    // Environmental forces
+    if (physics.environmentalForces.length > 0) {
+      const forceDesc = physics.environmentalForces
+        .map(f => `${f.type}: ${f.effect}`)
+        .slice(0, 2)
+        .join('. ');
+      lines.push(`Forces: ${forceDesc}`);
+    }
+
+    // Material physics
+    if (physics.materialPhysics.length > 0) {
+      const matDesc = physics.materialPhysics
+        .map(m => m.detail)
+        .slice(0, 2)
+        .join('. ');
+      lines.push(`Materials: ${matDesc}`);
+    }
+
+    // Contact physics
+    if (physics.contactPhysics.length > 0) {
+      const contactDesc = physics.contactPhysics
+        .map(c => c.description)
+        .slice(0, 2)
+        .join('. ');
+      lines.push(`Contact: ${contactDesc}`);
+    }
+
+    // Cause-effect chains (most important for modern AI video)
+    if (physics.causeAndEffect.length > 0) {
+      const chain = physics.causeAndEffect[0];
+      lines.push(`Cause→Effect: ${chain.cause} triggers ${chain.effects.slice(0, 2).join(', ')}`);
+    }
+
+    // Camera physics
+    lines.push(`Camera: ${physics.cameraPhysics.physics}`);
+
+    return lines.join('\n');
+  },
+
+  /**
+   * Get physics summary for metadata
+   */
+  getPhysicsSummary(scene, shot, intensity) {
+    const physics = this.analyzeScenePhysics(scene, shot, intensity);
+
+    return {
+      hasObjectPhysics: Object.values(physics.objectPhysics).some(arr => arr.length > 0),
+      hasEnvironmentalForces: physics.environmentalForces.length > 0,
+      hasMaterialPhysics: physics.materialPhysics.length > 0,
+      hasContactPhysics: physics.contactPhysics.length > 0,
+      causeEffectChains: physics.causeAndEffect.length,
+      cameraStyle: physics.cameraPhysics.style,
+      temporalPhases: Object.keys(physics.temporalPhysics)
+    };
+  }
+};
+
+// =============================================================================
+// CHARACTER_REFERENCE_ENGINE - Visual Consistency Across Shots
+// =============================================================================
+/**
+ * CHARACTER_REFERENCE_ENGINE
+ *
+ * Maintains character visual consistency across shots using anchor images and
+ * reference sheets. Based on 2025 AI filmmaking best practices:
+ * - LoRA training concepts (20-50 images with angle variety)
+ * - Character sheets (front, side, expression views)
+ * - First-shot anchoring (use first appearance as reference)
+ *
+ * The engine:
+ * 1. Extracts character visual anchors from concept/bible data
+ * 2. Generates pose/expression reference sheets
+ * 3. Provides per-shot character consistency hints
+ * 4. Tracks character appearances across scenes
+ */
+const CHARACTER_REFERENCE_ENGINE = {
+
+  /**
+   * Extract character anchors from scene/project data
+   * @param {Object} characterBible - Character bible array
+   * @param {Object} sceneMemory - Scene memory with character descriptions
+   * @param {Object} enrichmentData - Concept enrichment data
+   * @returns {Object} Character anchor data
+   */
+  extractCharacterAnchors(characterBible, sceneMemory, enrichmentData) {
+    const anchors = {};
+
+    // Extract from character bible (primary source)
+    if (characterBible && Array.isArray(characterBible)) {
+      characterBible.forEach((char, idx) => {
+        const name = char.name || char.archetype || `Character_${idx + 1}`;
+        anchors[name] = {
+          id: `char_${idx}`,
+          name: name,
+          source: 'characterBible',
+          // Visual description
+          visualDescription: char.visualDescription || char.appearance || null,
+          archetype: char.archetype || null,
+          role: char.role || 'supporting',
+          // Physical attributes (extracted or inferred)
+          physicalAttributes: this.extractPhysicalAttributes(char),
+          // Clothing/costume
+          costume: this.extractCostume(char),
+          // Distinguishing features
+          distinguishingFeatures: this.extractDistinguishingFeatures(char),
+          // Reference images (if available)
+          referenceImages: {
+            primary: char.referenceImage || char.imageUrl || null,
+            poses: [],
+            expressions: []
+          },
+          // Scene appearances (to be populated)
+          appearances: [],
+          firstAppearanceShot: null
+        };
+      });
+    }
+
+    // Enrich from scene memory
+    if (sceneMemory?.characterDescriptions) {
+      sceneMemory.characterDescriptions.forEach(desc => {
+        const name = desc.name || desc.character;
+        if (name && anchors[name]) {
+          anchors[name].visualDescription = anchors[name].visualDescription || desc.description;
+          if (desc.sceneId) {
+            anchors[name].appearances.push(desc.sceneId);
+          }
+        }
+      });
+    }
+
+    // Enrich from concept data
+    if (enrichmentData?.characters) {
+      enrichmentData.characters.forEach(char => {
+        const name = char.name || char.archetype;
+        if (name) {
+          if (!anchors[name]) {
+            anchors[name] = {
+              id: `char_enriched_${Object.keys(anchors).length}`,
+              name: name,
+              source: 'enrichment',
+              visualDescription: null,
+              archetype: char.archetype,
+              role: char.role,
+              physicalAttributes: {},
+              costume: {},
+              distinguishingFeatures: [],
+              referenceImages: { primary: null, poses: [], expressions: [] },
+              appearances: [],
+              firstAppearanceShot: null
+            };
+          }
+          // Merge enrichment data
+          anchors[name].archetype = anchors[name].archetype || char.archetype;
+          anchors[name].role = anchors[name].role || char.role;
+        }
+      });
+    }
+
+    return anchors;
+  },
+
+  /**
+   * Extract physical attributes from character data
+   */
+  extractPhysicalAttributes(char) {
+    const desc = (char.visualDescription || char.appearance || '').toLowerCase();
+    const attributes = {
+      gender: null,
+      age: null,
+      build: null,
+      height: null,
+      hairColor: null,
+      hairStyle: null,
+      eyeColor: null,
+      skinTone: null
+    };
+
+    // Gender detection
+    if (/\b(woman|female|she|her|girl|lady)\b/i.test(desc)) attributes.gender = 'female';
+    else if (/\b(man|male|he|his|boy|guy)\b/i.test(desc)) attributes.gender = 'male';
+
+    // Age detection
+    if (/\b(young|youth|teen|adolescent)\b/i.test(desc)) attributes.age = 'young';
+    else if (/\b(middle.?aged?|mature)\b/i.test(desc)) attributes.age = 'middle-aged';
+    else if (/\b(old|elderly|aged|ancient|wizened)\b/i.test(desc)) attributes.age = 'elderly';
+    else if (/\b(child|kid|little)\b/i.test(desc)) attributes.age = 'child';
+
+    // Build detection
+    if (/\b(muscular|athletic|strong|powerful|built)\b/i.test(desc)) attributes.build = 'athletic';
+    else if (/\b(slim|slender|thin|lean|lithe)\b/i.test(desc)) attributes.build = 'slim';
+    else if (/\b(large|heavy|stocky|broad)\b/i.test(desc)) attributes.build = 'large';
+
+    // Hair color
+    const hairColorMatch = desc.match(/\b(black|dark|brown|blonde|blond|red|auburn|grey|gray|white|silver|golden)\s*hair\b/i);
+    if (hairColorMatch) attributes.hairColor = hairColorMatch[1];
+
+    // Hair style
+    const hairStyleMatch = desc.match(/\b(long|short|cropped|braided|curly|straight|wavy|shaved|bald)\s*hair\b/i);
+    if (hairStyleMatch) attributes.hairStyle = hairStyleMatch[1];
+
+    // Eye color
+    const eyeColorMatch = desc.match(/\b(blue|green|brown|hazel|grey|gray|golden|amber|dark|black)\s*eyes?\b/i);
+    if (eyeColorMatch) attributes.eyeColor = eyeColorMatch[1];
+
+    return attributes;
+  },
+
+  /**
+   * Extract costume/clothing details
+   */
+  extractCostume(char) {
+    const desc = (char.visualDescription || char.appearance || '').toLowerCase();
+    const costume = {
+      type: null,
+      colors: [],
+      material: null,
+      accessories: []
+    };
+
+    // Clothing type
+    if (/\b(armor|armour|plate)\b/i.test(desc)) costume.type = 'armor';
+    else if (/\b(robe|robes|cloak|cape)\b/i.test(desc)) costume.type = 'robes';
+    else if (/\b(dress|gown)\b/i.test(desc)) costume.type = 'dress';
+    else if (/\b(suit|formal|tuxedo)\b/i.test(desc)) costume.type = 'formal';
+    else if (/\b(casual|jeans|t-?shirt)\b/i.test(desc)) costume.type = 'casual';
+    else if (/\b(uniform|military)\b/i.test(desc)) costume.type = 'uniform';
+    else if (/\b(traditional|kimono|hanbok|sari)\b/i.test(desc)) costume.type = 'traditional';
+
+    // Colors in clothing
+    const colorMatches = desc.match(/\b(red|blue|green|black|white|gold|silver|purple|crimson|azure|emerald|onyx|ivory)\b/gi);
+    if (colorMatches) costume.colors = [...new Set(colorMatches.map(c => c.toLowerCase()))];
+
+    // Materials
+    if (/\b(leather)\b/i.test(desc)) costume.material = 'leather';
+    else if (/\b(silk|satin)\b/i.test(desc)) costume.material = 'silk';
+    else if (/\b(wool|woolen)\b/i.test(desc)) costume.material = 'wool';
+    else if (/\b(metal|steel|iron)\b/i.test(desc)) costume.material = 'metal';
+
+    // Accessories
+    const accessoryPatterns = [
+      /\b(sword|blade|weapon)\b/i,
+      /\b(staff|wand)\b/i,
+      /\b(crown|tiara|circlet)\b/i,
+      /\b(necklace|pendant|amulet)\b/i,
+      /\b(ring|rings)\b/i,
+      /\b(gloves|gauntlets)\b/i,
+      /\b(boots|sandals)\b/i,
+      /\b(mask)\b/i,
+      /\b(glasses|spectacles)\b/i,
+      /\b(hat|hood|helm|helmet)\b/i
+    ];
+    accessoryPatterns.forEach(pattern => {
+      const match = desc.match(pattern);
+      if (match) costume.accessories.push(match[1].toLowerCase());
+    });
+
+    return costume;
+  },
+
+  /**
+   * Extract distinguishing features
+   */
+  extractDistinguishingFeatures(char) {
+    const desc = (char.visualDescription || char.appearance || '').toLowerCase();
+    const features = [];
+
+    // Scars, tattoos, marks
+    if (/\bscar\b/i.test(desc)) features.push('scar');
+    if (/\btattoo\b/i.test(desc)) features.push('tattoo');
+    if (/\bmark|birthmark\b/i.test(desc)) features.push('distinctive mark');
+
+    // Facial features
+    if (/\bbeard\b/i.test(desc)) features.push('beard');
+    if (/\bmustache\b/i.test(desc)) features.push('mustache');
+    if (/\bfreckles\b/i.test(desc)) features.push('freckles');
+
+    // Physical traits
+    if (/\beye.?patch\b/i.test(desc)) features.push('eyepatch');
+    if (/\bprosthetic|mechanical|cybernetic\b/i.test(desc)) features.push('prosthetic');
+    if (/\bwings\b/i.test(desc)) features.push('wings');
+    if (/\btail\b/i.test(desc)) features.push('tail');
+    if (/\bhorns\b/i.test(desc)) features.push('horns');
+    if (/\bpointed ears|elf ears\b/i.test(desc)) features.push('pointed ears');
+
+    return features;
+  },
+
+  /**
+   * Generate character reference sheet for a specific character
+   * Returns structured data for AI image/video consistency
+   */
+  generateReferenceSheet(characterAnchor) {
+    if (!characterAnchor) return null;
+
+    const sheet = {
+      characterId: characterAnchor.id,
+      characterName: characterAnchor.name,
+
+      // Core visual identity (MUST be consistent)
+      coreIdentity: {
+        physicalBuild: this.buildPhysicalDescription(characterAnchor.physicalAttributes),
+        facialFeatures: this.buildFacialDescription(characterAnchor.physicalAttributes),
+        distinguishingMarks: characterAnchor.distinguishingFeatures.join(', ') || 'none',
+        primaryCostume: this.buildCostumeDescription(characterAnchor.costume)
+      },
+
+      // Pose reference positions (for AI video consistency)
+      poseGuide: {
+        neutral: 'Standing straight, arms relaxed at sides, weight evenly distributed',
+        walking: 'Mid-stride, arms swinging naturally, looking ahead',
+        action: 'Dynamic pose, weight forward, ready for movement',
+        emotional: 'Posture reflects emotional state while maintaining physical characteristics'
+      },
+
+      // Expression range (for AI video consistency)
+      expressionGuide: {
+        neutral: 'Relaxed face, natural expression, characteristic features visible',
+        focused: 'Slight brow furrow, determined eyes, jaw set',
+        emotional: 'Clear expression while maintaining facial structure',
+        speaking: 'Natural mouth movement, characteristic expressions'
+      },
+
+      // AI video prompt helper
+      videoPromptTemplate: this.buildVideoPromptTemplate(characterAnchor),
+
+      // Consistency checklist
+      consistencyChecklist: [
+        `Hair: ${characterAnchor.physicalAttributes.hairColor || 'as established'} ${characterAnchor.physicalAttributes.hairStyle || ''} hair`,
+        `Eyes: ${characterAnchor.physicalAttributes.eyeColor || 'as established'} eyes`,
+        `Build: ${characterAnchor.physicalAttributes.build || 'as established'} build`,
+        `Costume: ${characterAnchor.costume.type || 'as established'} in ${characterAnchor.costume.colors.join('/') || 'established colors'}`,
+        ...characterAnchor.distinguishingFeatures.map(f => `Feature: ${f} visible when relevant`)
+      ]
+    };
+
+    return sheet;
+  },
+
+  /**
+   * Build physical description string
+   */
+  buildPhysicalDescription(attrs) {
+    const parts = [];
+    if (attrs.gender) parts.push(attrs.gender);
+    if (attrs.age) parts.push(attrs.age);
+    if (attrs.build) parts.push(`${attrs.build} build`);
+    if (attrs.height) parts.push(attrs.height);
+    return parts.join(', ') || 'as established in reference';
+  },
+
+  /**
+   * Build facial description string
+   */
+  buildFacialDescription(attrs) {
+    const parts = [];
+    if (attrs.hairColor || attrs.hairStyle) {
+      parts.push(`${attrs.hairColor || ''} ${attrs.hairStyle || ''} hair`.trim());
+    }
+    if (attrs.eyeColor) parts.push(`${attrs.eyeColor} eyes`);
+    if (attrs.skinTone) parts.push(`${attrs.skinTone} skin`);
+    return parts.join(', ') || 'as established in reference';
+  },
+
+  /**
+   * Build costume description string
+   */
+  buildCostumeDescription(costume) {
+    const parts = [];
+    if (costume.colors.length > 0) parts.push(costume.colors.join(' and '));
+    if (costume.material) parts.push(costume.material);
+    if (costume.type) parts.push(costume.type);
+    if (costume.accessories.length > 0) parts.push(`with ${costume.accessories.join(', ')}`);
+    return parts.join(' ') || 'as established in reference';
+  },
+
+  /**
+   * Build video prompt template for character
+   */
+  buildVideoPromptTemplate(anchor) {
+    const parts = [];
+
+    // Core identity
+    if (anchor.name) parts.push(`[${anchor.name}]`);
+
+    // Physical description
+    const physical = [];
+    if (anchor.physicalAttributes.gender) physical.push(anchor.physicalAttributes.gender);
+    if (anchor.physicalAttributes.age) physical.push(anchor.physicalAttributes.age);
+    if (anchor.physicalAttributes.build) physical.push(`${anchor.physicalAttributes.build} build`);
+    if (physical.length > 0) parts.push(physical.join(' '));
+
+    // Hair and face
+    const face = [];
+    if (anchor.physicalAttributes.hairColor) {
+      face.push(`${anchor.physicalAttributes.hairColor} ${anchor.physicalAttributes.hairStyle || ''} hair`.trim());
+    }
+    if (anchor.physicalAttributes.eyeColor) face.push(`${anchor.physicalAttributes.eyeColor} eyes`);
+    if (face.length > 0) parts.push(face.join(', '));
+
+    // Costume
+    if (anchor.costume.type || anchor.costume.colors.length > 0) {
+      const costumeStr = this.buildCostumeDescription(anchor.costume);
+      if (costumeStr) parts.push(`wearing ${costumeStr}`);
+    }
+
+    // Distinguishing features
+    if (anchor.distinguishingFeatures.length > 0) {
+      parts.push(`with ${anchor.distinguishingFeatures.join(', ')}`);
+    }
+
+    return parts.join(', ') || anchor.visualDescription || 'character as established';
+  },
+
+  /**
+   * Get per-shot character reference hints
+   * @param {Object} shot - Shot data
+   * @param {Object} scene - Scene data
+   * @param {Object} characterAnchors - All character anchors
+   * @returns {Object} Character reference hints for this shot
+   */
+  getShotCharacterHints(shot, scene, characterAnchors) {
+    const hints = {
+      charactersInShot: [],
+      consistencyRequirements: [],
+      referenceNotes: [],
+      promptEnhancement: ''
+    };
+
+    // Detect characters from scene/shot data
+    const charactersInScene = scene?.charactersInScene || [];
+    const shotPrompt = (shot?.videoPrompt || shot?.prompt || '').toLowerCase();
+
+    // Check each anchor against the shot
+    Object.values(characterAnchors).forEach(anchor => {
+      const name = anchor.name.toLowerCase();
+      const isInScene = charactersInScene.some(c =>
+        (c.toLowerCase && c.toLowerCase().includes(name)) || c === anchor.name
+      );
+      const isInPrompt = shotPrompt.includes(name);
+
+      if (isInScene || isInPrompt) {
+        hints.charactersInShot.push({
+          name: anchor.name,
+          referenceSheet: this.generateReferenceSheet(anchor),
+          promptTemplate: this.buildVideoPromptTemplate(anchor)
+        });
+
+        // Add consistency requirements
+        hints.consistencyRequirements.push(
+          `${anchor.name}: Maintain exact visual appearance as established`
+        );
+
+        if (anchor.distinguishingFeatures.length > 0) {
+          hints.consistencyRequirements.push(
+            `${anchor.name} features: ${anchor.distinguishingFeatures.join(', ')} must be visible when character is shown`
+          );
+        }
+      }
+    });
+
+    // Build prompt enhancement
+    if (hints.charactersInShot.length > 0) {
+      const charDescriptions = hints.charactersInShot
+        .map(c => c.promptTemplate)
+        .join('; ');
+      hints.promptEnhancement = `[CHARACTER CONSISTENCY] ${charDescriptions}`;
+    }
+
+    return hints;
+  },
+
+  /**
+   * Register first appearance of a character
+   */
+  registerFirstAppearance(characterName, shotId, imageUrl, anchors) {
+    if (anchors[characterName]) {
+      if (!anchors[characterName].firstAppearanceShot) {
+        anchors[characterName].firstAppearanceShot = shotId;
+      }
+      if (imageUrl && !anchors[characterName].referenceImages.primary) {
+        anchors[characterName].referenceImages.primary = imageUrl;
+      }
+    }
+    return anchors;
+  },
+
+  /**
+   * Generate character consistency enhancement for video prompt
+   * @param {Object} scene - Scene data
+   * @param {Object} shot - Shot data
+   * @param {Object} characterBible - Character bible data
+   * @returns {string} Character consistency text to append to video prompt
+   */
+  generateCharacterEnhancement(scene, shot, characterBible) {
+    // Extract anchors
+    const anchors = this.extractCharacterAnchors(characterBible, null, null);
+
+    // Get shot-specific hints
+    const hints = this.getShotCharacterHints(shot, scene, anchors);
+
+    if (hints.charactersInShot.length === 0) {
+      return '';
+    }
+
+    const lines = [];
+    lines.push('[CHARACTER CONSISTENCY]');
+
+    hints.charactersInShot.forEach(char => {
+      const sheet = char.referenceSheet;
+      if (sheet) {
+        lines.push(`${char.name}: ${sheet.coreIdentity.physicalBuild}, ${sheet.coreIdentity.facialFeatures}`);
+        if (sheet.coreIdentity.primaryCostume) {
+          lines.push(`  Costume: ${sheet.coreIdentity.primaryCostume}`);
+        }
+        if (sheet.coreIdentity.distinguishingMarks !== 'none') {
+          lines.push(`  Features: ${sheet.coreIdentity.distinguishingMarks}`);
+        }
+      }
+    });
+
+    lines.push('MAINTAIN: Same face, same build, same costume across all shots');
+
+    return lines.join('\n');
+  },
+
+  /**
+   * Get character reference summary for metadata
+   */
+  getCharacterSummary(characterBible, scene, shot) {
+    const anchors = this.extractCharacterAnchors(characterBible, null, null);
+    const hints = this.getShotCharacterHints(shot, scene, anchors);
+
+    return {
+      totalCharacters: Object.keys(anchors).length,
+      charactersInShot: hints.charactersInShot.length,
+      characterNames: hints.charactersInShot.map(c => c.name),
+      hasConsistencyRequirements: hints.consistencyRequirements.length > 0,
+      anchorsWithImages: Object.values(anchors).filter(a => a.referenceImages.primary).length
+    };
+  }
+};
+
+// =============================================================================
+// AUDIO_BEAT_ENGINE - Sound Design Mapping for AI Video
+// =============================================================================
+/**
+ * AUDIO_BEAT_ENGINE
+ *
+ * Maps audio cues to video beats for enhanced AI video generation.
+ * Based on 2025 AI filmmaking: Native audio generation is now expected.
+ *
+ * Modern AI video models (Veo 3, WAN 2.6, Seedance 1.5) generate:
+ * - Synchronized dialogue with lip-sync
+ * - Ambient sound effects
+ * - Environmental audio
+ * - Impact/action sounds
+ *
+ * This engine generates audio-aware prompt enhancements.
+ */
+const AUDIO_BEAT_ENGINE = {
+
+  /**
+   * Analyze scene for audio cues
+   * @param {Object} scene - Scene data
+   * @param {Object} shot - Shot data
+   * @param {number} beatIndex - Current beat index (0-3 for 4-beat system)
+   * @returns {Object} Audio mapping for this beat
+   */
+  analyzeAudioCues(scene, shot, beatIndex = 0) {
+    const visualPrompt = scene?.visualPrompt || '';
+    const sceneAction = scene?.sceneAction || '';
+    const narration = scene?.narration || '';
+    const combinedText = `${visualPrompt} ${sceneAction} ${narration}`.toLowerCase();
+
+    return {
+      // Dialogue/speech cues
+      dialogue: this.detectDialogueCues(combinedText, narration),
+      // Ambient sound environment
+      ambience: this.detectAmbienceCues(combinedText),
+      // Action/impact sounds
+      actionSounds: this.detectActionSounds(combinedText),
+      // Music/score suggestions
+      musicCues: this.detectMusicCues(combinedText, scene),
+      // Beat-specific timing
+      beatTiming: this.getBeatAudioTiming(beatIndex),
+      // Emotional audio atmosphere
+      emotionalAudio: this.getEmotionalAudioAtmosphere(scene, shot)
+    };
+  },
+
+  /**
+   * Detect dialogue and speech cues
+   */
+  detectDialogueCues(text, narration) {
+    const cues = {
+      hasDialogue: false,
+      dialogueType: null,
+      lipSyncRequired: false,
+      speechPatterns: [],
+      voiceNotes: []
+    };
+
+    // Check for dialogue indicators
+    if (/["'].+["']|says|speaks|whispers|shouts|calls|replies|asks|exclaims/i.test(text)) {
+      cues.hasDialogue = true;
+      cues.lipSyncRequired = true;
+
+      // Dialogue type
+      if (/whispers?|quiet|soft voice|murmur/i.test(text)) {
+        cues.dialogueType = 'whisper';
+        cues.voiceNotes.push('soft, intimate delivery, close-mic sound');
+      } else if (/shouts?|screams?|yells?|calls out/i.test(text)) {
+        cues.dialogueType = 'shout';
+        cues.voiceNotes.push('loud, projected voice, slight echo possible');
+      } else if (/chant|incant|spell/i.test(text)) {
+        cues.dialogueType = 'chant';
+        cues.voiceNotes.push('rhythmic, ceremonial delivery');
+      } else {
+        cues.dialogueType = 'normal';
+        cues.voiceNotes.push('conversational tone, natural delivery');
+      }
+    }
+
+    // Check for narration/voiceover
+    if (narration && narration.length > 20) {
+      cues.hasDialogue = true;
+      if (!cues.dialogueType) {
+        cues.dialogueType = 'voiceover';
+        cues.voiceNotes.push('narrative voiceover, not synced to visible character');
+      }
+    }
+
+    // Speech patterns for lip-sync hints
+    if (cues.hasDialogue) {
+      if (/question|asks|\?/i.test(text)) {
+        cues.speechPatterns.push('questioning intonation, rising pitch');
+      }
+      if (/exclaims?|!|\bwow\b|\bno\b/i.test(text)) {
+        cues.speechPatterns.push('emphatic delivery, wide mouth movements');
+      }
+      if (/pause|hesitat|trail/i.test(text)) {
+        cues.speechPatterns.push('pauses and hesitations in speech');
+      }
+    }
+
+    return cues;
+  },
+
+  /**
+   * Detect ambient environment sounds
+   */
+  detectAmbienceCues(text) {
+    const ambience = {
+      primary: null,
+      secondary: [],
+      intensity: 'normal',
+      layers: []
+    };
+
+    // Natural environments
+    if (/forest|woods|jungle|trees/i.test(text)) {
+      ambience.primary = 'forest';
+      ambience.layers.push('bird calls', 'rustling leaves', 'distant wildlife');
+    }
+    if (/ocean|sea|beach|waves|shore/i.test(text)) {
+      ambience.primary = 'ocean';
+      ambience.layers.push('crashing waves', 'seabirds', 'wind over water');
+    }
+    if (/mountain|peak|cliff|heights/i.test(text)) {
+      ambience.primary = 'mountain';
+      ambience.layers.push('wind gusts', 'distant echoes', 'sparse wildlife');
+    }
+    if (/desert|sand|dune/i.test(text)) {
+      ambience.primary = 'desert';
+      ambience.layers.push('wind over sand', 'heat shimmer hum', 'sparse sounds');
+    }
+    if (/river|stream|waterfall|creek/i.test(text)) {
+      ambience.secondary.push('flowing water');
+      ambience.layers.push('water movement', 'splashing');
+    }
+
+    // Weather
+    if (/rain|storm|thunder/i.test(text)) {
+      ambience.secondary.push('rain');
+      ambience.layers.push('rainfall', 'thunder rumbles', 'water dripping');
+      ambience.intensity = 'high';
+    }
+    if (/wind|breeze|gust/i.test(text)) {
+      ambience.secondary.push('wind');
+      ambience.layers.push('wind howling or whistling');
+    }
+    if (/snow|blizzard|frost/i.test(text)) {
+      ambience.secondary.push('cold');
+      ambience.layers.push('muffled silence', 'crunching snow', 'icy wind');
+    }
+
+    // Urban/interior
+    if (/city|urban|street|market/i.test(text)) {
+      ambience.primary = 'urban';
+      ambience.layers.push('crowd murmur', 'distant traffic', 'footsteps');
+    }
+    if (/temple|church|cathedral|shrine/i.test(text)) {
+      ambience.primary = 'sacred';
+      ambience.layers.push('echoing space', 'reverberant silence', 'distant chanting');
+    }
+    if (/cave|cavern|underground/i.test(text)) {
+      ambience.primary = 'cave';
+      ambience.layers.push('dripping water', 'echoing footsteps', 'distant rumbles');
+    }
+    if (/castle|palace|throne/i.test(text)) {
+      ambience.primary = 'castle';
+      ambience.layers.push('stone echo', 'distant voices', 'torches crackling');
+    }
+    if (/tavern|inn|bar/i.test(text)) {
+      ambience.primary = 'tavern';
+      ambience.layers.push('crowd chatter', 'clinking glasses', 'fireplace crackle');
+    }
+
+    // Time of day
+    if (/night|midnight|dark/i.test(text)) {
+      ambience.secondary.push('night');
+      ambience.layers.push('crickets', 'owl hoots', 'nocturnal sounds');
+    }
+    if (/dawn|sunrise|morning/i.test(text)) {
+      ambience.secondary.push('dawn');
+      ambience.layers.push('birdsong', 'rooster crow', 'awakening sounds');
+    }
+
+    // Silence/tension
+    if (/silent|quiet|still|eerie|tense/i.test(text)) {
+      ambience.intensity = 'minimal';
+      ambience.layers.push('oppressive silence', 'subtle tension');
+    }
+
+    return ambience;
+  },
+
+  /**
+   * Detect action and impact sounds
+   */
+  detectActionSounds(text) {
+    const sounds = [];
+
+    // Combat sounds
+    if (/sword|blade|slash|cut/i.test(text)) {
+      sounds.push({
+        type: 'weapon',
+        sound: 'sword slash - metal singing through air, impact clang',
+        timing: 'on action'
+      });
+    }
+    if (/punch|hit|strike|blow/i.test(text)) {
+      sounds.push({
+        type: 'impact',
+        sound: 'physical impact - thud, grunt, body reaction',
+        timing: 'on contact'
+      });
+    }
+    if (/kick|stomp/i.test(text)) {
+      sounds.push({
+        type: 'impact',
+        sound: 'kick impact - whoosh, thud, target reaction',
+        timing: 'on contact'
+      });
+    }
+    if (/block|shield|parry/i.test(text)) {
+      sounds.push({
+        type: 'defense',
+        sound: 'blocking impact - metal clang, wood thunk, grunt of effort',
+        timing: 'on block'
+      });
+    }
+    if (/arrow|bow|shot|projectile/i.test(text)) {
+      sounds.push({
+        type: 'projectile',
+        sound: 'arrow flight - whoosh, thunk on impact',
+        timing: 'release to impact'
+      });
+    }
+
+    // Movement sounds
+    if (/run|sprint|dash/i.test(text)) {
+      sounds.push({
+        type: 'movement',
+        sound: 'running footsteps - rapid rhythm, breathing',
+        timing: 'continuous'
+      });
+    }
+    if (/walk|step|stride/i.test(text)) {
+      sounds.push({
+        type: 'movement',
+        sound: 'walking footsteps - measured pace on surface',
+        timing: 'rhythmic'
+      });
+    }
+    if (/jump|leap|vault/i.test(text)) {
+      sounds.push({
+        type: 'movement',
+        sound: 'jump - push off, air, landing impact',
+        timing: 'takeoff to landing'
+      });
+    }
+    if (/fall|drop|crash/i.test(text)) {
+      sounds.push({
+        type: 'impact',
+        sound: 'falling impact - air rush, heavy landing, aftermath',
+        timing: 'acceleration to impact'
+      });
+    }
+
+    // Object sounds
+    if (/door|gate/i.test(text)) {
+      sounds.push({
+        type: 'object',
+        sound: 'door movement - creak, latch, closing thud',
+        timing: 'on action'
+      });
+    }
+    if (/break|shatter|crack|smash/i.test(text)) {
+      sounds.push({
+        type: 'destruction',
+        sound: 'breaking - crack, shatter, debris scatter',
+        timing: 'on impact'
+      });
+    }
+    if (/explosion|blast|boom/i.test(text)) {
+      sounds.push({
+        type: 'explosion',
+        sound: 'explosion - boom, debris, shockwave echo',
+        timing: 'immediate then aftermath'
+      });
+    }
+
+    // Magic/energy sounds
+    if (/magic|spell|energy|power|glow/i.test(text)) {
+      sounds.push({
+        type: 'magic',
+        sound: 'magical energy - ethereal hum, crackle, whoosh',
+        timing: 'build to release'
+      });
+    }
+    if (/fire|flame|burn/i.test(text)) {
+      sounds.push({
+        type: 'element',
+        sound: 'fire - crackling, roaring, heat shimmer',
+        timing: 'continuous with flare-ups'
+      });
+    }
+    if (/lightning|electricity|spark/i.test(text)) {
+      sounds.push({
+        type: 'element',
+        sound: 'electricity - crackle, zap, thunder',
+        timing: 'sudden bursts'
+      });
+    }
+
+    // Emotional sounds
+    if (/cry|sob|weep/i.test(text)) {
+      sounds.push({
+        type: 'emotional',
+        sound: 'crying - sobs, sniffles, unsteady breathing',
+        timing: 'intermittent'
+      });
+    }
+    if (/laugh|chuckle/i.test(text)) {
+      sounds.push({
+        type: 'emotional',
+        sound: 'laughter - genuine, character-appropriate',
+        timing: 'on emotion'
+      });
+    }
+    if (/scream|shriek/i.test(text)) {
+      sounds.push({
+        type: 'emotional',
+        sound: 'scream - intense vocalization, echo',
+        timing: 'sudden'
+      });
+    }
+
+    return sounds;
+  },
+
+  /**
+   * Detect music/score cues
+   */
+  detectMusicCues(text, scene) {
+    const music = {
+      mood: null,
+      tempo: null,
+      intensity: null,
+      instruments: [],
+      notes: []
+    };
+
+    // Determine mood from scene content
+    if (/battle|fight|combat|war|clash/i.test(text)) {
+      music.mood = 'action';
+      music.tempo = 'fast';
+      music.intensity = 'high';
+      music.instruments.push('percussion', 'brass', 'strings (intense)');
+      music.notes.push('driving rhythm, building tension');
+    } else if (/love|romance|tender|gentle|embrace/i.test(text)) {
+      music.mood = 'romantic';
+      music.tempo = 'slow';
+      music.intensity = 'low';
+      music.instruments.push('strings', 'piano', 'soft winds');
+      music.notes.push('warm, emotional, intimate');
+    } else if (/fear|terror|horror|creep|sinister/i.test(text)) {
+      music.mood = 'tension';
+      music.tempo = 'varied';
+      music.intensity = 'building';
+      music.instruments.push('low strings', 'dissonant tones', 'sparse percussion');
+      music.notes.push('unsettling, building dread');
+    } else if (/triumph|victory|hero|glory|success/i.test(text)) {
+      music.mood = 'triumphant';
+      music.tempo = 'moderate-fast';
+      music.intensity = 'high';
+      music.instruments.push('full orchestra', 'brass fanfare', 'choral');
+      music.notes.push('soaring, uplifting, celebratory');
+    } else if (/sad|grief|loss|mourn|tragedy/i.test(text)) {
+      music.mood = 'melancholic';
+      music.tempo = 'slow';
+      music.intensity = 'low';
+      music.instruments.push('solo strings', 'piano', 'minimal');
+      music.notes.push('somber, reflective, emotional weight');
+    } else if (/mystery|discover|reveal|secret/i.test(text)) {
+      music.mood = 'mysterious';
+      music.tempo = 'slow-moderate';
+      music.intensity = 'medium';
+      music.instruments.push('winds', 'sparse strings', 'ethereal pads');
+      music.notes.push('curious, anticipatory, unfolding');
+    } else if (/peace|calm|serene|tranquil/i.test(text)) {
+      music.mood = 'peaceful';
+      music.tempo = 'slow';
+      music.intensity = 'minimal';
+      music.instruments.push('ambient pads', 'nature sounds', 'soft melody');
+      music.notes.push('restful, contemplative, still');
+    }
+
+    // Scene position affects music
+    const sceneIndex = scene?.sceneIndex || 0;
+    if (sceneIndex === 0) {
+      music.notes.push('opening - establish world theme');
+    }
+
+    return music;
+  },
+
+  /**
+   * Get beat-specific audio timing (for 4-beat system)
+   */
+  getBeatAudioTiming(beatIndex) {
+    const beatTimings = [
+      {
+        beat: 1,
+        timing: '0-2s',
+        audioFocus: 'establish',
+        description: 'Establish audio atmosphere, ambient foundation',
+        notes: 'Fade in ambience, set sonic palette'
+      },
+      {
+        beat: 2,
+        timing: '2-5s',
+        audioFocus: 'develop',
+        description: 'Develop audio layers, introduce action sounds',
+        notes: 'Add specific sounds, dialogue begins if present'
+      },
+      {
+        beat: 3,
+        timing: '5-8s',
+        audioFocus: 'peak',
+        description: 'Audio climax - loudest/most intense moment',
+        notes: 'Impact sounds, emotional peaks, music swells'
+      },
+      {
+        beat: 4,
+        timing: '8-10s',
+        audioFocus: 'resolve',
+        description: 'Audio resolution - settle or transition',
+        notes: 'Sounds fade or transform to next scene'
+      }
+    ];
+
+    return beatTimings[beatIndex] || beatTimings[0];
+  },
+
+  /**
+   * Get emotional audio atmosphere
+   */
+  getEmotionalAudioAtmosphere(scene, shot) {
+    const choreography = scene?.choreography || {};
+    const intensity = choreography.intensityProgression?.[0] || 0.5;
+    const sceneArc = choreography.sceneArc || 'steady_build';
+
+    let atmosphere = {
+      intensity: 'moderate',
+      dynamic: 'stable',
+      suggestion: ''
+    };
+
+    if (intensity > 0.8) {
+      atmosphere.intensity = 'intense';
+      atmosphere.dynamic = 'dramatic peaks';
+      atmosphere.suggestion = 'loud, impactful, emotionally charged audio';
+    } else if (intensity > 0.6) {
+      atmosphere.intensity = 'heightened';
+      atmosphere.dynamic = 'building';
+      atmosphere.suggestion = 'energetic, forward-moving audio';
+    } else if (intensity > 0.4) {
+      atmosphere.intensity = 'moderate';
+      atmosphere.dynamic = 'steady';
+      atmosphere.suggestion = 'balanced audio, clear and present';
+    } else {
+      atmosphere.intensity = 'subtle';
+      atmosphere.dynamic = 'restrained';
+      atmosphere.suggestion = 'quiet, intimate, careful audio';
+    }
+
+    // Arc-specific adjustments
+    if (sceneArc === 'build_to_climax') {
+      atmosphere.suggestion += ' - audio should crescendo';
+    } else if (sceneArc === 'tension_release') {
+      atmosphere.suggestion += ' - build tension then release';
+    } else if (sceneArc === 'peak_then_calm') {
+      atmosphere.suggestion += ' - start intense, gradually calm';
+    }
+
+    return atmosphere;
+  },
+
+  /**
+   * Generate audio enhancement for video prompt
+   * @param {Object} scene - Scene data
+   * @param {Object} shot - Shot data
+   * @param {number} beatIndex - Beat index for timing
+   * @returns {string} Audio enhancement text for video prompt
+   */
+  generateAudioEnhancement(scene, shot, beatIndex = 0) {
+    const audio = this.analyzeAudioCues(scene, shot, beatIndex);
+    const lines = [];
+
+    lines.push('[AUDIO DESIGN]');
+
+    // Dialogue cues
+    if (audio.dialogue.hasDialogue) {
+      lines.push(`Dialogue: ${audio.dialogue.dialogueType} - ${audio.dialogue.voiceNotes.join(', ')}`);
+      if (audio.dialogue.lipSyncRequired) {
+        lines.push('Lip-sync: Required - match mouth movements to speech');
+      }
+    }
+
+    // Ambience
+    if (audio.ambience.primary) {
+      lines.push(`Ambience: ${audio.ambience.primary} - ${audio.ambience.layers.slice(0, 3).join(', ')}`);
+    }
+
+    // Action sounds (most important for modern AI video)
+    if (audio.actionSounds.length > 0) {
+      const soundsStr = audio.actionSounds
+        .slice(0, 3)
+        .map(s => `${s.type}: ${s.sound}`)
+        .join('; ');
+      lines.push(`SFX: ${soundsStr}`);
+    }
+
+    // Music mood
+    if (audio.musicCues.mood) {
+      lines.push(`Music: ${audio.musicCues.mood} mood, ${audio.musicCues.tempo} tempo`);
+    }
+
+    // Beat timing
+    lines.push(`Beat ${audio.beatTiming.beat} (${audio.beatTiming.timing}): ${audio.beatTiming.audioFocus} - ${audio.beatTiming.notes}`);
+
+    return lines.join('\n');
+  },
+
+  /**
+   * Get audio summary for metadata
+   */
+  getAudioSummary(scene, shot, beatIndex) {
+    const audio = this.analyzeAudioCues(scene, shot, beatIndex);
+
+    return {
+      hasDialogue: audio.dialogue.hasDialogue,
+      dialogueType: audio.dialogue.dialogueType,
+      lipSyncRequired: audio.dialogue.lipSyncRequired,
+      ambienceType: audio.ambience.primary,
+      actionSoundCount: audio.actionSounds.length,
+      musicMood: audio.musicCues.mood,
+      emotionalIntensity: audio.emotionalAudio.intensity,
+      beatPhase: audio.beatTiming.audioFocus
+    };
+  }
+};
+
+// =============================================================================
+// SHOT_SEQUENCE_VALIDATOR - Cinematographic Progression Validation
+// =============================================================================
+/**
+ * SHOT_SEQUENCE_VALIDATOR
+ *
+ * Validates that shot sequences follow cinematographic best practices.
+ * Ensures camera progressions are logical and visually coherent.
+ *
+ * Validates:
+ * - Shot type progression (wide → medium → close-up pattern)
+ * - Camera movement variety
+ * - Transition logic between shots
+ * - Visual storytelling flow
+ */
+const SHOT_SEQUENCE_VALIDATOR = {
+
+  // Valid shot type progressions (cinematographic rules)
+  VALID_PROGRESSIONS: {
+    'establishing': ['wide', 'medium_wide', 'medium'],
+    'wide': ['medium_wide', 'medium', 'establishing'],
+    'medium_wide': ['medium', 'close_up', 'wide'],
+    'medium': ['close_up', 'medium_wide', 'extreme_close_up'],
+    'close_up': ['extreme_close_up', 'medium', 'cutaway'],
+    'extreme_close_up': ['close_up', 'medium', 'wide'],
+    'cutaway': ['medium', 'close_up', 'wide'],
+    'over_shoulder': ['close_up', 'medium', 'over_shoulder'],
+    'two_shot': ['close_up', 'medium', 'over_shoulder'],
+    'pov': ['close_up', 'medium', 'reaction']
+  },
+
+  // Camera movement variety rules
+  MOVEMENT_CATEGORIES: {
+    static: ['static', 'locked', 'tripod'],
+    pan: ['pan_left', 'pan_right', 'pan'],
+    tilt: ['tilt_up', 'tilt_down', 'tilt'],
+    dolly: ['dolly_in', 'dolly_out', 'push', 'pull'],
+    track: ['track_left', 'track_right', 'tracking'],
+    crane: ['crane_up', 'crane_down', 'crane', 'jib'],
+    handheld: ['handheld', 'shaky'],
+    steadicam: ['steadicam', 'gimbal', 'smooth'],
+    drone: ['drone', 'aerial']
+  },
+
+  /**
+   * Validate a sequence of shots
+   * @param {Array} shots - Array of shot objects
+   * @returns {Object} Validation result with issues and suggestions
+   */
+  validateSequence(shots) {
+    if (!shots || shots.length === 0) {
+      return {
+        valid: true,
+        score: 100,
+        issues: [],
+        suggestions: []
+      };
+    }
+
+    const issues = [];
+    const suggestions = [];
+    let score = 100;
+
+    // Run all validation checks
+    const progressionResult = this.validateShotProgression(shots);
+    issues.push(...progressionResult.issues);
+    suggestions.push(...progressionResult.suggestions);
+    score -= progressionResult.penalty;
+
+    const movementResult = this.validateMovementVariety(shots);
+    issues.push(...movementResult.issues);
+    suggestions.push(...movementResult.suggestions);
+    score -= movementResult.penalty;
+
+    const transitionResult = this.validateTransitions(shots);
+    issues.push(...transitionResult.issues);
+    suggestions.push(...transitionResult.suggestions);
+    score -= transitionResult.penalty;
+
+    const flowResult = this.validateVisualFlow(shots);
+    issues.push(...flowResult.issues);
+    suggestions.push(...flowResult.suggestions);
+    score -= flowResult.penalty;
+
+    return {
+      valid: score >= 70,
+      score: Math.max(0, score),
+      issues,
+      suggestions,
+      progressionValid: progressionResult.issues.length === 0,
+      movementVariety: movementResult.variety,
+      transitionsSmooth: transitionResult.issues.length === 0
+    };
+  },
+
+  /**
+   * Validate shot type progression
+   */
+  validateShotProgression(shots) {
+    const issues = [];
+    const suggestions = [];
+    let penalty = 0;
+
+    for (let i = 0; i < shots.length - 1; i++) {
+      const current = this.normalizeShotType(shots[i].shotType);
+      const next = this.normalizeShotType(shots[i + 1].shotType);
+
+      // Check if progression is valid
+      const validNextShots = this.VALID_PROGRESSIONS[current] || [];
+
+      // Jump detection (e.g., establishing directly to extreme close-up)
+      if (this.isJumpCut(current, next)) {
+        issues.push({
+          type: 'jump_cut',
+          location: `Shot ${i + 1} → ${i + 2}`,
+          message: `Jump cut detected: ${current} → ${next}. Consider adding intermediate shot.`
+        });
+        penalty += 5;
+        suggestions.push(`Insert a ${this.suggestIntermediateShot(current, next)} between shots ${i + 1} and ${i + 2}`);
+      }
+    }
+
+    // Check for shot type variety
+    const shotTypes = shots.map(s => this.normalizeShotType(s.shotType));
+    const uniqueTypes = new Set(shotTypes);
+    if (uniqueTypes.size < Math.min(3, shots.length)) {
+      issues.push({
+        type: 'low_variety',
+        message: `Low shot type variety. Only ${uniqueTypes.size} unique types in ${shots.length} shots.`
+      });
+      penalty += 5;
+      suggestions.push('Add more variety in shot types for visual interest');
+    }
+
+    return { issues, suggestions, penalty };
+  },
+
+  /**
+   * Validate camera movement variety
+   */
+  validateMovementVariety(shots) {
+    const issues = [];
+    const suggestions = [];
+    let penalty = 0;
+
+    const movements = shots.map(s => this.normalizeMovement(s.cameraMovement));
+    const categories = movements.map(m => this.categorizeMovement(m));
+
+    // Check for consecutive same movements
+    let sameMovementCount = 1;
+    for (let i = 1; i < categories.length; i++) {
+      if (categories[i] === categories[i - 1]) {
+        sameMovementCount++;
+        if (sameMovementCount >= 3) {
+          issues.push({
+            type: 'repetitive_movement',
+            location: `Shots ${i - 1} to ${i + 1}`,
+            message: `Repetitive camera movement: ${sameMovementCount} consecutive ${categories[i]} movements`
+          });
+          penalty += 3;
+        }
+      } else {
+        sameMovementCount = 1;
+      }
+    }
+
+    // Calculate movement variety
+    const uniqueCategories = new Set(categories);
+    const variety = (uniqueCategories.size / Object.keys(this.MOVEMENT_CATEGORIES).length) * 100;
+
+    if (variety < 30 && shots.length >= 4) {
+      suggestions.push('Consider adding more variety in camera movements (pan, dolly, crane, etc.)');
+    }
+
+    return { issues, suggestions, penalty, variety };
+  },
+
+  /**
+   * Validate transitions between shots
+   */
+  validateTransitions(shots) {
+    const issues = [];
+    const suggestions = [];
+    let penalty = 0;
+
+    // Check for 180-degree rule violations (if we had spatial data)
+    // Check for matching action (if action data available)
+
+    for (let i = 0; i < shots.length - 1; i++) {
+      const current = shots[i];
+      const next = shots[i + 1];
+
+      // Check for jarring transitions
+      const currentIntensity = current.cinematicPhysics?.intensity || 0.5;
+      const nextIntensity = next.cinematicPhysics?.intensity || 0.5;
+
+      // Sudden intensity jump without buildup
+      if (Math.abs(nextIntensity - currentIntensity) > 0.5) {
+        suggestions.push(`Shot ${i + 1} → ${i + 2}: Large intensity change (${(currentIntensity * 100).toFixed(0)}% → ${(nextIntensity * 100).toFixed(0)}%). Consider smoother transition.`);
+      }
+    }
+
+    return { issues, suggestions, penalty };
+  },
+
+  /**
+   * Validate visual storytelling flow
+   */
+  validateVisualFlow(shots) {
+    const issues = [];
+    const suggestions = [];
+    let penalty = 0;
+
+    // Opening shot check
+    if (shots.length > 0) {
+      const firstShot = this.normalizeShotType(shots[0].shotType);
+      if (!['establishing', 'wide', 'medium_wide'].includes(firstShot)) {
+        suggestions.push(`Consider starting with an establishing or wide shot instead of ${firstShot}`);
+      }
+    }
+
+    // Closing shot check
+    if (shots.length > 1) {
+      const lastShot = this.normalizeShotType(shots[shots.length - 1].shotType);
+      // Good endings: close-up (emotional), medium (balanced), wide (context)
+      if (lastShot === 'extreme_close_up') {
+        suggestions.push('Consider pulling back slightly for the final shot to give context');
+      }
+    }
+
+    // Pacing check (shot duration variance)
+    const durations = shots.map(s => s.duration || 10);
+    const avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
+    const variance = durations.reduce((sum, d) => sum + Math.pow(d - avgDuration, 2), 0) / durations.length;
+
+    if (variance < 0.5 && shots.length >= 3) {
+      suggestions.push('Consider varying shot durations for better pacing and rhythm');
+    }
+
+    return { issues, suggestions, penalty };
+  },
+
+  /**
+   * Normalize shot type string
+   */
+  normalizeShotType(shotType) {
+    if (!shotType) return 'medium';
+    const type = shotType.toLowerCase().replace(/[\s-]/g, '_');
+
+    if (type.includes('establish')) return 'establishing';
+    if (type.includes('extreme') && type.includes('close')) return 'extreme_close_up';
+    if (type.includes('close')) return 'close_up';
+    if (type.includes('medium') && type.includes('wide')) return 'medium_wide';
+    if (type.includes('medium')) return 'medium';
+    if (type.includes('wide')) return 'wide';
+    if (type.includes('over') && type.includes('shoulder')) return 'over_shoulder';
+    if (type.includes('two')) return 'two_shot';
+    if (type.includes('pov') || type.includes('point')) return 'pov';
+    if (type.includes('cutaway')) return 'cutaway';
+
+    return 'medium';
+  },
+
+  /**
+   * Normalize camera movement
+   */
+  normalizeMovement(movement) {
+    if (!movement) return 'static';
+    return movement.toLowerCase().replace(/[\s-]/g, '_');
+  },
+
+  /**
+   * Categorize movement type
+   */
+  categorizeMovement(movement) {
+    const m = movement.toLowerCase();
+    for (const [category, keywords] of Object.entries(this.MOVEMENT_CATEGORIES)) {
+      if (keywords.some(k => m.includes(k))) {
+        return category;
+      }
+    }
+    return 'static';
+  },
+
+  /**
+   * Check if this is a jarring jump cut
+   */
+  isJumpCut(current, next) {
+    const jumpPairs = [
+      ['establishing', 'extreme_close_up'],
+      ['establishing', 'close_up'],
+      ['wide', 'extreme_close_up'],
+      ['extreme_close_up', 'establishing'],
+      ['extreme_close_up', 'wide']
+    ];
+
+    return jumpPairs.some(([a, b]) =>
+      (current === a && next === b) || (current === b && next === a)
+    );
+  },
+
+  /**
+   * Suggest intermediate shot for jump cuts
+   */
+  suggestIntermediateShot(from, to) {
+    if (from === 'establishing' || from === 'wide') {
+      return 'medium or medium_wide';
+    }
+    if (to === 'extreme_close_up') {
+      return 'close_up';
+    }
+    return 'medium';
+  },
+
+  /**
+   * Get sequence summary for metadata
+   */
+  getSequenceSummary(shots) {
+    const validation = this.validateSequence(shots);
+
+    return {
+      valid: validation.valid,
+      score: validation.score,
+      issueCount: validation.issues.length,
+      suggestionCount: validation.suggestions.length,
+      progressionValid: validation.progressionValid,
+      movementVariety: validation.movementVariety?.toFixed(1) + '%',
+      transitionsSmooth: validation.transitionsSmooth
+    };
+  }
+};
+
+// =============================================================================
+// KEYFRAME_QUALITY_ENGINE - Image Quality Validation for Video Generation
+// =============================================================================
+/**
+ * KEYFRAME_QUALITY_ENGINE
+ *
+ * Validates keyframe images before video generation.
+ * Based on 2025 AI filmmaking: "The cleaner the keyframe, the less
+ * the video model needs to invent—and the more stable your motion becomes."
+ *
+ * Validates:
+ * - Subject clarity (faces unobscured, clear focus)
+ * - Motion-readiness (pose suitable for animation)
+ * - Technical quality (composition, lighting, framing)
+ * - AI-specific requirements (avoid problematic elements)
+ */
+const KEYFRAME_QUALITY_ENGINE = {
+
+  // Quality thresholds
+  THRESHOLDS: {
+    minSubjectVisibility: 0.3,  // At least 30% of frame
+    maxCrowding: 5,             // Max characters before quality drops
+    minContrast: 0.4,           // Minimum contrast for clear motion
+    optimalAspectRatios: ['16:9', '4:3', '1:1', '9:16']
+  },
+
+  /**
+   * Analyze image prompt for keyframe quality indicators
+   * @param {Object} shot - Shot data with imagePrompt
+   * @param {Object} scene - Scene context
+   * @returns {Object} Quality assessment
+   */
+  analyzeKeyframeQuality(shot, scene) {
+    const imagePrompt = shot?.imagePrompt || shot?.prompt || '';
+    const videoPrompt = shot?.videoPrompt || '';
+    const shotType = shot?.shotType || 'medium';
+
+    return {
+      subjectClarity: this.assessSubjectClarity(imagePrompt, shotType),
+      motionReadiness: this.assessMotionReadiness(imagePrompt, videoPrompt),
+      technicalQuality: this.assessTechnicalQuality(imagePrompt),
+      aiCompatibility: this.assessAICompatibility(imagePrompt),
+      recommendations: this.generateRecommendations(imagePrompt, shotType)
+    };
+  },
+
+  /**
+   * Assess subject clarity in the prompt
+   */
+  assessSubjectClarity(prompt, shotType) {
+    const lowerPrompt = prompt.toLowerCase();
+    const issues = [];
+    let score = 100;
+
+    // Face visibility issues
+    if (/back\s+view|from\s+behind|rear\s+view/i.test(prompt)) {
+      issues.push('Subject shown from behind - face not visible');
+      score -= 15;
+    }
+    if (/obscured|hidden|covered\s+face|mask|silhouette/i.test(prompt)) {
+      issues.push('Face may be obscured or hidden');
+      score -= 20;
+    }
+    if (/crowd|group|many\s+people|multiple\s+characters/i.test(prompt)) {
+      issues.push('Multiple subjects may reduce individual clarity');
+      score -= 10;
+    }
+
+    // Focus issues
+    if (/blur|blurry|out\s+of\s+focus|soft\s+focus/i.test(prompt)) {
+      issues.push('Blur mentioned - may affect video generation');
+      score -= 15;
+    }
+    if (/motion\s+blur/i.test(prompt)) {
+      issues.push('Motion blur in keyframe can cause video artifacts');
+      score -= 20;
+    }
+
+    // Good indicators
+    if (/clear\s+view|facing\s+camera|front\s+view|visible\s+face/i.test(prompt)) {
+      score += 10;
+    }
+    if (/sharp|crisp|detailed|high\s+definition/i.test(prompt)) {
+      score += 5;
+    }
+
+    // Shot type specific
+    if ((shotType.includes('close') || shotType.includes('medium')) &&
+        !/(face|portrait|expression|eyes)/i.test(prompt)) {
+      issues.push('Close/medium shot without clear face description');
+      score -= 10;
+    }
+
+    return {
+      score: Math.max(0, Math.min(100, score)),
+      issues,
+      suitable: score >= 70
+    };
+  },
+
+  /**
+   * Assess motion readiness of the keyframe
+   */
+  assessMotionReadiness(imagePrompt, videoPrompt) {
+    const combined = `${imagePrompt} ${videoPrompt}`.toLowerCase();
+    const issues = [];
+    let score = 100;
+
+    // Static poses that are hard to animate
+    if (/perfectly\s+still|frozen|statue|completely\s+motionless/i.test(combined)) {
+      issues.push('Extremely static pose - may create unnatural video motion');
+      score -= 10;
+    }
+
+    // Problematic positions
+    if (/lying\s+down|on\s+the\s+ground|prone|supine/i.test(combined)) {
+      issues.push('Lying position can be difficult for video models');
+      score -= 15;
+    }
+    if (/extreme\s+angle|dutch\s+angle|tilted/i.test(combined)) {
+      issues.push('Extreme camera angle may complicate motion');
+      score -= 5;
+    }
+
+    // Good motion indicators
+    if (/ready\s+to|about\s+to|beginning\s+to|starting\s+to/i.test(combined)) {
+      score += 10;
+    }
+    if (/dynamic|in\s+motion|moving|walking|running/i.test(combined)) {
+      score += 5;
+    }
+    if (/natural\s+pose|relaxed\s+stance|balanced/i.test(combined)) {
+      score += 5;
+    }
+
+    // Action potential
+    const hasActionPotential = /arms|legs|hands|body|torso|movement/i.test(combined);
+    if (!hasActionPotential) {
+      issues.push('Limited motion description - add body/movement details');
+      score -= 5;
+    }
+
+    return {
+      score: Math.max(0, Math.min(100, score)),
+      issues,
+      motionReady: score >= 70
+    };
+  },
+
+  /**
+   * Assess technical quality indicators
+   */
+  assessTechnicalQuality(prompt) {
+    const lowerPrompt = prompt.toLowerCase();
+    const issues = [];
+    let score = 100;
+
+    // Lighting issues
+    if (/harsh\s+shadows|extreme\s+contrast|backlit\s+only/i.test(prompt)) {
+      issues.push('Challenging lighting may affect video generation');
+      score -= 10;
+    }
+    if (/dark|underexposed|low\s+light|shadows/i.test(prompt) &&
+        !/dramatic|cinematic|moody/i.test(prompt)) {
+      issues.push('Low light conditions may reduce video quality');
+      score -= 5;
+    }
+
+    // Composition issues
+    if (/cropped|cut\s+off|edge\s+of\s+frame/i.test(prompt)) {
+      issues.push('Subject cropping may cause issues in video');
+      score -= 10;
+    }
+
+    // Quality indicators (positive)
+    if (/cinematic|professional|high\s+quality|4K|8K/i.test(prompt)) {
+      score += 10;
+    }
+    if (/well\s+lit|balanced\s+lighting|natural\s+light/i.test(prompt)) {
+      score += 5;
+    }
+    if (/sharp\s+focus|detailed|crisp/i.test(prompt)) {
+      score += 5;
+    }
+
+    return {
+      score: Math.max(0, Math.min(100, score)),
+      issues,
+      technicallySound: score >= 70
+    };
+  },
+
+  /**
+   * Assess AI video generation compatibility
+   */
+  assessAICompatibility(prompt) {
+    const lowerPrompt = prompt.toLowerCase();
+    const issues = [];
+    const warnings = [];
+    let score = 100;
+
+    // Known problematic elements for AI video
+    if (/text|words|letters|writing|sign\s+with|banner\s+saying/i.test(prompt)) {
+      issues.push('Text in image can cause artifacts in video');
+      score -= 20;
+    }
+    if (/mirror|reflection|glass/i.test(prompt)) {
+      warnings.push('Reflections can be challenging for AI video');
+      score -= 5;
+    }
+    if (/water\s+surface|transparent|translucent/i.test(prompt)) {
+      warnings.push('Transparent/water surfaces may have artifacts');
+      score -= 5;
+    }
+    if (/fingers|hands\s+close|detailed\s+hands/i.test(prompt)) {
+      warnings.push('Hand details can be problematic in AI video');
+      score -= 5;
+    }
+    if (/crowd|many\s+faces|group\s+of\s+people/i.test(prompt)) {
+      warnings.push('Multiple faces increase consistency challenges');
+      score -= 10;
+    }
+
+    // Positive AI-friendly elements
+    if (/simple\s+background|clean\s+composition|uncluttered/i.test(prompt)) {
+      score += 5;
+    }
+    if (/single\s+subject|one\s+person|lone\s+figure/i.test(prompt)) {
+      score += 5;
+    }
+
+    return {
+      score: Math.max(0, Math.min(100, score)),
+      issues,
+      warnings,
+      aiCompatible: score >= 70
+    };
+  },
+
+  /**
+   * Generate recommendations for improving keyframe quality
+   */
+  generateRecommendations(prompt, shotType) {
+    const recommendations = [];
+    const lowerPrompt = prompt.toLowerCase();
+
+    // Subject recommendations
+    if (!/(face|portrait|expression|looking)/i.test(prompt)) {
+      recommendations.push('Add clear face/expression description for character shots');
+    }
+
+    // Composition recommendations
+    if (!/(centered|framing|composition|rule\s+of\s+thirds)/i.test(prompt)) {
+      recommendations.push('Specify composition (centered, rule of thirds, etc.)');
+    }
+
+    // Lighting recommendations
+    if (!/(light|lit|lighting|sun|shadow)/i.test(prompt)) {
+      recommendations.push('Add lighting description for more controlled output');
+    }
+
+    // Quality recommendations
+    if (!/(quality|resolution|4K|cinematic|professional)/i.test(prompt)) {
+      recommendations.push('Add quality indicators (cinematic, 4K, professional)');
+    }
+
+    // Shot-type specific
+    if (shotType.includes('close') && !/(expression|emotion|eyes|face)/i.test(prompt)) {
+      recommendations.push('Close-up shots should emphasize facial expression/emotion');
+    }
+    if (shotType.includes('wide') && !/(environment|setting|location|landscape)/i.test(prompt)) {
+      recommendations.push('Wide shots should describe the environment/setting');
+    }
+
+    return recommendations;
+  },
+
+  /**
+   * Validate a shot's keyframe quality
+   * @param {Object} shot - Shot data
+   * @param {Object} scene - Scene context
+   * @returns {Object} Validation result with score and recommendations
+   */
+  validateKeyframe(shot, scene) {
+    const analysis = this.analyzeKeyframeQuality(shot, scene);
+
+    // Calculate overall score
+    const overallScore = Math.round(
+      (analysis.subjectClarity.score * 0.3) +
+      (analysis.motionReadiness.score * 0.3) +
+      (analysis.technicalQuality.score * 0.2) +
+      (analysis.aiCompatibility.score * 0.2)
+    );
+
+    // Collect all issues
+    const allIssues = [
+      ...analysis.subjectClarity.issues,
+      ...analysis.motionReadiness.issues,
+      ...analysis.technicalQuality.issues,
+      ...analysis.aiCompatibility.issues
+    ];
+
+    return {
+      valid: overallScore >= 70,
+      score: overallScore,
+      grade: this.scoreToGrade(overallScore),
+      issues: allIssues,
+      warnings: analysis.aiCompatibility.warnings || [],
+      recommendations: analysis.recommendations,
+      details: {
+        subjectClarity: analysis.subjectClarity.score,
+        motionReadiness: analysis.motionReadiness.score,
+        technicalQuality: analysis.technicalQuality.score,
+        aiCompatibility: analysis.aiCompatibility.score
+      }
+    };
+  },
+
+  /**
+   * Convert score to letter grade
+   */
+  scoreToGrade(score) {
+    if (score >= 90) return 'A';
+    if (score >= 80) return 'B';
+    if (score >= 70) return 'C';
+    if (score >= 60) return 'D';
+    return 'F';
+  },
+
+  /**
+   * Get keyframe quality summary for metadata
+   */
+  getKeyframeSummary(shot, scene) {
+    const validation = this.validateKeyframe(shot, scene);
+
+    return {
+      valid: validation.valid,
+      score: validation.score,
+      grade: validation.grade,
+      issueCount: validation.issues.length,
+      warningCount: validation.warnings.length,
+      recommendationCount: validation.recommendations.length,
+      subjectClarity: validation.details.subjectClarity,
+      motionReadiness: validation.details.motionReadiness
+    };
+  }
+};
+
 /**
  * ENVIRONMENT_RESPONSE_SYSTEM
  * Environment reacts to character actions and emotions
@@ -46922,11 +49178,146 @@ exports.creationWizardDecomposeSceneToShots = functions
       }
     }
 
+    // STEP 5.95: CINEMATIC PHYSICS ENHANCEMENT
+    // Add Hollywood-level force/momentum physics to video prompts
+    // Based on 2025 AI filmmaking research: "Describe forces, not appearances"
+    const physicsEnhancedShots = worldFirstShots.map((shot, idx) => {
+      try {
+        // Get intensity from choreography or default based on position
+        const choreographyIntensity = shot.hollywoodChoreography?.captureFrame?.intensity;
+        const positionIntensity = idx === 0 ? 0.4 : idx === worldFirstShots.length - 1 ? 0.6 : 0.5 + (idx * 0.1);
+        const intensity = choreographyIntensity ?? positionIntensity;
+
+        // Generate physics enhancement
+        const physicsEnhancement = CINEMATIC_PHYSICS_ENGINE.generatePhysicsEnhancement(
+          scene,
+          shot,
+          intensity
+        );
+
+        // Get physics summary for metadata
+        const physicsSummary = CINEMATIC_PHYSICS_ENGINE.getPhysicsSummary(scene, shot, intensity);
+
+        // Enhance the video prompt with physics layer
+        const existingVideoPrompt = shot.videoPrompt || '';
+        const enhancedVideoPrompt = physicsEnhancement
+          ? `${existingVideoPrompt}\n\n${physicsEnhancement}`
+          : existingVideoPrompt;
+
+        return {
+          ...shot,
+          videoPrompt: enhancedVideoPrompt,
+          cinematicPhysics: {
+            applied: true,
+            intensity,
+            ...physicsSummary
+          }
+        };
+      } catch (physicsError) {
+        console.warn(`[creationWizardDecomposeSceneToShots] Physics enhancement failed for shot ${idx + 1}:`, physicsError.message);
+        return {
+          ...shot,
+          cinematicPhysics: { applied: false, error: physicsError.message }
+        };
+      }
+    });
+
+    console.log(`[creationWizardDecomposeSceneToShots] Cinematic Physics applied to ${physicsEnhancedShots.filter(s => s.cinematicPhysics?.applied).length}/${physicsEnhancedShots.length} shots`);
+
+    // STEP 5.96: CHARACTER REFERENCE ENHANCEMENT
+    // Add character consistency hints to video prompts
+    // Based on 2025 AI filmmaking: "Character consistency is the #1 priority"
+    const characterEnhancedShots = physicsEnhancedShots.map((shot, idx) => {
+      try {
+        // Generate character enhancement
+        const characterEnhancement = CHARACTER_REFERENCE_ENGINE.generateCharacterEnhancement(
+          scene,
+          shot,
+          characterBible || []
+        );
+
+        // Get character summary for metadata
+        const characterSummary = CHARACTER_REFERENCE_ENGINE.getCharacterSummary(
+          characterBible || [],
+          scene,
+          shot
+        );
+
+        // Enhance the video prompt with character consistency layer
+        const existingVideoPrompt = shot.videoPrompt || '';
+        const enhancedVideoPrompt = characterEnhancement
+          ? `${existingVideoPrompt}\n\n${characterEnhancement}`
+          : existingVideoPrompt;
+
+        return {
+          ...shot,
+          videoPrompt: enhancedVideoPrompt,
+          characterReference: {
+            applied: characterEnhancement.length > 0,
+            ...characterSummary
+          }
+        };
+      } catch (charError) {
+        console.warn(`[creationWizardDecomposeSceneToShots] Character enhancement failed for shot ${idx + 1}:`, charError.message);
+        return {
+          ...shot,
+          characterReference: { applied: false, error: charError.message }
+        };
+      }
+    });
+
+    console.log(`[creationWizardDecomposeSceneToShots] Character Reference applied to ${characterEnhancedShots.filter(s => s.characterReference?.applied).length}/${characterEnhancedShots.length} shots`);
+
+    // STEP 5.97: AUDIO BEAT MAPPING
+    // Add sound design hints to video prompts for AI audio generation
+    // Based on 2025 AI filmmaking: Native audio generation is now expected
+    const audioEnhancedShots = characterEnhancedShots.map((shot, idx) => {
+      try {
+        // Calculate beat index for 4-beat system (each shot maps to a beat phase)
+        const totalShots = characterEnhancedShots.length;
+        const beatIndex = Math.min(Math.floor(idx / (totalShots / 4)), 3);
+
+        // Generate audio enhancement
+        const audioEnhancement = AUDIO_BEAT_ENGINE.generateAudioEnhancement(
+          scene,
+          shot,
+          beatIndex
+        );
+
+        // Get audio summary for metadata
+        const audioSummary = AUDIO_BEAT_ENGINE.getAudioSummary(scene, shot, beatIndex);
+
+        // Enhance the video prompt with audio layer
+        const existingVideoPrompt = shot.videoPrompt || '';
+        const enhancedVideoPrompt = audioEnhancement
+          ? `${existingVideoPrompt}\n\n${audioEnhancement}`
+          : existingVideoPrompt;
+
+        return {
+          ...shot,
+          videoPrompt: enhancedVideoPrompt,
+          audioBeat: {
+            applied: true,
+            beatIndex,
+            ...audioSummary
+          }
+        };
+      } catch (audioError) {
+        console.warn(`[creationWizardDecomposeSceneToShots] Audio enhancement failed for shot ${idx + 1}:`, audioError.message);
+        return {
+          ...shot,
+          audioBeat: { applied: false, error: audioError.message }
+        };
+      }
+    });
+
+    console.log(`[creationWizardDecomposeSceneToShots] Audio Beat Mapping applied to ${audioEnhancedShots.filter(s => s.audioBeat?.applied).length}/${audioEnhancedShots.length} shots`);
+
     // STEP 6: Normalize shots with all required fields
     // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, and visualContinuity
-    // IMPORTANT: Use worldFirstShots (enhanced for opening scenes) instead of continuityShots
-    const normalizedShots = worldFirstShots.map((shot, idx) => {
-      const isLast = idx === worldFirstShots.length - 1;
+    // IMPORTANT: Use audioEnhancedShots (with World-First + Physics + Character + Audio) for final normalization
+    const normalizedShots = audioEnhancedShots.map((shot, idx) => {
+      const isLast = idx === audioEnhancedShots.length - 1;
       const isFirst = idx === 0;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
@@ -46976,6 +49367,18 @@ exports.creationWizardDecomposeSceneToShots = functions
         // NEW: Opening scene World-First structure
         openingStructure: shot.openingStructure || null,
         isWorldFirst: shot.openingStructure?.isWorldFirst || false,
+        // NEW: Cinematic Physics (force/momentum layer)
+        cinematicPhysics: shot.cinematicPhysics || null,
+        hasPhysicsEnhancement: shot.cinematicPhysics?.applied || false,
+        // NEW: Character Reference (visual consistency)
+        characterReference: shot.characterReference || null,
+        hasCharacterConsistency: shot.characterReference?.applied || false,
+        charactersInShot: shot.characterReference?.characterNames || [],
+        // NEW: Audio Beat Mapping (sound design)
+        audioBeat: shot.audioBeat || null,
+        hasAudioMapping: shot.audioBeat?.applied || false,
+        audioDialogue: shot.audioBeat?.hasDialogue || false,
+        audioAmbience: shot.audioBeat?.ambienceType || null,
         // Generation status
         // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
         // This ensures when user regenerates scene image, Shot 1 stays in sync
@@ -47051,6 +49454,49 @@ exports.creationWizardDecomposeSceneToShots = functions
         shot1SyncedWithScene: normalizedShots[0]?.syncedWithScene || false,
         sceneImageUrl: scene.imageUrl || null,
         shot1ImageUrl: normalizedShots[0]?.imageUrl || null
+      },
+      // Cinematic Physics Enhancement status
+      cinematicPhysics: {
+        applied: physicsEnhancedShots.some(s => s.cinematicPhysics?.applied),
+        shotsWithPhysics: normalizedShots.filter(s => s.hasPhysicsEnhancement).length,
+        physicsTypes: {
+          hasObjectPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasObjectPhysics),
+          hasEnvironmentalForces: normalizedShots.some(s => s.cinematicPhysics?.hasEnvironmentalForces),
+          hasMaterialPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasMaterialPhysics),
+          hasContactPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasContactPhysics),
+          hasCauseEffectChains: normalizedShots.some(s => s.cinematicPhysics?.causeEffectChains > 0)
+        }
+      },
+      // Character Reference System status
+      characterReferenceSystem: {
+        applied: characterEnhancedShots.some(s => s.characterReference?.applied),
+        shotsWithCharacterConsistency: normalizedShots.filter(s => s.hasCharacterConsistency).length,
+        totalCharacters: characterBible?.length || 0,
+        characterAnchorsExtracted: normalizedShots.some(s => s.characterReference?.totalCharacters > 0),
+        charactersTracked: [...new Set(normalizedShots.flatMap(s => s.charactersInShot || []))]
+      },
+      // Audio Beat Mapping status
+      audioBeatMapping: {
+        applied: audioEnhancedShots.some(s => s.audioBeat?.applied),
+        shotsWithAudio: normalizedShots.filter(s => s.hasAudioMapping).length,
+        hasDialogue: normalizedShots.some(s => s.audioDialogue),
+        lipSyncRequired: normalizedShots.some(s => s.audioBeat?.lipSyncRequired),
+        ambienceTypes: [...new Set(normalizedShots.map(s => s.audioAmbience).filter(Boolean))],
+        musicMoods: [...new Set(normalizedShots.map(s => s.audioBeat?.musicMood).filter(Boolean))]
+      },
+      // Shot Sequence Validation status
+      shotSequenceValidation: SHOT_SEQUENCE_VALIDATOR.getSequenceSummary(normalizedShots),
+      // Keyframe Quality Check status
+      keyframeQuality: {
+        averageScore: Math.round(normalizedShots.reduce((sum, shot) => {
+          const quality = KEYFRAME_QUALITY_ENGINE.getKeyframeSummary(shot, scene);
+          return sum + quality.score;
+        }, 0) / (normalizedShots.length || 1)),
+        shotsAnalyzed: normalizedShots.length,
+        shotGrades: normalizedShots.map(shot => {
+          const quality = KEYFRAME_QUALITY_ENGINE.getKeyframeSummary(shot, scene);
+          return { shotId: shot.id, grade: quality.grade, score: quality.score };
+        })
       }
     };
 
