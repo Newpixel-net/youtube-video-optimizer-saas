@@ -6650,22 +6650,40 @@
             }
 
             // Layer 3: Location Context (from Location Bible if available)
+            // CRITICAL: Include full visual description, not just key elements!
             if (scene.location && typeof scene.location === 'object') {
                 const loc = scene.location;
                 const locationParts = [];
 
-                // Find location in Location Bible for richer description
+                // Find location in Location Bible for FULL visual description
                 const bibleLoc = state.storyboard.locationBible?.locations?.find(l =>
                     l.name?.toLowerCase() === loc.name?.toLowerCase()
                 );
 
-                if (bibleLoc?.keyElements?.length > 0) {
-                    locationParts.push(`SETTING: ${loc.name} - ${bibleLoc.keyElements.slice(0, 3).join(', ')}`);
+                if (bibleLoc) {
+                    // Use full visual description from Location Bible
+                    if (bibleLoc.description) {
+                        locationParts.push(`LOCATION: ${loc.name} - ${bibleLoc.description}`);
+                    } else if (bibleLoc.keyElements?.length > 0) {
+                        locationParts.push(`SETTING: ${loc.name} - ${bibleLoc.keyElements.slice(0, 3).join(', ')}`);
+                    } else {
+                        locationParts.push(`SETTING: ${loc.name}`);
+                    }
+
+                    // Add lighting style from Location Bible
+                    if (bibleLoc.lightingStyle) {
+                        locationParts.push(`LIGHTING: ${bibleLoc.lightingStyle}`);
+                    }
+
+                    // Add mood/atmosphere from Location Bible
+                    if (bibleLoc.mood && bibleLoc.mood !== 'neutral') {
+                        locationParts.push(`ATMOSPHERE: ${bibleLoc.mood}`);
+                    }
                 } else if (loc.name) {
                     locationParts.push(`SETTING: ${loc.name}`);
                 }
 
-                // Add state modifiers
+                // Add state modifiers (can override Location Bible defaults)
                 if (loc.timeOfDay && loc.timeOfDay !== 'day') {
                     locationParts.push(`TIME: ${loc.timeOfDay}`);
                 }
@@ -6678,6 +6696,34 @@
 
                 if (locationParts.length > 0) {
                     parts.push(locationParts.join('. '));
+                }
+            }
+
+            // Layer 3B: If no scene.location but Location Bible is enabled,
+            // find any location that applies to this scene
+            if (!scene.location && state.storyboard.locationBible?.enabled) {
+                const sceneId = scene.id;
+                const matchingLoc = state.storyboard.locationBible.locations?.find(loc => {
+                    const includeInAll = !loc.appliedToScenes || loc.appliedToScenes.length === 0;
+                    const includeInScene = loc.appliedToScenes?.includes(sceneId);
+                    return includeInAll || includeInScene;
+                });
+
+                if (matchingLoc) {
+                    const locParts = [`LOCATION: ${matchingLoc.name}`];
+                    if (matchingLoc.description) {
+                        locParts.push(matchingLoc.description);
+                    }
+                    if (matchingLoc.lightingStyle) {
+                        locParts.push(`LIGHTING: ${matchingLoc.lightingStyle}`);
+                    }
+                    if (matchingLoc.mood && matchingLoc.mood !== 'neutral') {
+                        locParts.push(`ATMOSPHERE: ${matchingLoc.mood}`);
+                    }
+                    if (matchingLoc.timeOfDay && matchingLoc.timeOfDay !== 'day') {
+                        locParts.push(`TIME: ${matchingLoc.timeOfDay}`);
+                    }
+                    parts.push(locParts.join('. '));
                 }
             }
 
@@ -7975,14 +8021,36 @@
                     console.log(`[Scene ${sceneId}] Using Prompt Chain optimized prompt`);
                 }
 
+                // Get location reference for this scene (if available from Location Bible)
+                const locationRef = getLocationReferenceForScene(sceneId);
+                if (locationRef) {
+                    console.log(`[Scene Generation] Using Location Bible: "${locationRef.locationName}"`);
+                }
+
                 // Check if using HiDream (RunPod) or NanoBanana (Gemini)
                 if (modelId === 'hidream') {
                     // Use RunPod HiDream endpoint
                     const generateFn = functions.httpsCallable('creationWizardGenerateSceneImage');
+
+                    // Build enhanced prompt with Location Bible description
+                    let enhancedPrompt = prompt;
+                    if (locationRef) {
+                        const locationContext = [
+                            `LOCATION: ${locationRef.locationName}`,
+                            locationRef.locationDescription ? locationRef.locationDescription : '',
+                            locationRef.lightingStyle ? `LIGHTING: ${locationRef.lightingStyle}` : '',
+                            locationRef.timeOfDay && locationRef.timeOfDay !== 'day' ? `TIME: ${locationRef.timeOfDay}` : '',
+                            locationRef.weather && locationRef.weather !== 'clear' ? `WEATHER: ${locationRef.weather}` : '',
+                            locationRef.mood && locationRef.mood !== 'neutral' ? `ATMOSPHERE: ${locationRef.mood}` : ''
+                        ].filter(Boolean).join('. ');
+                        enhancedPrompt = `${locationContext}. ${prompt}`;
+                        console.log('[Scene Generation] Enhanced prompt with Location Bible');
+                    }
+
                     const result = await generateFn({
                         projectId: state.project.id,
                         sceneId: sceneId,
-                        prompt: prompt,
+                        prompt: enhancedPrompt,
                         style: state.content.style,
                         aspectRatio: state.platform.aspectRatio,
                         // Phase 3B: Visual Intelligence parameters
@@ -8000,7 +8068,16 @@
                         promptChainSource: promptSource,
                         promptChainMetadata: optimizedPrompt.metadata,
                         // VISUAL_STYLE_DNA: Critical for photorealistic/cinematic/anime rendering
-                        visualStyleMode: state.content.visualStyleMode || 'photorealistic'
+                        visualStyleMode: state.content.visualStyleMode || 'photorealistic',
+                        // LOCATION BIBLE: Reference for consistent environments
+                        locationReference: locationRef ? {
+                            name: locationRef.locationName,
+                            description: locationRef.locationDescription,
+                            lighting: locationRef.lightingStyle,
+                            timeOfDay: locationRef.timeOfDay,
+                            weather: locationRef.weather,
+                            mood: locationRef.mood
+                        } : null
                     });
 
                     if (result.data.success) {
@@ -8033,7 +8110,20 @@
 
                     // Phase 8-11: Use optimized prompt from Prompt Chain (already fetched above)
                     // Falls back to assembled prompt if prompt chain not available
-                    const fullPrompt = prompt; // This already has the optimized prompt from getOptimizedImagePrompt()
+                    // LOCATION BIBLE: Enhance prompt with location description if available
+                    let fullPrompt = prompt;
+                    if (locationRef) {
+                        const locationContext = [
+                            `LOCATION: ${locationRef.locationName}`,
+                            locationRef.locationDescription ? locationRef.locationDescription : '',
+                            locationRef.lightingStyle ? `LIGHTING: ${locationRef.lightingStyle}` : '',
+                            locationRef.timeOfDay && locationRef.timeOfDay !== 'day' ? `TIME: ${locationRef.timeOfDay}` : '',
+                            locationRef.weather && locationRef.weather !== 'clear' ? `WEATHER: ${locationRef.weather}` : '',
+                            locationRef.mood && locationRef.mood !== 'neutral' ? `ATMOSPHERE: ${locationRef.mood}` : ''
+                        ].filter(Boolean).join('. ');
+                        fullPrompt = `${locationContext}. ${prompt}`;
+                        console.log('[Scene Generation] Enhanced NanoBanana prompt with Location Bible');
+                    }
 
                     const requestData = {
                         prompt: fullPrompt,
@@ -8058,6 +8148,17 @@
                             mimeType: characterRef.mimeType || 'image/png'
                         };
                         console.log(`[Scene Generation] Using character reference for "${characterRef.characterName}"`);
+                    }
+
+                    // Add location reference image if available (Gemini supports this!)
+                    // This enables consistent environment backgrounds across scenes
+                    if (locationRef && locationRef.base64) {
+                        requestData.locationReference = {
+                            base64: locationRef.base64,
+                            mimeType: locationRef.mimeType || 'image/png',
+                            name: locationRef.locationName
+                        };
+                        console.log(`[Scene Generation] Using location reference for "${locationRef.locationName}"`);
                     }
 
                     // Use rate limiter queue for NanoBanana/Gemini to prevent 429 errors
