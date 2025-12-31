@@ -7998,7 +7998,9 @@
                         sceneMemory: sceneMemoryData,
                         // Phase 8-11: Prompt Chain metadata
                         promptChainSource: promptSource,
-                        promptChainMetadata: optimizedPrompt.metadata
+                        promptChainMetadata: optimizedPrompt.metadata,
+                        // VISUAL_STYLE_DNA: Critical for photorealistic/cinematic/anime rendering
+                        visualStyleMode: state.content.visualStyleMode || 'photorealistic'
                     });
 
                     if (result.data.success) {

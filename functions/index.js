@@ -28499,10 +28499,25 @@ function buildVisualPrompt(basePrompt, options = {}) {
     visualSettings = {},
     style = 'cinematic',
     // Phase 4: Scene Memory System
-    sceneMemory = null
+    sceneMemory = null,
+    // VISUAL_STYLE_DNA: Visual rendering style (photorealistic, cinematic, anime, etc.)
+    visualStyleMode = null,
+    styleEnhancement = null
   } = options;
 
   const promptParts = [];
+
+  // ===== VISUAL_STYLE_DNA: PREPEND STYLE PREFIX (CRITICAL for rendering style) =====
+  // This MUST come FIRST to establish the rendering style (photorealistic vs anime vs 3D, etc.)
+  if (styleEnhancement?.prefix) {
+    promptParts.push(styleEnhancement.prefix);
+    console.log('[buildVisualPrompt] Applied VISUAL_STYLE_DNA prefix for mode:', visualStyleMode);
+  }
+
+  // Add skin rendering guidance for human subjects
+  if (styleEnhancement?.skinText) {
+    promptParts.push(styleEnhancement.skinText);
+  }
 
   // ===== PHASE 4: SCENE MEMORY 4-LAYER ARCHITECTURE =====
 
@@ -28573,11 +28588,21 @@ function buildVisualPrompt(basePrompt, options = {}) {
   let negativePrompt = '';
   if (sceneMemory?.technicalSpecs?.enabled && sceneMemory.technicalSpecs.negative) {
     negativePrompt = sceneMemory.technicalSpecs.negative;
+    // Also add VISUAL_STYLE_DNA negatives to user's negative prompt
+    if (styleEnhancement?.negative) {
+      negativePrompt = `${styleEnhancement.negative}, ${negativePrompt}`;
+    }
   } else {
     // Default negative prompt
     const negativeParts = [
       'blurry, low quality, ugly, distorted, watermark, nsfw, text, words, letters, logo, signature, amateur'
     ];
+
+    // VISUAL_STYLE_DNA: Add style-specific negatives (CRITICAL for preventing wrong rendering)
+    // e.g., photorealistic adds "3D render, CGI, cartoon, anime" to negatives
+    if (styleEnhancement?.negative) {
+      negativeParts.unshift(styleEnhancement.negative);
+    }
 
     if (!sceneMemory?.styleBible?.enabled) {
       const genreVisual = VISUAL_INTELLIGENCE.genreVisuals[genre] ||
@@ -28641,8 +28666,12 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
     mood = null,
     visualSettings = {},
     // Phase 4: Scene Memory System parameters
-    sceneMemory = null
+    sceneMemory = null,
+    // VISUAL_STYLE_DNA: Controls rendering style (photorealistic, cinematic, anime, etc.)
+    visualStyleMode = 'photorealistic'
   } = data;
+
+  console.log('[creationWizardGenerateSceneImage] Visual style mode:', visualStyleMode);
 
   if (!prompt || prompt.trim().length < 10) {
     throw new functions.https.HttpsError('invalid-argument', 'Image prompt is required (min 10 chars)');
@@ -28654,6 +28683,14 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
   }
 
   try {
+    // Get VISUAL_STYLE_DNA enhancement for the selected style mode
+    const hasHumanSubject = prompt.toLowerCase().includes('person') ||
+                           prompt.toLowerCase().includes('man') ||
+                           prompt.toLowerCase().includes('woman') ||
+                           prompt.toLowerCase().includes('character') ||
+                           sceneMemory?.characterDescriptions?.length > 0;
+    const styleEnhancement = VISUAL_STYLE_DNA.buildStyleEnhancement(visualStyleMode, hasHumanSubject);
+
     // Phase 3B + Phase 4: Use Visual Intelligence + Scene Memory to build enhanced prompt
     const visualResult = buildVisualPrompt(prompt, {
       genre,
@@ -28661,7 +28698,10 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
       mood,
       visualSettings,
       style,
-      sceneMemory  // Phase 4: Scene Memory data
+      sceneMemory,  // Phase 4: Scene Memory data
+      // VISUAL_STYLE_DNA integration
+      visualStyleMode,
+      styleEnhancement
     });
 
     const enhancedPrompt = visualResult.enhancedPrompt;
