@@ -7442,20 +7442,33 @@
                 // Merge data from: improvedData (AI enhancement) + refinedConcept (selected idea) + characterIntelligence
                 const selectedConcept = state.concept?.refinedConcept || null;
                 const improvedData = state.concept?.improvedData || null;
+                const rawInput = state.concept?.rawInput || null;
+
+                // ==========================================
+                // PASS-THROUGH SUPPORT: Use rawInput as improvedConcept when no AI enhancement
+                // This ensures user's direct concept flows to the backend
+                // ==========================================
+                const isPassThrough = selectedConcept?.isPassThrough === true;
+                const effectiveImprovedConcept = improvedData?.improvedConcept ||
+                    (isPassThrough && rawInput ? rawInput : null) ||
+                    (selectedConcept?.logline || null);
 
                 const conceptEnrichment = {
-                    // From AI Improvement (improveConceptIdea)
-                    improvedConcept: improvedData?.improvedConcept || null,
+                    // From AI Improvement (improveConceptIdea) OR Pass-through raw input
+                    improvedConcept: effectiveImprovedConcept,
                     characters: improvedData?.characters || [],
                     worldBuilding: improvedData?.worldBuilding || null,
                     keyElements: improvedData?.keyElements || [],
                     visualSignature: improvedData?.visualSignature || null,
                     genreFusion: improvedData?.genreFusion || null,
-                    hookLine: improvedData?.hookLine || null,
+                    hookLine: improvedData?.hookLine || (isPassThrough && selectedConcept?.title ? selectedConcept.title : null),
                     extractedStyles: improvedData?.extractedStyles || [],
                     thingsToAvoid: improvedData?.thingsToAvoid || [],
                     suggestedMood: improvedData?.suggestedMood || selectedConcept?.mood || null,
                     suggestedTone: improvedData?.suggestedTone || selectedConcept?.tone || null,
+
+                    // Flag for pass-through concepts
+                    isPassThrough: isPassThrough,
 
                     // From Selected Concept (creationWizardGenerateConcepts) - FULL DATA!
                     // CRITICAL: Pass ALL concept fields, not just a subset
@@ -7469,6 +7482,7 @@
                         tone: selectedConcept.tone,
                         visualApproach: selectedConcept.visualApproach,
                         theme: selectedConcept.theme,
+                        isPassThrough: selectedConcept.isPassThrough || false,
 
                         // Narrative Architecture - CRITICAL for script structure
                         narrativeStructure: selectedConcept.narrativeStructure,
@@ -7494,7 +7508,8 @@
                 };
 
                 // Only include if we have SOME enrichment data
-                const hasEnrichment = improvedData || selectedConcept ||
+                // CRITICAL: Include when we have rawInput (pass-through concepts)
+                const hasEnrichment = improvedData || selectedConcept || rawInput ||
                     (state.characterIntelligence?.suggestedCount > 0);
 
                 const config = {
@@ -7800,6 +7815,36 @@
                 state.script.expandedScene = sceneId;
             }
             render();
+        }
+
+        // Toggle expand/collapse for pass-through concept display on Step 3
+        function toggleConceptDisplay() {
+            const content = document.getElementById('concept-display-content');
+            const btn = document.getElementById('concept-toggle-btn');
+            if (!content || !btn) return;
+
+            const isExpanded = content.style.maxHeight !== '150px';
+            if (isExpanded) {
+                // Collapse
+                content.style.maxHeight = '150px';
+                content.style.overflow = 'hidden';
+                btn.innerHTML = 'Show Full Concept ▼';
+                // Re-add gradient overlay
+                const existing = content.querySelector('div[style*="linear-gradient"]');
+                if (!existing) {
+                    const overlay = document.createElement('div');
+                    overlay.style.cssText = 'position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, rgba(30,30,50,0.95));';
+                    content.appendChild(overlay);
+                }
+            } else {
+                // Expand
+                content.style.maxHeight = 'none';
+                content.style.overflow = 'visible';
+                btn.innerHTML = 'Show Less ▲';
+                // Remove gradient overlay
+                const overlay = content.querySelector('div[style*="linear-gradient"]');
+                if (overlay) overlay.remove();
+            }
         }
 
         function updateSceneNarration(sceneId, value) {
@@ -14657,34 +14702,76 @@
             const hasImprovedConcept = improvedData && (improvedData.improvedConcept || improvedData.hookLine);
             const hasRawConcept = concept?.rawInput && concept.rawInput.length > 20;
 
+            // ==========================================
+            // PASS-THROUGH CONCEPT: Auto-create refinedConcept from rawInput
+            // When user writes their own concept and clicks Continue directly
+            // ==========================================
+            if (hasRawConcept && !hasSelectedConcept && !hasImprovedConcept) {
+                // Create a pass-through concept from raw input
+                const rawInput = concept.rawInput;
+
+                // Extract a title from the first line or first sentence
+                const firstLine = rawInput.split('\n')[0].trim();
+                const extractedTitle = firstLine.length > 5 && firstLine.length < 100
+                    ? firstLine.replace(/[:.\-–—].*$/, '').trim()
+                    : 'Your Direct Concept';
+
+                // Create minimal refinedConcept for pass-through
+                state.concept.refinedConcept = {
+                    title: extractedTitle,
+                    logline: rawInput,  // FULL text, not truncated
+                    description: rawInput,
+                    isPassThrough: true,  // Flag to indicate direct user input
+                    mood: 'cinematic',
+                    tone: 'engaging'
+                };
+
+                // Also set selectedIdea to 0 to indicate a concept is selected
+                if (state.concept.selectedIdea === null) {
+                    state.concept.selectedIdea = 0;
+                    state.concept.ideas = [state.concept.refinedConcept];
+                }
+
+                console.log('[Step 3] Created pass-through concept from raw input:', extractedTitle);
+            }
+
+            // Re-check selectedConcept after potential pass-through creation
+            const effectiveSelectedConcept = state.concept?.refinedConcept || selectedConcept;
+            const effectiveHasSelectedConcept = effectiveSelectedConcept && (effectiveSelectedConcept.title || effectiveSelectedConcept.logline);
+
             // usingNewFlow = ONLY when we have a FULL selected concept (with title)
             // This ensures the new flow block can safely access selectedConcept properties
-            const usingNewFlow = hasSelectedConcept;
+            const usingNewFlow = effectiveHasSelectedConcept;
 
             // hasAnyConcept = we have SOME concept data to show (even if not full)
-            const hasAnyConcept = hasSelectedConcept || hasImprovedConcept || hasRawConcept;
+            const hasAnyConcept = effectiveHasSelectedConcept || hasImprovedConcept || hasRawConcept;
 
             // AUTO-POPULATE TOPIC: Always derive from available data
             // This ensures the Script step is always connected to previous steps
+            // CRITICAL: Use FULL text for pass-through concepts, not truncated
             if (!state.content.topic || state.content.topic.trim() === '') {
-                if (selectedConcept?.title) {
-                    // Best: Use selected concept title + logline
-                    state.content.topic = selectedConcept.title + ': ' + (selectedConcept.logline || selectedConcept.description || '');
+                if (effectiveSelectedConcept?.title) {
+                    // Best: Use selected concept title + logline (full text for pass-through)
+                    const logline = effectiveSelectedConcept.logline || effectiveSelectedConcept.description || '';
+                    state.content.topic = effectiveSelectedConcept.isPassThrough
+                        ? logline  // Pass-through: use FULL text
+                        : effectiveSelectedConcept.title + ': ' + logline;
                 } else if (improvedData?.improvedConcept) {
-                    // Fallback: Use AI-improved concept text (first 150 chars)
-                    state.content.topic = improvedData.improvedConcept.substring(0, 150);
+                    // Fallback: Use AI-improved concept text (full text)
+                    state.content.topic = improvedData.improvedConcept;
                 } else if (concept?.rawInput) {
-                    // Last resort: Use raw user input
-                    state.content.topic = concept.rawInput.substring(0, 150);
+                    // Last resort: Use raw user input (FULL text, no truncation!)
+                    state.content.topic = concept.rawInput;
                 }
             }
 
             // BUILD DISPLAY DATA: Compile all concept info for display
             // Even in legacy flow, show what we know
-            const displayTitle = selectedConcept?.title || (improvedData?.hookLine ? 'Your Concept' : null);
-            const displayLogline = selectedConcept?.logline || selectedConcept?.description || improvedData?.improvedConcept?.substring(0, 200) || concept?.rawInput?.substring(0, 200) || '';
-            const displayMood = selectedConcept?.mood || improvedData?.suggestedMood || null;
-            const displayTone = selectedConcept?.tone || improvedData?.suggestedTone || null;
+            const isPassThrough = effectiveSelectedConcept?.isPassThrough === true;
+            const displayTitle = effectiveSelectedConcept?.title || (improvedData?.hookLine ? 'Your Concept' : (hasRawConcept ? 'Your Direct Concept' : null));
+            const displayLogline = effectiveSelectedConcept?.logline || effectiveSelectedConcept?.description || improvedData?.improvedConcept || concept?.rawInput || '';
+            const displayMood = effectiveSelectedConcept?.mood || improvedData?.suggestedMood || null;
+            const displayTone = effectiveSelectedConcept?.tone || improvedData?.suggestedTone || null;
 
             return `
                 <div class="content-card">
@@ -14697,32 +14784,43 @@
                     </div>
 
                     ${usingNewFlow ? `
-                    <!-- NEW FLOW: Selected Concept Summary -->
-                    <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.1)); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <!-- NEW FLOW: Selected Concept Summary (supports pass-through concepts) -->
+                    <div style="background: linear-gradient(135deg, ${isPassThrough ? 'rgba(16, 185, 129, 0.15), rgba(6, 182, 212, 0.1)' : 'rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.1)'}); border: 1px solid ${isPassThrough ? 'rgba(16, 185, 129, 0.4)' : 'rgba(139, 92, 246, 0.4)'}; border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem;">
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
                             <div>
-                                <div style="font-size: 0.7rem; color: rgba(139, 92, 246, 0.8); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Selected Concept</div>
-                                <div style="font-size: 1.1rem; font-weight: 700; color: white;">${selectedConcept.title || 'Untitled Concept'}</div>
+                                <div style="font-size: 0.7rem; color: ${isPassThrough ? 'rgba(16, 185, 129, 0.8)' : 'rgba(139, 92, 246, 0.8)'}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">
+                                    ${isPassThrough ? '📝 Your Direct Concept' : 'Selected Concept'}
+                                </div>
+                                <div style="font-size: 1.1rem; font-weight: 700; color: white;">${effectiveSelectedConcept.title || 'Untitled Concept'}</div>
                             </div>
                             <div style="display: flex; gap: 0.5rem;">
+                                ${isPassThrough ? `<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(16, 185, 129, 0.3); border-radius: 0.25rem; color: #6ee7b7;">✓ Pass-through</span>` : ''}
                                 ${production?.typeConfig ? `<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(139, 92, 246, 0.3); border-radius: 0.25rem; color: #a78bfa;">${production.typeConfig.icon || '🎬'} ${production.typeConfig.name}</span>` : ''}
                                 ${production?.subTypeConfig ? `<span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(236, 72, 153, 0.3); border-radius: 0.25rem; color: #f472b6;">${production.subTypeConfig.name}</span>` : ''}
                             </div>
                         </div>
-                        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.5; margin-bottom: 1rem;">
-                            ${selectedConcept.logline || selectedConcept.description || ''}
+                        <!-- Concept content with expand/collapse for long text -->
+                        <div id="concept-display-content" style="font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.5; margin-bottom: 1rem; ${isPassThrough && displayLogline.length > 300 ? 'max-height: 150px; overflow: hidden; position: relative;' : ''}">
+                            ${isPassThrough ? displayLogline.replace(/\n/g, '<br>') : (effectiveSelectedConcept.logline || effectiveSelectedConcept.description || '')}
+                            ${isPassThrough && displayLogline.length > 300 ? `<div style="position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, rgba(30,30,50,0.95));"></div>` : ''}
                         </div>
-                        ${selectedConcept.uniqueElements?.length > 0 ? `
+                        ${isPassThrough && displayLogline.length > 300 ? `
+                        <button onclick="toggleConceptDisplay()" id="concept-toggle-btn" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.35rem; color: #6ee7b7; cursor: pointer; margin-bottom: 0.75rem;">
+                            Show Full Concept ▼
+                        </button>
+                        ` : ''}
+                        ${effectiveSelectedConcept.uniqueElements?.length > 0 ? `
                         <div style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.75rem;">
-                            ${selectedConcept.uniqueElements.map(elem => `
+                            ${effectiveSelectedConcept.uniqueElements.map(elem => `
                                 <span style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.25rem; color: #67e8f9;">${elem}</span>
                             `).join('')}
                         </div>
                         ` : ''}
                         <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: rgba(255,255,255,0.6);">
-                            ${selectedConcept.mood ? `<span>Mood: <span style="color: #a78bfa;">${selectedConcept.mood}</span></span>` : ''}
-                            ${selectedConcept.tone ? `<span>Tone: <span style="color: #f472b6;">${selectedConcept.tone}</span></span>` : ''}
+                            ${effectiveSelectedConcept.mood ? `<span>Mood: <span style="color: #a78bfa;">${effectiveSelectedConcept.mood}</span></span>` : ''}
+                            ${effectiveSelectedConcept.tone ? `<span>Tone: <span style="color: #f472b6;">${effectiveSelectedConcept.tone}</span></span>` : ''}
                             ${formatDuration(production?.targetDuration || state.platform.targetDuration) ? `<span>Duration: <span style="color: #67e8f9;">${formatDuration(production?.targetDuration || state.platform.targetDuration)}</span></span>` : ''}
+                            ${isPassThrough ? `<span style="margin-left: auto; color: rgba(16, 185, 129, 0.7);">${displayLogline.length} chars</span>` : ''}
                         </div>
                     </div>
 
