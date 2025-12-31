@@ -42515,6 +42515,559 @@ const CHARACTER_REFERENCE_ENGINE = {
   }
 };
 
+// =============================================================================
+// AUDIO_BEAT_ENGINE - Sound Design Mapping for AI Video
+// =============================================================================
+/**
+ * AUDIO_BEAT_ENGINE
+ *
+ * Maps audio cues to video beats for enhanced AI video generation.
+ * Based on 2025 AI filmmaking: Native audio generation is now expected.
+ *
+ * Modern AI video models (Veo 3, WAN 2.6, Seedance 1.5) generate:
+ * - Synchronized dialogue with lip-sync
+ * - Ambient sound effects
+ * - Environmental audio
+ * - Impact/action sounds
+ *
+ * This engine generates audio-aware prompt enhancements.
+ */
+const AUDIO_BEAT_ENGINE = {
+
+  /**
+   * Analyze scene for audio cues
+   * @param {Object} scene - Scene data
+   * @param {Object} shot - Shot data
+   * @param {number} beatIndex - Current beat index (0-3 for 4-beat system)
+   * @returns {Object} Audio mapping for this beat
+   */
+  analyzeAudioCues(scene, shot, beatIndex = 0) {
+    const visualPrompt = scene?.visualPrompt || '';
+    const sceneAction = scene?.sceneAction || '';
+    const narration = scene?.narration || '';
+    const combinedText = `${visualPrompt} ${sceneAction} ${narration}`.toLowerCase();
+
+    return {
+      // Dialogue/speech cues
+      dialogue: this.detectDialogueCues(combinedText, narration),
+      // Ambient sound environment
+      ambience: this.detectAmbienceCues(combinedText),
+      // Action/impact sounds
+      actionSounds: this.detectActionSounds(combinedText),
+      // Music/score suggestions
+      musicCues: this.detectMusicCues(combinedText, scene),
+      // Beat-specific timing
+      beatTiming: this.getBeatAudioTiming(beatIndex),
+      // Emotional audio atmosphere
+      emotionalAudio: this.getEmotionalAudioAtmosphere(scene, shot)
+    };
+  },
+
+  /**
+   * Detect dialogue and speech cues
+   */
+  detectDialogueCues(text, narration) {
+    const cues = {
+      hasDialogue: false,
+      dialogueType: null,
+      lipSyncRequired: false,
+      speechPatterns: [],
+      voiceNotes: []
+    };
+
+    // Check for dialogue indicators
+    if (/["'].+["']|says|speaks|whispers|shouts|calls|replies|asks|exclaims/i.test(text)) {
+      cues.hasDialogue = true;
+      cues.lipSyncRequired = true;
+
+      // Dialogue type
+      if (/whispers?|quiet|soft voice|murmur/i.test(text)) {
+        cues.dialogueType = 'whisper';
+        cues.voiceNotes.push('soft, intimate delivery, close-mic sound');
+      } else if (/shouts?|screams?|yells?|calls out/i.test(text)) {
+        cues.dialogueType = 'shout';
+        cues.voiceNotes.push('loud, projected voice, slight echo possible');
+      } else if (/chant|incant|spell/i.test(text)) {
+        cues.dialogueType = 'chant';
+        cues.voiceNotes.push('rhythmic, ceremonial delivery');
+      } else {
+        cues.dialogueType = 'normal';
+        cues.voiceNotes.push('conversational tone, natural delivery');
+      }
+    }
+
+    // Check for narration/voiceover
+    if (narration && narration.length > 20) {
+      cues.hasDialogue = true;
+      if (!cues.dialogueType) {
+        cues.dialogueType = 'voiceover';
+        cues.voiceNotes.push('narrative voiceover, not synced to visible character');
+      }
+    }
+
+    // Speech patterns for lip-sync hints
+    if (cues.hasDialogue) {
+      if (/question|asks|\?/i.test(text)) {
+        cues.speechPatterns.push('questioning intonation, rising pitch');
+      }
+      if (/exclaims?|!|\bwow\b|\bno\b/i.test(text)) {
+        cues.speechPatterns.push('emphatic delivery, wide mouth movements');
+      }
+      if (/pause|hesitat|trail/i.test(text)) {
+        cues.speechPatterns.push('pauses and hesitations in speech');
+      }
+    }
+
+    return cues;
+  },
+
+  /**
+   * Detect ambient environment sounds
+   */
+  detectAmbienceCues(text) {
+    const ambience = {
+      primary: null,
+      secondary: [],
+      intensity: 'normal',
+      layers: []
+    };
+
+    // Natural environments
+    if (/forest|woods|jungle|trees/i.test(text)) {
+      ambience.primary = 'forest';
+      ambience.layers.push('bird calls', 'rustling leaves', 'distant wildlife');
+    }
+    if (/ocean|sea|beach|waves|shore/i.test(text)) {
+      ambience.primary = 'ocean';
+      ambience.layers.push('crashing waves', 'seabirds', 'wind over water');
+    }
+    if (/mountain|peak|cliff|heights/i.test(text)) {
+      ambience.primary = 'mountain';
+      ambience.layers.push('wind gusts', 'distant echoes', 'sparse wildlife');
+    }
+    if (/desert|sand|dune/i.test(text)) {
+      ambience.primary = 'desert';
+      ambience.layers.push('wind over sand', 'heat shimmer hum', 'sparse sounds');
+    }
+    if (/river|stream|waterfall|creek/i.test(text)) {
+      ambience.secondary.push('flowing water');
+      ambience.layers.push('water movement', 'splashing');
+    }
+
+    // Weather
+    if (/rain|storm|thunder/i.test(text)) {
+      ambience.secondary.push('rain');
+      ambience.layers.push('rainfall', 'thunder rumbles', 'water dripping');
+      ambience.intensity = 'high';
+    }
+    if (/wind|breeze|gust/i.test(text)) {
+      ambience.secondary.push('wind');
+      ambience.layers.push('wind howling or whistling');
+    }
+    if (/snow|blizzard|frost/i.test(text)) {
+      ambience.secondary.push('cold');
+      ambience.layers.push('muffled silence', 'crunching snow', 'icy wind');
+    }
+
+    // Urban/interior
+    if (/city|urban|street|market/i.test(text)) {
+      ambience.primary = 'urban';
+      ambience.layers.push('crowd murmur', 'distant traffic', 'footsteps');
+    }
+    if (/temple|church|cathedral|shrine/i.test(text)) {
+      ambience.primary = 'sacred';
+      ambience.layers.push('echoing space', 'reverberant silence', 'distant chanting');
+    }
+    if (/cave|cavern|underground/i.test(text)) {
+      ambience.primary = 'cave';
+      ambience.layers.push('dripping water', 'echoing footsteps', 'distant rumbles');
+    }
+    if (/castle|palace|throne/i.test(text)) {
+      ambience.primary = 'castle';
+      ambience.layers.push('stone echo', 'distant voices', 'torches crackling');
+    }
+    if (/tavern|inn|bar/i.test(text)) {
+      ambience.primary = 'tavern';
+      ambience.layers.push('crowd chatter', 'clinking glasses', 'fireplace crackle');
+    }
+
+    // Time of day
+    if (/night|midnight|dark/i.test(text)) {
+      ambience.secondary.push('night');
+      ambience.layers.push('crickets', 'owl hoots', 'nocturnal sounds');
+    }
+    if (/dawn|sunrise|morning/i.test(text)) {
+      ambience.secondary.push('dawn');
+      ambience.layers.push('birdsong', 'rooster crow', 'awakening sounds');
+    }
+
+    // Silence/tension
+    if (/silent|quiet|still|eerie|tense/i.test(text)) {
+      ambience.intensity = 'minimal';
+      ambience.layers.push('oppressive silence', 'subtle tension');
+    }
+
+    return ambience;
+  },
+
+  /**
+   * Detect action and impact sounds
+   */
+  detectActionSounds(text) {
+    const sounds = [];
+
+    // Combat sounds
+    if (/sword|blade|slash|cut/i.test(text)) {
+      sounds.push({
+        type: 'weapon',
+        sound: 'sword slash - metal singing through air, impact clang',
+        timing: 'on action'
+      });
+    }
+    if (/punch|hit|strike|blow/i.test(text)) {
+      sounds.push({
+        type: 'impact',
+        sound: 'physical impact - thud, grunt, body reaction',
+        timing: 'on contact'
+      });
+    }
+    if (/kick|stomp/i.test(text)) {
+      sounds.push({
+        type: 'impact',
+        sound: 'kick impact - whoosh, thud, target reaction',
+        timing: 'on contact'
+      });
+    }
+    if (/block|shield|parry/i.test(text)) {
+      sounds.push({
+        type: 'defense',
+        sound: 'blocking impact - metal clang, wood thunk, grunt of effort',
+        timing: 'on block'
+      });
+    }
+    if (/arrow|bow|shot|projectile/i.test(text)) {
+      sounds.push({
+        type: 'projectile',
+        sound: 'arrow flight - whoosh, thunk on impact',
+        timing: 'release to impact'
+      });
+    }
+
+    // Movement sounds
+    if (/run|sprint|dash/i.test(text)) {
+      sounds.push({
+        type: 'movement',
+        sound: 'running footsteps - rapid rhythm, breathing',
+        timing: 'continuous'
+      });
+    }
+    if (/walk|step|stride/i.test(text)) {
+      sounds.push({
+        type: 'movement',
+        sound: 'walking footsteps - measured pace on surface',
+        timing: 'rhythmic'
+      });
+    }
+    if (/jump|leap|vault/i.test(text)) {
+      sounds.push({
+        type: 'movement',
+        sound: 'jump - push off, air, landing impact',
+        timing: 'takeoff to landing'
+      });
+    }
+    if (/fall|drop|crash/i.test(text)) {
+      sounds.push({
+        type: 'impact',
+        sound: 'falling impact - air rush, heavy landing, aftermath',
+        timing: 'acceleration to impact'
+      });
+    }
+
+    // Object sounds
+    if (/door|gate/i.test(text)) {
+      sounds.push({
+        type: 'object',
+        sound: 'door movement - creak, latch, closing thud',
+        timing: 'on action'
+      });
+    }
+    if (/break|shatter|crack|smash/i.test(text)) {
+      sounds.push({
+        type: 'destruction',
+        sound: 'breaking - crack, shatter, debris scatter',
+        timing: 'on impact'
+      });
+    }
+    if (/explosion|blast|boom/i.test(text)) {
+      sounds.push({
+        type: 'explosion',
+        sound: 'explosion - boom, debris, shockwave echo',
+        timing: 'immediate then aftermath'
+      });
+    }
+
+    // Magic/energy sounds
+    if (/magic|spell|energy|power|glow/i.test(text)) {
+      sounds.push({
+        type: 'magic',
+        sound: 'magical energy - ethereal hum, crackle, whoosh',
+        timing: 'build to release'
+      });
+    }
+    if (/fire|flame|burn/i.test(text)) {
+      sounds.push({
+        type: 'element',
+        sound: 'fire - crackling, roaring, heat shimmer',
+        timing: 'continuous with flare-ups'
+      });
+    }
+    if (/lightning|electricity|spark/i.test(text)) {
+      sounds.push({
+        type: 'element',
+        sound: 'electricity - crackle, zap, thunder',
+        timing: 'sudden bursts'
+      });
+    }
+
+    // Emotional sounds
+    if (/cry|sob|weep/i.test(text)) {
+      sounds.push({
+        type: 'emotional',
+        sound: 'crying - sobs, sniffles, unsteady breathing',
+        timing: 'intermittent'
+      });
+    }
+    if (/laugh|chuckle/i.test(text)) {
+      sounds.push({
+        type: 'emotional',
+        sound: 'laughter - genuine, character-appropriate',
+        timing: 'on emotion'
+      });
+    }
+    if (/scream|shriek/i.test(text)) {
+      sounds.push({
+        type: 'emotional',
+        sound: 'scream - intense vocalization, echo',
+        timing: 'sudden'
+      });
+    }
+
+    return sounds;
+  },
+
+  /**
+   * Detect music/score cues
+   */
+  detectMusicCues(text, scene) {
+    const music = {
+      mood: null,
+      tempo: null,
+      intensity: null,
+      instruments: [],
+      notes: []
+    };
+
+    // Determine mood from scene content
+    if (/battle|fight|combat|war|clash/i.test(text)) {
+      music.mood = 'action';
+      music.tempo = 'fast';
+      music.intensity = 'high';
+      music.instruments.push('percussion', 'brass', 'strings (intense)');
+      music.notes.push('driving rhythm, building tension');
+    } else if (/love|romance|tender|gentle|embrace/i.test(text)) {
+      music.mood = 'romantic';
+      music.tempo = 'slow';
+      music.intensity = 'low';
+      music.instruments.push('strings', 'piano', 'soft winds');
+      music.notes.push('warm, emotional, intimate');
+    } else if (/fear|terror|horror|creep|sinister/i.test(text)) {
+      music.mood = 'tension';
+      music.tempo = 'varied';
+      music.intensity = 'building';
+      music.instruments.push('low strings', 'dissonant tones', 'sparse percussion');
+      music.notes.push('unsettling, building dread');
+    } else if (/triumph|victory|hero|glory|success/i.test(text)) {
+      music.mood = 'triumphant';
+      music.tempo = 'moderate-fast';
+      music.intensity = 'high';
+      music.instruments.push('full orchestra', 'brass fanfare', 'choral');
+      music.notes.push('soaring, uplifting, celebratory');
+    } else if (/sad|grief|loss|mourn|tragedy/i.test(text)) {
+      music.mood = 'melancholic';
+      music.tempo = 'slow';
+      music.intensity = 'low';
+      music.instruments.push('solo strings', 'piano', 'minimal');
+      music.notes.push('somber, reflective, emotional weight');
+    } else if (/mystery|discover|reveal|secret/i.test(text)) {
+      music.mood = 'mysterious';
+      music.tempo = 'slow-moderate';
+      music.intensity = 'medium';
+      music.instruments.push('winds', 'sparse strings', 'ethereal pads');
+      music.notes.push('curious, anticipatory, unfolding');
+    } else if (/peace|calm|serene|tranquil/i.test(text)) {
+      music.mood = 'peaceful';
+      music.tempo = 'slow';
+      music.intensity = 'minimal';
+      music.instruments.push('ambient pads', 'nature sounds', 'soft melody');
+      music.notes.push('restful, contemplative, still');
+    }
+
+    // Scene position affects music
+    const sceneIndex = scene?.sceneIndex || 0;
+    if (sceneIndex === 0) {
+      music.notes.push('opening - establish world theme');
+    }
+
+    return music;
+  },
+
+  /**
+   * Get beat-specific audio timing (for 4-beat system)
+   */
+  getBeatAudioTiming(beatIndex) {
+    const beatTimings = [
+      {
+        beat: 1,
+        timing: '0-2s',
+        audioFocus: 'establish',
+        description: 'Establish audio atmosphere, ambient foundation',
+        notes: 'Fade in ambience, set sonic palette'
+      },
+      {
+        beat: 2,
+        timing: '2-5s',
+        audioFocus: 'develop',
+        description: 'Develop audio layers, introduce action sounds',
+        notes: 'Add specific sounds, dialogue begins if present'
+      },
+      {
+        beat: 3,
+        timing: '5-8s',
+        audioFocus: 'peak',
+        description: 'Audio climax - loudest/most intense moment',
+        notes: 'Impact sounds, emotional peaks, music swells'
+      },
+      {
+        beat: 4,
+        timing: '8-10s',
+        audioFocus: 'resolve',
+        description: 'Audio resolution - settle or transition',
+        notes: 'Sounds fade or transform to next scene'
+      }
+    ];
+
+    return beatTimings[beatIndex] || beatTimings[0];
+  },
+
+  /**
+   * Get emotional audio atmosphere
+   */
+  getEmotionalAudioAtmosphere(scene, shot) {
+    const choreography = scene?.choreography || {};
+    const intensity = choreography.intensityProgression?.[0] || 0.5;
+    const sceneArc = choreography.sceneArc || 'steady_build';
+
+    let atmosphere = {
+      intensity: 'moderate',
+      dynamic: 'stable',
+      suggestion: ''
+    };
+
+    if (intensity > 0.8) {
+      atmosphere.intensity = 'intense';
+      atmosphere.dynamic = 'dramatic peaks';
+      atmosphere.suggestion = 'loud, impactful, emotionally charged audio';
+    } else if (intensity > 0.6) {
+      atmosphere.intensity = 'heightened';
+      atmosphere.dynamic = 'building';
+      atmosphere.suggestion = 'energetic, forward-moving audio';
+    } else if (intensity > 0.4) {
+      atmosphere.intensity = 'moderate';
+      atmosphere.dynamic = 'steady';
+      atmosphere.suggestion = 'balanced audio, clear and present';
+    } else {
+      atmosphere.intensity = 'subtle';
+      atmosphere.dynamic = 'restrained';
+      atmosphere.suggestion = 'quiet, intimate, careful audio';
+    }
+
+    // Arc-specific adjustments
+    if (sceneArc === 'build_to_climax') {
+      atmosphere.suggestion += ' - audio should crescendo';
+    } else if (sceneArc === 'tension_release') {
+      atmosphere.suggestion += ' - build tension then release';
+    } else if (sceneArc === 'peak_then_calm') {
+      atmosphere.suggestion += ' - start intense, gradually calm';
+    }
+
+    return atmosphere;
+  },
+
+  /**
+   * Generate audio enhancement for video prompt
+   * @param {Object} scene - Scene data
+   * @param {Object} shot - Shot data
+   * @param {number} beatIndex - Beat index for timing
+   * @returns {string} Audio enhancement text for video prompt
+   */
+  generateAudioEnhancement(scene, shot, beatIndex = 0) {
+    const audio = this.analyzeAudioCues(scene, shot, beatIndex);
+    const lines = [];
+
+    lines.push('[AUDIO DESIGN]');
+
+    // Dialogue cues
+    if (audio.dialogue.hasDialogue) {
+      lines.push(`Dialogue: ${audio.dialogue.dialogueType} - ${audio.dialogue.voiceNotes.join(', ')}`);
+      if (audio.dialogue.lipSyncRequired) {
+        lines.push('Lip-sync: Required - match mouth movements to speech');
+      }
+    }
+
+    // Ambience
+    if (audio.ambience.primary) {
+      lines.push(`Ambience: ${audio.ambience.primary} - ${audio.ambience.layers.slice(0, 3).join(', ')}`);
+    }
+
+    // Action sounds (most important for modern AI video)
+    if (audio.actionSounds.length > 0) {
+      const soundsStr = audio.actionSounds
+        .slice(0, 3)
+        .map(s => `${s.type}: ${s.sound}`)
+        .join('; ');
+      lines.push(`SFX: ${soundsStr}`);
+    }
+
+    // Music mood
+    if (audio.musicCues.mood) {
+      lines.push(`Music: ${audio.musicCues.mood} mood, ${audio.musicCues.tempo} tempo`);
+    }
+
+    // Beat timing
+    lines.push(`Beat ${audio.beatTiming.beat} (${audio.beatTiming.timing}): ${audio.beatTiming.audioFocus} - ${audio.beatTiming.notes}`);
+
+    return lines.join('\n');
+  },
+
+  /**
+   * Get audio summary for metadata
+   */
+  getAudioSummary(scene, shot, beatIndex) {
+    const audio = this.analyzeAudioCues(scene, shot, beatIndex);
+
+    return {
+      hasDialogue: audio.dialogue.hasDialogue,
+      dialogueType: audio.dialogue.dialogueType,
+      lipSyncRequired: audio.dialogue.lipSyncRequired,
+      ambienceType: audio.ambience.primary,
+      actionSoundCount: audio.actionSounds.length,
+      musicMood: audio.musicCues.mood,
+      emotionalIntensity: audio.emotionalAudio.intensity,
+      beatPhase: audio.beatTiming.audioFocus
+    };
+  }
+};
+
 /**
  * ENVIRONMENT_RESPONSE_SYSTEM
  * Environment reacts to character actions and emotions
@@ -48035,11 +48588,56 @@ exports.creationWizardDecomposeSceneToShots = functions
 
     console.log(`[creationWizardDecomposeSceneToShots] Character Reference applied to ${characterEnhancedShots.filter(s => s.characterReference?.applied).length}/${characterEnhancedShots.length} shots`);
 
+    // STEP 5.97: AUDIO BEAT MAPPING
+    // Add sound design hints to video prompts for AI audio generation
+    // Based on 2025 AI filmmaking: Native audio generation is now expected
+    const audioEnhancedShots = characterEnhancedShots.map((shot, idx) => {
+      try {
+        // Calculate beat index for 4-beat system (each shot maps to a beat phase)
+        const totalShots = characterEnhancedShots.length;
+        const beatIndex = Math.min(Math.floor(idx / (totalShots / 4)), 3);
+
+        // Generate audio enhancement
+        const audioEnhancement = AUDIO_BEAT_ENGINE.generateAudioEnhancement(
+          scene,
+          shot,
+          beatIndex
+        );
+
+        // Get audio summary for metadata
+        const audioSummary = AUDIO_BEAT_ENGINE.getAudioSummary(scene, shot, beatIndex);
+
+        // Enhance the video prompt with audio layer
+        const existingVideoPrompt = shot.videoPrompt || '';
+        const enhancedVideoPrompt = audioEnhancement
+          ? `${existingVideoPrompt}\n\n${audioEnhancement}`
+          : existingVideoPrompt;
+
+        return {
+          ...shot,
+          videoPrompt: enhancedVideoPrompt,
+          audioBeat: {
+            applied: true,
+            beatIndex,
+            ...audioSummary
+          }
+        };
+      } catch (audioError) {
+        console.warn(`[creationWizardDecomposeSceneToShots] Audio enhancement failed for shot ${idx + 1}:`, audioError.message);
+        return {
+          ...shot,
+          audioBeat: { applied: false, error: audioError.message }
+        };
+      }
+    });
+
+    console.log(`[creationWizardDecomposeSceneToShots] Audio Beat Mapping applied to ${audioEnhancedShots.filter(s => s.audioBeat?.applied).length}/${audioEnhancedShots.length} shots`);
+
     // STEP 6: Normalize shots with all required fields
     // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, and visualContinuity
-    // IMPORTANT: Use characterEnhancedShots (with World-First + Physics + Character) for final normalization
-    const normalizedShots = characterEnhancedShots.map((shot, idx) => {
-      const isLast = idx === characterEnhancedShots.length - 1;
+    // IMPORTANT: Use audioEnhancedShots (with World-First + Physics + Character + Audio) for final normalization
+    const normalizedShots = audioEnhancedShots.map((shot, idx) => {
+      const isLast = idx === audioEnhancedShots.length - 1;
       const isFirst = idx === 0;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
@@ -48096,6 +48694,11 @@ exports.creationWizardDecomposeSceneToShots = functions
         characterReference: shot.characterReference || null,
         hasCharacterConsistency: shot.characterReference?.applied || false,
         charactersInShot: shot.characterReference?.characterNames || [],
+        // NEW: Audio Beat Mapping (sound design)
+        audioBeat: shot.audioBeat || null,
+        hasAudioMapping: shot.audioBeat?.applied || false,
+        audioDialogue: shot.audioBeat?.hasDialogue || false,
+        audioAmbience: shot.audioBeat?.ambienceType || null,
         // Generation status
         // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
         // This ensures when user regenerates scene image, Shot 1 stays in sync
@@ -48191,6 +48794,15 @@ exports.creationWizardDecomposeSceneToShots = functions
         totalCharacters: characterBible?.length || 0,
         characterAnchorsExtracted: normalizedShots.some(s => s.characterReference?.totalCharacters > 0),
         charactersTracked: [...new Set(normalizedShots.flatMap(s => s.charactersInShot || []))]
+      },
+      // Audio Beat Mapping status
+      audioBeatMapping: {
+        applied: audioEnhancedShots.some(s => s.audioBeat?.applied),
+        shotsWithAudio: normalizedShots.filter(s => s.hasAudioMapping).length,
+        hasDialogue: normalizedShots.some(s => s.audioDialogue),
+        lipSyncRequired: normalizedShots.some(s => s.audioBeat?.lipSyncRequired),
+        ambienceTypes: [...new Set(normalizedShots.map(s => s.audioAmbience).filter(Boolean))],
+        musicMoods: [...new Set(normalizedShots.map(s => s.audioBeat?.musicMood).filter(Boolean))]
       }
     };
 
