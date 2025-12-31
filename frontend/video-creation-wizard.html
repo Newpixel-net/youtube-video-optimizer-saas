@@ -4888,7 +4888,7 @@
                 'anime': 'Anime (Japanese Animation)',
                 'noir': 'Film Noir (High Contrast)'
             };
-            showNotification(`Visual style set to: ${styleNames[styleMode] || styleMode}`, 'success');
+            showToast(`Visual style set to: ${styleNames[styleMode] || styleMode}`, 'success');
 
             render();
             scheduleAutoSave();
