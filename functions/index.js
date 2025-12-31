@@ -23552,7 +23552,14 @@ exports.creationWizardSaveProject = functions.https.onCall(async (data, context)
         narrativePreset: projectData.content.narrativePreset || null,
         mood: projectData.content.mood || null,
         storyArc: projectData.content.storyArc || null,
-        emotionalJourney: projectData.content.emotionalJourney || null
+        emotionalJourney: projectData.content.emotionalJourney || null,
+        // ADDED: Missing fields for complete state restoration
+        tone: projectData.content.tone || 'engaging',
+        contentDepth: projectData.content.contentDepth || 'detailed',
+        contentFormat: projectData.content.contentFormat || 'medium-form',
+        tensionCurve: projectData.content.tensionCurve || null,
+        visualStyleMode: projectData.content.visualStyleMode || 'photorealistic', // VISUAL_STYLE_DNA
+        videoModel: projectData.content.videoModel || null
       } : null,
 
       // NEW WIZARD FLOW: Production Type System
@@ -23579,7 +23586,13 @@ exports.creationWizardSaveProject = functions.https.onCall(async (data, context)
         uniqueElements: projectData.concept.uniqueElements || [],
         avoidElements: projectData.concept.avoidElements || [],
         logline: projectData.concept.logline || '',
-        worldBuilding: projectData.concept.worldBuilding || null
+        worldBuilding: projectData.concept.worldBuilding || null,
+        // ADDED: AI Enhancement data - critical for concept restoration
+        improvedData: projectData.concept.improvedData || null, // Full AI enhancement result
+        suggestedMood: projectData.concept.suggestedMood || null,
+        suggestedTone: projectData.concept.suggestedTone || null,
+        keyElements: projectData.concept.keyElements || [],
+        characters: projectData.concept.characters || []
       } : null,
 
       // NEW WIZARD FLOW: Character Intelligence
@@ -23599,7 +23612,9 @@ exports.creationWizardSaveProject = functions.https.onCall(async (data, context)
         scenes: projectData.script.scenes || [],
         generatedAt: projectData.script.generatedAt || null,
         fullScript: projectData.script.fullScript || null,
-        metadata: projectData.script.metadata || null
+        metadata: projectData.script.metadata || null,
+        // ADDED: Timing configuration for Hollywood-style scene architecture
+        timing: projectData.script.timing || null
       } : null,
 
       // Storyboard data - complete (including Phase 4 Scene Memory & Phase 8-11 Prompt Chain)
@@ -23608,10 +23623,21 @@ exports.creationWizardSaveProject = functions.https.onCall(async (data, context)
         visualStyle: projectData.storyboard.visualStyle || null,
         selectedAspectRatio: projectData.storyboard.selectedAspectRatio || null,
         imageModel: projectData.storyboard.imageModel || 'hidream',
+        status: projectData.storyboard.status || 'idle',
         // Phase 4: Scene Memory System
         styleBible: projectData.storyboard.styleBible || null,
         characterBible: projectData.storyboard.characterBible || null,
         technicalSpecs: projectData.storyboard.technicalSpecs || null,
+        // ADDED: Location Bible - consistent environments with reference images
+        // NOTE: base64 images are stripped by frontend, only URLs and metadata saved
+        locationBible: projectData.storyboard.locationBible || null,
+        // ADDED: Multi-Shot Mode - decomposed scenes into shots
+        multiShotMode: projectData.storyboard.multiShotMode ? {
+          enabled: projectData.storyboard.multiShotMode.enabled || false,
+          defaultShotCount: projectData.storyboard.multiShotMode.defaultShotCount || 3,
+          autoDecompose: projectData.storyboard.multiShotMode.autoDecompose || false,
+          decomposedScenes: projectData.storyboard.multiShotMode.decomposedScenes || {}
+        } : null,
         // Phase 8-11: Prompt Chain Architecture
         promptChain: projectData.storyboard.promptChain ? {
           enabled: projectData.storyboard.promptChain.enabled !== false,
