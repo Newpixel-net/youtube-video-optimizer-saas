@@ -41492,6 +41492,543 @@ const PHYSICS_LAYER = {
   }
 };
 
+// =============================================================================
+// CINEMATIC_PHYSICS_ENGINE - Hollywood-Level Force & Momentum Physics
+// =============================================================================
+/**
+ * CINEMATIC_PHYSICS_ENGINE
+ *
+ * Adds Hollywood-quality physics descriptions to video prompts.
+ * Based on 2025 AI filmmaking research: "Stop describing what things look like—
+ * start describing the forces acting on them."
+ *
+ * Modern AI video models (Runway Gen-4, Sora 2, Kling 2.6) now understand:
+ * - Weight and momentum
+ * - Cause-and-effect chains
+ * - Material physics (fabric, hair, liquid)
+ * - Environmental forces
+ *
+ * This engine generates physics-aware prompt enhancements.
+ */
+const CINEMATIC_PHYSICS_ENGINE = {
+
+  /**
+   * Analyze scene context and generate comprehensive physics layer
+   * @param {Object} scene - Scene data with visualPrompt, sceneAction, etc.
+   * @param {Object} shot - Shot data with shotType, cameraMovement, etc.
+   * @param {number} intensity - Scene intensity (0.0-1.0)
+   * @returns {Object} Complete physics analysis for video prompt enhancement
+   */
+  analyzeScenePhysics(scene, shot, intensity = 0.5) {
+    const visualPrompt = scene?.visualPrompt || '';
+    const sceneAction = scene?.sceneAction || '';
+    const combinedText = `${visualPrompt} ${sceneAction}`.toLowerCase();
+
+    return {
+      // Core physics systems
+      objectPhysics: this.detectObjectPhysics(combinedText, intensity),
+      environmentalForces: this.detectEnvironmentalForces(combinedText),
+      materialPhysics: this.detectMaterialPhysics(combinedText),
+      contactPhysics: this.detectContactPhysics(combinedText, intensity),
+      causeAndEffect: this.generateCauseEffectChains(combinedText, intensity),
+
+      // Physics-aware camera hints
+      cameraPhysics: this.getCameraPhysicsHints(shot?.cameraMovement, intensity),
+
+      // Temporal physics (how physics evolves over shot duration)
+      temporalPhysics: this.getTemporalPhysicsProgression(intensity)
+    };
+  },
+
+  /**
+   * Detect objects and their physics properties
+   */
+  detectObjectPhysics(text, intensity) {
+    const objects = {
+      heavy: [],
+      light: [],
+      fluid: [],
+      particles: []
+    };
+
+    // Heavy objects (have weight, momentum, impact)
+    const heavyPatterns = [
+      { pattern: /sword|blade|weapon/i, physics: 'steel weight, momentum on swing, slicing arc' },
+      { pattern: /door|gate/i, physics: 'heavy swing, slow momentum, solid impact' },
+      { pattern: /boulder|rock|stone/i, physics: 'massive weight, crushing force, ground shake on impact' },
+      { pattern: /body|bodies|corpse/i, physics: 'limp weight, gravity pull, ragdoll physics' },
+      { pattern: /armor|shield/i, physics: 'metal weight, clanking on movement, protective mass' },
+      { pattern: /staff|pole/i, physics: 'balanced weight, sweeping momentum, whooshing arcs' },
+      { pattern: /book|tome|scroll/i, physics: 'paper weight, pages flutter, binding creak' },
+      { pattern: /chest|box|crate/i, physics: 'solid mass, scraping on floor, heavy thud' }
+    ];
+
+    // Light objects (affected by air, quick movement)
+    const lightPatterns = [
+      { pattern: /leaf|leaves/i, physics: 'weightless drift, spiral descent, wind-carried' },
+      { pattern: /feather/i, physics: 'floating descent, air resistance, gentle landing' },
+      { pattern: /paper|parchment/i, physics: 'flutter and fold, caught by air currents' },
+      { pattern: /petal|petals|flower/i, physics: 'delicate drift, scatter pattern, soft landing' },
+      { pattern: /ash|ashes/i, physics: 'rising thermals, grey drift, settling slowly' },
+      { pattern: /snow|snowflake/i, physics: 'lazy descent, wind-swirled, accumulating softly' }
+    ];
+
+    // Fluid objects (flow, splash, wave)
+    const fluidPatterns = [
+      { pattern: /water|river|stream|ocean|sea/i, physics: 'flowing current, wave motion, splash dynamics' },
+      { pattern: /blood/i, physics: 'viscous flow, splatter pattern, drip trajectory' },
+      { pattern: /rain/i, physics: 'vertical streaks, splash on impact, surface ripples' },
+      { pattern: /tear|tears/i, physics: 'welling, slow roll down cheek, drop formation' },
+      { pattern: /liquid|potion/i, physics: 'sloshing movement, pour arc, surface tension' },
+      { pattern: /lava|magma/i, physics: 'thick slow flow, cooling crust, heat shimmer above' }
+    ];
+
+    // Particle objects (many small elements)
+    const particlePatterns = [
+      { pattern: /dust|motes/i, physics: 'suspended particles, caught in light beams, slow drift' },
+      { pattern: /spark|sparks/i, physics: 'quick scatter, fade trajectory, brief illumination' },
+      { pattern: /ember|embers/i, physics: 'rising glow, cooling arc, floating upward' },
+      { pattern: /smoke/i, physics: 'rising curl, dissipation pattern, air current response' },
+      { pattern: /mist|fog/i, physics: 'low-lying blanket, swirl around movement, density variation' },
+      { pattern: /sand/i, physics: 'granular flow, wind-blown scatter, settling pattern' },
+      { pattern: /debris/i, physics: 'scatter pattern, various weights, settling sequence' }
+    ];
+
+    heavyPatterns.forEach(p => { if (p.pattern.test(text)) objects.heavy.push(p.physics); });
+    lightPatterns.forEach(p => { if (p.pattern.test(text)) objects.light.push(p.physics); });
+    fluidPatterns.forEach(p => { if (p.pattern.test(text)) objects.fluid.push(p.physics); });
+    particlePatterns.forEach(p => { if (p.pattern.test(text)) objects.particles.push(p.physics); });
+
+    return objects;
+  },
+
+  /**
+   * Detect environmental forces acting on the scene
+   */
+  detectEnvironmentalForces(text) {
+    const forces = [];
+
+    // Wind forces
+    if (/wind|breeze|gust|storm|gale/i.test(text)) {
+      if (/storm|gale|fierce|strong/i.test(text)) {
+        forces.push({
+          type: 'wind',
+          strength: 'strong',
+          effect: 'clothing pressed against body, hair streaming, difficult movement'
+        });
+      } else if (/breeze|gentle|soft/i.test(text)) {
+        forces.push({
+          type: 'wind',
+          strength: 'gentle',
+          effect: 'subtle fabric flutter, hair wisps lifting, leaves stirring'
+        });
+      } else {
+        forces.push({
+          type: 'wind',
+          strength: 'moderate',
+          effect: 'clothing rippling, hair flowing, objects may shift'
+        });
+      }
+    }
+
+    // Gravity variations
+    if (/fall|falling|drop|descend|plunge/i.test(text)) {
+      forces.push({
+        type: 'gravity',
+        strength: 'normal',
+        effect: 'acceleration downward, increasing speed, impact anticipation'
+      });
+    }
+    if (/float|hover|weightless|zero.?g/i.test(text)) {
+      forces.push({
+        type: 'gravity',
+        strength: 'reduced',
+        effect: 'slow drift, objects suspended, hair floating upward'
+      });
+    }
+
+    // Water resistance
+    if (/underwater|submerged|swimming|diving/i.test(text)) {
+      forces.push({
+        type: 'water_resistance',
+        strength: 'full',
+        effect: 'slowed movement, hair floating, bubbles rising, light refraction'
+      });
+    }
+
+    // Heat/thermal
+    if (/fire|flame|heat|hot|burning/i.test(text)) {
+      forces.push({
+        type: 'thermal',
+        strength: 'high',
+        effect: 'rising heat shimmer, sweat forming, light flickering upward'
+      });
+    }
+    if (/cold|ice|frost|frozen|freezing/i.test(text)) {
+      forces.push({
+        type: 'thermal',
+        strength: 'low',
+        effect: 'visible breath, condensation, stiff movement, frost spreading'
+      });
+    }
+
+    // Magical/energy forces
+    if (/energy|power|force|magic|glow|aura/i.test(text)) {
+      forces.push({
+        type: 'energy',
+        strength: 'variable',
+        effect: 'crackling arcs, pulsing waves, objects responding to invisible force'
+      });
+    }
+
+    return forces;
+  },
+
+  /**
+   * Detect materials and their physics behaviors
+   */
+  detectMaterialPhysics(text) {
+    const materials = [];
+
+    // Fabric/clothing
+    if (/cloak|cape|robe|coat|dress|gown|fabric|cloth|veil|banner|flag/i.test(text)) {
+      materials.push({
+        type: 'fabric',
+        behavior: 'wave and billow with movement, settle when still, catch wind and light',
+        detail: 'fabric ripples follow body motion with slight delay, hem trails behind turns'
+      });
+    }
+
+    // Hair
+    if (/hair|locks|mane|braid|ponytail/i.test(text)) {
+      materials.push({
+        type: 'hair',
+        behavior: 'flows opposite to movement direction, bounces on impact, affected by wind',
+        detail: 'strands separate and rejoin, volume responds to humidity/wetness'
+      });
+    }
+
+    // Metal
+    if (/metal|steel|iron|gold|silver|bronze|armor|sword|chain/i.test(text)) {
+      materials.push({
+        type: 'metal',
+        behavior: 'rigid movement, reflects light sharply, rings or clanks on contact',
+        detail: 'catches light as angle changes, slight flex on thin pieces, weight affects swing'
+      });
+    }
+
+    // Glass/crystal
+    if (/glass|crystal|gem|jewel|mirror/i.test(text)) {
+      materials.push({
+        type: 'glass',
+        behavior: 'refracts light, casts prismatic reflections, shatters dramatically',
+        detail: 'internal light play, rainbow edges, sharp fragmentation pattern'
+      });
+    }
+
+    // Leather
+    if (/leather|hide|strap|belt|boot/i.test(text)) {
+      materials.push({
+        type: 'leather',
+        behavior: 'creaks with movement, flexes but holds shape, ages with wear',
+        detail: 'subtle sound on flex, worn areas lighter, stiff until warmed'
+      });
+    }
+
+    // Wood
+    if (/wood|wooden|timber|branch|tree/i.test(text)) {
+      materials.push({
+        type: 'wood',
+        behavior: 'solid but can splinter, grain visible, creaks under stress',
+        detail: 'flex before break, splinters scatter on impact, hollow vs solid sounds'
+      });
+    }
+
+    return materials;
+  },
+
+  /**
+   * Detect and describe contact/impact physics
+   */
+  detectContactPhysics(text, intensity) {
+    const contacts = [];
+
+    // Footsteps
+    if (/walk|step|run|stride|pace/i.test(text)) {
+      const weight = intensity > 0.7 ? 'heavy, purposeful' : 'measured, deliberate';
+      contacts.push({
+        type: 'footsteps',
+        description: `${weight} footfalls, ground compression, subtle dust rise`,
+        timing: 'rhythmic, matching movement pace'
+      });
+    }
+
+    // Combat/strikes
+    if (/hit|strike|punch|kick|slash|stab|clash|fight/i.test(text)) {
+      contacts.push({
+        type: 'combat_impact',
+        description: 'impact force transfer, target recoil, attacker follow-through',
+        timing: 'sharp impact moment, brief freeze, momentum continuation'
+      });
+    }
+
+    // Landing/falling
+    if (/land|jump|leap|fall|drop/i.test(text)) {
+      contacts.push({
+        type: 'landing',
+        description: 'leg absorption, body compression, balance recovery',
+        timing: 'impact → absorption → stabilization (0.3s → 0.5s → settle)'
+      });
+    }
+
+    // Touch/grasp
+    if (/touch|grab|grasp|hold|reach|hand/i.test(text)) {
+      contacts.push({
+        type: 'touch',
+        description: 'finger contact pressure, object response to grip',
+        timing: 'approach → contact → grip adjustment'
+      });
+    }
+
+    // Collision
+    if (/crash|collide|smash|shatter|break/i.test(text)) {
+      contacts.push({
+        type: 'collision',
+        description: 'sudden momentum transfer, debris scatter, settling aftermath',
+        timing: 'impact spike → scatter → settle (instant → 1s → 2s)'
+      });
+    }
+
+    return contacts;
+  },
+
+  /**
+   * Generate cause-and-effect physics chains
+   */
+  generateCauseEffectChains(text, intensity) {
+    const chains = [];
+
+    // Movement → environment reaction
+    if (/walk|run|move|stride/i.test(text)) {
+      chains.push({
+        cause: 'character movement',
+        effects: [
+          'clothing follows body with 0.1s delay',
+          'hair trails movement direction',
+          'nearby light particles scatter',
+          'fabric settles after stopping'
+        ]
+      });
+    }
+
+    // Turn → cascade effect
+    if (/turn|spin|pivot|rotate/i.test(text)) {
+      chains.push({
+        cause: 'character rotation',
+        effects: [
+          'cape/coat swings outward (centrifugal)',
+          'hair arcs in rotation direction',
+          'weight shifts to outer foot',
+          'eyes lead the turn'
+        ]
+      });
+    }
+
+    // Impact → reaction chain
+    if (/hit|strike|impact|clash/i.test(text)) {
+      chains.push({
+        cause: 'physical impact',
+        effects: [
+          'shock wave through contact point',
+          'receiver body deformation/recoil',
+          'attacker follow-through momentum',
+          'environmental particle scatter',
+          'settling return to equilibrium'
+        ]
+      });
+    }
+
+    // Emotional → physical manifestation
+    if (intensity > 0.7) {
+      chains.push({
+        cause: 'high emotional intensity',
+        effects: [
+          'breathing visible and quickened',
+          'micro-tremors in extremities',
+          'posture tension visible',
+          'environment seems to respond (pathetic fallacy)'
+        ]
+      });
+    }
+
+    return chains;
+  },
+
+  /**
+   * Get camera physics hints (how camera movement affects perception)
+   */
+  getCameraPhysicsHints(cameraMovement, intensity) {
+    const movement = (cameraMovement || '').toLowerCase();
+
+    if (movement.includes('handheld') || movement.includes('shaky')) {
+      return {
+        style: 'handheld',
+        physics: 'organic micro-movements, breathing rhythm, human imperfection',
+        effect: 'visceral, immediate, documentary feel'
+      };
+    }
+
+    if (movement.includes('dolly') || movement.includes('track')) {
+      return {
+        style: 'tracking',
+        physics: 'smooth glide, parallax on background layers, steady pursuit',
+        effect: 'professional, deliberate, following action'
+      };
+    }
+
+    if (movement.includes('crane') || movement.includes('jib')) {
+      return {
+        style: 'crane',
+        physics: 'sweeping arc, reveal physics, grandeur movement',
+        effect: 'epic, establishing, god-like perspective'
+      };
+    }
+
+    if (movement.includes('zoom')) {
+      return {
+        style: 'zoom',
+        physics: 'optical compression, background squeeze, no parallax',
+        effect: 'emotional punch, isolation, focus shift'
+      };
+    }
+
+    if (movement.includes('static') || movement.includes('locked')) {
+      return {
+        style: 'static',
+        physics: 'stable frame, motion exists only in subjects',
+        effect: 'theatrical, observational, tension through stillness'
+      };
+    }
+
+    return {
+      style: 'neutral',
+      physics: 'subtle stabilization, natural float',
+      effect: 'cinematic, professional, unobtrusive'
+    };
+  },
+
+  /**
+   * Get temporal physics progression (how physics evolves over the shot)
+   */
+  getTemporalPhysicsProgression(intensity) {
+    // Physics changes over a 10-second shot
+    return {
+      seconds_0_2: {
+        phase: 'initiation',
+        description: 'Forces begin to act, momentum building, initial states',
+        physicsNote: 'Objects at rest or in established motion, forces accumulating'
+      },
+      seconds_2_5: {
+        phase: 'development',
+        description: 'Physics in full effect, cause-effect chains playing out',
+        physicsNote: 'Peak momentum, maximum force expression, cascading effects'
+      },
+      seconds_5_8: {
+        phase: 'peak_or_transfer',
+        description: intensity > 0.7
+          ? 'Maximum energy expression, potential energy release'
+          : 'Energy transfer between elements, momentum shifts',
+        physicsNote: 'Key physics moments - impacts, releases, transformations'
+      },
+      seconds_8_10: {
+        phase: 'resolution',
+        description: 'Energy dissipation, settling, new equilibrium forming',
+        physicsNote: 'Motion dampening, particles settling, fabric falling still'
+      }
+    };
+  },
+
+  /**
+   * Generate complete physics enhancement for a video prompt
+   * @param {Object} scene - Scene data
+   * @param {Object} shot - Shot data
+   * @param {number} intensity - Intensity value 0.0-1.0
+   * @returns {string} Physics enhancement text to append to video prompt
+   */
+  generatePhysicsEnhancement(scene, shot, intensity = 0.5) {
+    const physics = this.analyzeScenePhysics(scene, shot, intensity);
+    const lines = [];
+
+    lines.push('[PHYSICS LAYER - Force & Momentum]');
+
+    // Object physics
+    const allObjects = [
+      ...physics.objectPhysics.heavy,
+      ...physics.objectPhysics.light,
+      ...physics.objectPhysics.fluid,
+      ...physics.objectPhysics.particles
+    ];
+    if (allObjects.length > 0) {
+      lines.push(`Objects: ${allObjects.slice(0, 3).join('; ')}`);
+    }
+
+    // Environmental forces
+    if (physics.environmentalForces.length > 0) {
+      const forceDesc = physics.environmentalForces
+        .map(f => `${f.type}: ${f.effect}`)
+        .slice(0, 2)
+        .join('. ');
+      lines.push(`Forces: ${forceDesc}`);
+    }
+
+    // Material physics
+    if (physics.materialPhysics.length > 0) {
+      const matDesc = physics.materialPhysics
+        .map(m => m.detail)
+        .slice(0, 2)
+        .join('. ');
+      lines.push(`Materials: ${matDesc}`);
+    }
+
+    // Contact physics
+    if (physics.contactPhysics.length > 0) {
+      const contactDesc = physics.contactPhysics
+        .map(c => c.description)
+        .slice(0, 2)
+        .join('. ');
+      lines.push(`Contact: ${contactDesc}`);
+    }
+
+    // Cause-effect chains (most important for modern AI video)
+    if (physics.causeAndEffect.length > 0) {
+      const chain = physics.causeAndEffect[0];
+      lines.push(`Cause→Effect: ${chain.cause} triggers ${chain.effects.slice(0, 2).join(', ')}`);
+    }
+
+    // Camera physics
+    lines.push(`Camera: ${physics.cameraPhysics.physics}`);
+
+    return lines.join('\n');
+  },
+
+  /**
+   * Get physics summary for metadata
+   */
+  getPhysicsSummary(scene, shot, intensity) {
+    const physics = this.analyzeScenePhysics(scene, shot, intensity);
+
+    return {
+      hasObjectPhysics: Object.values(physics.objectPhysics).some(arr => arr.length > 0),
+      hasEnvironmentalForces: physics.environmentalForces.length > 0,
+      hasMaterialPhysics: physics.materialPhysics.length > 0,
+      hasContactPhysics: physics.contactPhysics.length > 0,
+      causeEffectChains: physics.causeAndEffect.length,
+      cameraStyle: physics.cameraPhysics.style,
+      temporalPhases: Object.keys(physics.temporalPhysics)
+    };
+  }
+};
+
 /**
  * ENVIRONMENT_RESPONSE_SYSTEM
  * Environment reacts to character actions and emotions
@@ -46922,11 +47459,57 @@ exports.creationWizardDecomposeSceneToShots = functions
       }
     }
 
+    // STEP 5.95: CINEMATIC PHYSICS ENHANCEMENT
+    // Add Hollywood-level force/momentum physics to video prompts
+    // Based on 2025 AI filmmaking research: "Describe forces, not appearances"
+    const physicsEnhancedShots = worldFirstShots.map((shot, idx) => {
+      try {
+        // Get intensity from choreography or default based on position
+        const choreographyIntensity = shot.hollywoodChoreography?.captureFrame?.intensity;
+        const positionIntensity = idx === 0 ? 0.4 : idx === worldFirstShots.length - 1 ? 0.6 : 0.5 + (idx * 0.1);
+        const intensity = choreographyIntensity ?? positionIntensity;
+
+        // Generate physics enhancement
+        const physicsEnhancement = CINEMATIC_PHYSICS_ENGINE.generatePhysicsEnhancement(
+          scene,
+          shot,
+          intensity
+        );
+
+        // Get physics summary for metadata
+        const physicsSummary = CINEMATIC_PHYSICS_ENGINE.getPhysicsSummary(scene, shot, intensity);
+
+        // Enhance the video prompt with physics layer
+        const existingVideoPrompt = shot.videoPrompt || '';
+        const enhancedVideoPrompt = physicsEnhancement
+          ? `${existingVideoPrompt}\n\n${physicsEnhancement}`
+          : existingVideoPrompt;
+
+        return {
+          ...shot,
+          videoPrompt: enhancedVideoPrompt,
+          cinematicPhysics: {
+            applied: true,
+            intensity,
+            ...physicsSummary
+          }
+        };
+      } catch (physicsError) {
+        console.warn(`[creationWizardDecomposeSceneToShots] Physics enhancement failed for shot ${idx + 1}:`, physicsError.message);
+        return {
+          ...shot,
+          cinematicPhysics: { applied: false, error: physicsError.message }
+        };
+      }
+    });
+
+    console.log(`[creationWizardDecomposeSceneToShots] Cinematic Physics applied to ${physicsEnhancedShots.filter(s => s.cinematicPhysics?.applied).length}/${physicsEnhancedShots.length} shots`);
+
     // STEP 6: Normalize shots with all required fields
     // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, and visualContinuity
-    // IMPORTANT: Use worldFirstShots (enhanced for opening scenes) instead of continuityShots
-    const normalizedShots = worldFirstShots.map((shot, idx) => {
-      const isLast = idx === worldFirstShots.length - 1;
+    // IMPORTANT: Use physicsEnhancedShots (with World-First + Physics) for final normalization
+    const normalizedShots = physicsEnhancedShots.map((shot, idx) => {
+      const isLast = idx === physicsEnhancedShots.length - 1;
       const isFirst = idx === 0;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
@@ -46976,6 +47559,9 @@ exports.creationWizardDecomposeSceneToShots = functions
         // NEW: Opening scene World-First structure
         openingStructure: shot.openingStructure || null,
         isWorldFirst: shot.openingStructure?.isWorldFirst || false,
+        // NEW: Cinematic Physics (force/momentum layer)
+        cinematicPhysics: shot.cinematicPhysics || null,
+        hasPhysicsEnhancement: shot.cinematicPhysics?.applied || false,
         // Generation status
         // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
         // This ensures when user regenerates scene image, Shot 1 stays in sync
@@ -47051,6 +47637,18 @@ exports.creationWizardDecomposeSceneToShots = functions
         shot1SyncedWithScene: normalizedShots[0]?.syncedWithScene || false,
         sceneImageUrl: scene.imageUrl || null,
         shot1ImageUrl: normalizedShots[0]?.imageUrl || null
+      },
+      // Cinematic Physics Enhancement status
+      cinematicPhysics: {
+        applied: physicsEnhancedShots.some(s => s.cinematicPhysics?.applied),
+        shotsWithPhysics: normalizedShots.filter(s => s.hasPhysicsEnhancement).length,
+        physicsTypes: {
+          hasObjectPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasObjectPhysics),
+          hasEnvironmentalForces: normalizedShots.some(s => s.cinematicPhysics?.hasEnvironmentalForces),
+          hasMaterialPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasMaterialPhysics),
+          hasContactPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasContactPhysics),
+          hasCauseEffectChains: normalizedShots.some(s => s.cinematicPhysics?.causeEffectChains > 0)
+        }
       }
     };
 
