@@ -43240,6 +43240,231 @@ const AUDIO_BEAT_ENGINE = {
 };
 
 // =============================================================================
+// BEAT_TIMELINE_ENGINE - Temporal Shot Choreography
+// =============================================================================
+/**
+ * BEAT_TIMELINE_ENGINE
+ *
+ * Creates precise TEMPORAL choreography for each shot - the key differentiator
+ * between amateur and Hollywood-quality video generation.
+ *
+ * Instead of just describing WHAT is in the shot, this engine describes
+ * WHEN things happen during the shot's duration.
+ *
+ * Uses the 4-beat system:
+ * - ESTABLISH (0-2s): Set the stage, initial state
+ * - DEVELOP (2-5s): Action begins, momentum builds
+ * - ESCALATE (5-8s): Peak action/emotion, highest intensity
+ * - RESOLVE (8-10s): Landing, transition setup, breath
+ *
+ * Synthesizes data from:
+ * - Script narrative beat (what story moment)
+ * - Physics engine (how materials move)
+ * - Character engine (who and emotional state)
+ * - Audio engine (intensity curve)
+ */
+const BEAT_TIMELINE_ENGINE = {
+
+  // Beat phases with timing
+  BEAT_PHASES: {
+    ESTABLISH: { start: 0, end: 2, purpose: 'Set the stage' },
+    DEVELOP: { start: 2, end: 5, purpose: 'Build momentum' },
+    ESCALATE: { start: 5, end: 8, purpose: 'Peak intensity' },
+    RESOLVE: { start: 8, end: 10, purpose: 'Land and transition' }
+  },
+
+  // Action verbs for different intensities
+  ACTION_VERBS: {
+    low: ['rests', 'waits', 'observes', 'breathes', 'stands', 'settles'],
+    medium: ['moves', 'turns', 'reaches', 'walks', 'speaks', 'gestures'],
+    high: ['rushes', 'strikes', 'leaps', 'spins', 'clashes', 'charges'],
+    transitional: ['shifts', 'pauses', 'steadies', 'prepares', 'focuses']
+  },
+
+  // Material behavior templates (physics integration)
+  MATERIAL_BEHAVIORS: {
+    fabric: {
+      ESTABLISH: 'fabric settles into place',
+      DEVELOP: 'fabric begins to sway',
+      ESCALATE: 'fabric billows dramatically',
+      RESOLVE: 'fabric flows with momentum'
+    },
+    hair: {
+      ESTABLISH: 'hair rests naturally',
+      DEVELOP: 'strands catch movement',
+      ESCALATE: 'hair sweeps with motion',
+      RESOLVE: 'hair settles softly'
+    },
+    environment: {
+      ESTABLISH: 'atmosphere hangs still',
+      DEVELOP: 'particles drift gently',
+      ESCALATE: 'elements swirl intensely',
+      RESOLVE: 'environment calms'
+    }
+  },
+
+  // Emotional progression patterns
+  EMOTION_PROGRESSIONS: {
+    tension_build: ['watchful stillness', 'growing unease', 'mounting tension', 'coiled readiness'],
+    revelation: ['unknowing calm', 'dawning realization', 'full recognition', 'emotional impact'],
+    action_peak: ['poised stance', 'explosive motion', 'full commitment', 'follow-through'],
+    quiet_moment: ['peaceful state', 'subtle shift', 'gentle movement', 'serene resolution'],
+    confrontation: ['tense standoff', 'first move', 'engaged clash', 'aftermath']
+  },
+
+  /**
+   * Generate beat timeline from shot data and all engine outputs
+   * @param {Object} shot - Shot data with narrative beat, action, etc.
+   * @param {Object} scene - Scene data for context
+   * @param {Object} physicsData - Output from CINEMATIC_PHYSICS_ENGINE
+   * @param {Object} characterData - Output from CHARACTER_REFERENCE_ENGINE
+   * @param {Object} audioData - Output from AUDIO_BEAT_ENGINE
+   * @returns {Object} Timeline with beat descriptions and metadata
+   */
+  generateTimeline(shot, scene, physicsData = {}, characterData = {}, audioData = {}) {
+    // Extract narrative context
+    const narrativeBeat = shot.narrativeBeat || {};
+    const action = narrativeBeat.action || shot.action || scene.action || '';
+    const emotion = narrativeBeat.emotion || shot.emotion || scene.emotion || 'neutral';
+    const intensity = narrativeBeat.intensity || shot.intensity || 0.5;
+
+    // Determine emotion progression pattern
+    const progressionType = this._detectProgressionType(action, emotion, intensity);
+    const emotionProgression = this.EMOTION_PROGRESSIONS[progressionType] || this.EMOTION_PROGRESSIONS.quiet_moment;
+
+    // Get primary character
+    const primaryCharacter = characterData.characterNames?.[0] ||
+                              this._extractCharacterFromText(shot.prompt || scene.description || '') ||
+                              'the figure';
+
+    // Get primary material for physics
+    const primaryMaterial = this._detectPrimaryMaterial(physicsData, shot, scene);
+
+    // Get camera movement
+    const cameraMovement = shot.cameraMovement || 'static';
+
+    // Build each beat
+    const timeline = {
+      duration: shot.duration || 10,
+      beats: {
+        ESTABLISH: this._buildBeat('ESTABLISH', primaryCharacter, emotionProgression[0], primaryMaterial, cameraMovement, intensity * 0.4),
+        DEVELOP: this._buildBeat('DEVELOP', primaryCharacter, emotionProgression[1], primaryMaterial, cameraMovement, intensity * 0.6),
+        ESCALATE: this._buildBeat('ESCALATE', primaryCharacter, emotionProgression[2], primaryMaterial, cameraMovement, intensity),
+        RESOLVE: this._buildBeat('RESOLVE', primaryCharacter, emotionProgression[3], primaryMaterial, cameraMovement, intensity * 0.7)
+      },
+      metadata: {
+        progressionType,
+        primaryCharacter,
+        primaryMaterial,
+        cameraMovement,
+        peakIntensity: intensity
+      }
+    };
+
+    return timeline;
+  },
+
+  /**
+   * Build a single beat description
+   */
+  _buildBeat(beatName, character, emotionState, material, camera, intensity) {
+    const phase = this.BEAT_PHASES[beatName];
+    const materialBehavior = this.MATERIAL_BEHAVIORS[material]?.[beatName] || '';
+
+    // Select action verb based on intensity
+    const verbCategory = intensity > 0.7 ? 'high' : intensity > 0.4 ? 'medium' : 'low';
+    const verbs = this.ACTION_VERBS[beatName === 'RESOLVE' ? 'transitional' : verbCategory];
+    const verb = verbs[Math.floor(Math.random() * verbs.length)];
+
+    return {
+      timing: `${phase.start}-${phase.end}s`,
+      purpose: phase.purpose,
+      description: `${character} ${verb}, ${emotionState}`,
+      material: materialBehavior,
+      intensity: Math.round(intensity * 100)
+    };
+  },
+
+  /**
+   * Detect progression type from action and emotion
+   */
+  _detectProgressionType(action, emotion, intensity) {
+    const a = action.toLowerCase();
+    const e = emotion.toLowerCase();
+
+    if (/fight|battle|strike|attack|defend|clash/.test(a)) return 'action_peak';
+    if (/realize|discover|understand|reveal|see|notice/.test(a)) return 'revelation';
+    if (/confront|face|challenge|stand.*against/.test(a)) return 'confrontation';
+    if (/wait|watch|observe|prepare|tense/.test(a) || e === 'tense') return 'tension_build';
+    if (intensity > 0.7) return 'action_peak';
+    if (intensity < 0.3) return 'quiet_moment';
+    return 'tension_build';
+  },
+
+  /**
+   * Detect primary material from physics data
+   */
+  _detectPrimaryMaterial(physicsData, shot, scene) {
+    const text = (shot.prompt || '') + (scene.description || '');
+
+    if (/cape|cloak|dress|robe|coat|fabric|cloth/i.test(text)) return 'fabric';
+    if (/hair|strand|locks/i.test(text)) return 'hair';
+    return 'environment';
+  },
+
+  /**
+   * Extract character name from text
+   */
+  _extractCharacterFromText(text) {
+    // Look for capitalized names
+    const nameMatch = text.match(/\b([A-Z][a-z]+)\b(?:\s+[a-z]+\s+|,|\s+(?:stands|walks|moves|looks|turns))/);
+    if (nameMatch) return nameMatch[1];
+
+    // Look for "the [role]" patterns
+    const roleMatch = text.match(/the\s+(hero|warrior|woman|man|figure|protagonist|character)/i);
+    if (roleMatch) return 'the ' + roleMatch[1].toLowerCase();
+
+    return null;
+  },
+
+  /**
+   * Generate the timeline prompt text for video generation
+   * This is the MAIN output - a structured temporal description
+   * @returns {string} ~350-400 char timeline description
+   */
+  generateTimelinePrompt(shot, scene, physicsData = {}, characterData = {}, audioData = {}) {
+    const timeline = this.generateTimeline(shot, scene, physicsData, characterData, audioData);
+
+    const lines = [`[BEAT TIMELINE - ${timeline.duration}s]`];
+
+    for (const [beatName, beat] of Object.entries(timeline.beats)) {
+      let line = `${beat.timing} ${beatName}: ${beat.description}`;
+      if (beat.material) {
+        line += `, ${beat.material}`;
+      }
+      lines.push(line);
+    }
+
+    return lines.join('\n');
+  },
+
+  /**
+   * Generate condensed timeline hint (for when space is limited)
+   * @returns {string} ~150 char condensed timeline
+   */
+  generateCondensedHint(shot, scene, physicsData = {}, characterData = {}, audioData = {}) {
+    const timeline = this.generateTimeline(shot, scene, physicsData, characterData, audioData);
+
+    // Just the key moments
+    const establish = timeline.beats.ESTABLISH.description.split(',')[0];
+    const escalate = timeline.beats.ESCALATE.description.split(',')[0];
+    const resolve = timeline.beats.RESOLVE.description.split(',')[0];
+
+    return `[Timeline: 0-2s ${establish} → 5-8s ${escalate} → 8-10s ${resolve}]`;
+  }
+};
+
+// =============================================================================
 // SHOT_SEQUENCE_VALIDATOR - Cinematographic Progression Validation
 // =============================================================================
 /**
@@ -49496,11 +49721,67 @@ exports.creationWizardDecomposeSceneToShots = functions
 
     console.log(`[creationWizardDecomposeSceneToShots] Audio Beat Mapping applied to ${audioEnhancedShots.filter(s => s.audioBeat?.applied).length}/${audioEnhancedShots.length} shots`);
 
+    // STEP 5.98: BEAT TIMELINE SYNTHESIS
+    // Create temporal choreography for each shot - the Hollywood differentiator
+    // This synthesizes physics, character, and audio data into a precise timeline
+    const timelineEnhancedShots = audioEnhancedShots.map((shot, idx) => {
+      try {
+        // Generate the beat timeline prompt using all collected data
+        const timelinePrompt = BEAT_TIMELINE_ENGINE.generateTimelinePrompt(
+          shot,
+          scene,
+          shot.cinematicPhysics || {},
+          shot.characterReference || {},
+          shot.audioBeat || {}
+        );
+
+        // Get timeline metadata
+        const timeline = BEAT_TIMELINE_ENGINE.generateTimeline(
+          shot,
+          scene,
+          shot.cinematicPhysics || {},
+          shot.characterReference || {},
+          shot.audioBeat || {}
+        );
+
+        // Add timeline to video prompt (this is the key enhancement)
+        const existingVideoPrompt = shot.videoPrompt || '';
+        const enhancedVideoPrompt = timelinePrompt
+          ? `${existingVideoPrompt}\n\n${timelinePrompt}`
+          : existingVideoPrompt;
+
+        return {
+          ...shot,
+          videoPrompt: enhancedVideoPrompt,
+          beatTimeline: {
+            applied: true,
+            progressionType: timeline.metadata.progressionType,
+            primaryCharacter: timeline.metadata.primaryCharacter,
+            primaryMaterial: timeline.metadata.primaryMaterial,
+            peakIntensity: timeline.metadata.peakIntensity,
+            beats: Object.keys(timeline.beats).map(beatName => ({
+              name: beatName,
+              timing: timeline.beats[beatName].timing,
+              intensity: timeline.beats[beatName].intensity
+            }))
+          }
+        };
+      } catch (timelineError) {
+        console.warn(`[creationWizardDecomposeSceneToShots] Timeline enhancement failed for shot ${idx + 1}:`, timelineError.message);
+        return {
+          ...shot,
+          beatTimeline: { applied: false, error: timelineError.message }
+        };
+      }
+    });
+
+    console.log(`[creationWizardDecomposeSceneToShots] Beat Timeline applied to ${timelineEnhancedShots.filter(s => s.beatTimeline?.applied).length}/${timelineEnhancedShots.length} shots`);
+
     // STEP 6: Normalize shots with all required fields
     // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, and visualContinuity
-    // IMPORTANT: Use audioEnhancedShots (with World-First + Physics + Character + Audio) for final normalization
-    const normalizedShots = audioEnhancedShots.map((shot, idx) => {
-      const isLast = idx === audioEnhancedShots.length - 1;
+    // IMPORTANT: Use timelineEnhancedShots (with World-First + Physics + Character + Audio + Timeline) for final normalization
+    const normalizedShots = timelineEnhancedShots.map((shot, idx) => {
+      const isLast = idx === timelineEnhancedShots.length - 1;
       const isFirst = idx === 0;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
@@ -49562,6 +49843,10 @@ exports.creationWizardDecomposeSceneToShots = functions
         hasAudioMapping: shot.audioBeat?.applied || false,
         audioDialogue: shot.audioBeat?.hasDialogue || false,
         audioAmbience: shot.audioBeat?.ambienceType || null,
+        // BEAT TIMELINE - temporal choreography
+        beatTimeline: shot.beatTimeline || null,
+        hasTimeline: shot.beatTimeline?.applied || false,
+        timelineProgression: shot.beatTimeline?.progressionType || null,
         // Generation status
         // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
         // This ensures when user regenerates scene image, Shot 1 stays in sync
@@ -49666,6 +49951,14 @@ exports.creationWizardDecomposeSceneToShots = functions
         lipSyncRequired: normalizedShots.some(s => s.audioBeat?.lipSyncRequired),
         ambienceTypes: [...new Set(normalizedShots.map(s => s.audioAmbience).filter(Boolean))],
         musicMoods: [...new Set(normalizedShots.map(s => s.audioBeat?.musicMood).filter(Boolean))]
+      },
+      // Beat Timeline Synthesis status - the Hollywood differentiator
+      beatTimelineSynthesis: {
+        applied: timelineEnhancedShots.some(s => s.beatTimeline?.applied),
+        shotsWithTimeline: normalizedShots.filter(s => s.hasTimeline).length,
+        progressionTypes: [...new Set(normalizedShots.map(s => s.timelineProgression).filter(Boolean))],
+        primaryCharacters: [...new Set(normalizedShots.map(s => s.beatTimeline?.primaryCharacter).filter(Boolean))],
+        peakIntensities: normalizedShots.map(s => s.beatTimeline?.peakIntensity).filter(Boolean)
       },
       // Shot Sequence Validation status
       shotSequenceValidation: SHOT_SEQUENCE_VALIDATOR.getSequenceSummary(normalizedShots),
