@@ -54100,34 +54100,41 @@ exports.creationWizardGenerateMultitalkVideo = functions
       const numFrames = Math.ceil((audioDuration || 10) * fps);
 
       // Build RunPod input for Multitalk
-      // Based on handler.py required params
+      // IMPORTANT: Must match the handler.py expected parameter names
+      // The handler expects: image_url, audio_url, output_url, duration, and optional prompt
       const runpodInput = {
+        // Core required parameters (matching handler.py)
         image_url: imageUrl,
         audio_url: audioUrl,
-        video_upload_url: uploadUrl,
-        audio_crop_start_time: 0,
-        audio_crop_end_time: audioDuration || 10,
-        positive_prompt: prompt || 'natural motion, expressive, cinematic',
-        negative_prompt: 'blurry, distorted, glitchy, artifact, low quality',
+        output_url: uploadUrl,  // Handler expects output_url, not video_upload_url
+        duration: audioDuration || 10,
+
+        // Animation type - defaults to talking_head for lip-sync
+        animation_type: 'talking_head',
+        lip_sync: true,
+        head_motion: true,
+        eye_blink: true,
+
+        // Optional prompt for motion guidance
+        prompt: prompt || 'natural talking motion, expressive, cinematic quality',
+
+        // Audio settings
+        audio_start: 0,
+        audio_end: audioDuration || 10,
+
+        // Video settings
         aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
-        scale_to_length: 1280,
-        scale_to_side: 'width',
         fps: fps,
-        num_frames: numFrames,
-        embeds_audio_scale: 1.0,
-        embeds_cfg_audio_scale: 1.0,
-        embeds_multi_audio_type: 'single',
-        embeds_normalize_loudness: true,
-        steps: 25,
-        seed: seed,
-        scheduler: 'euler'
+
+        // Quality settings
+        seed: seed
       };
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
         imageUrl: imageUrl.substring(0, 50) + '...',
         audioUrl: audioUrl.substring(0, 50) + '...',
-        audioDuration,
-        numFrames,
+        duration: runpodInput.duration,
+        animation_type: runpodInput.animation_type,
         aspectRatio: runpodInput.aspect_ratio
       });
 
