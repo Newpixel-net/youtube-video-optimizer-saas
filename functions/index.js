@@ -51812,6 +51812,221 @@ exports.creationWizardCheckShotVideoStatus = functions.https.onCall(async (data,
   }
 });
 
+// ==========================================
+// MULTITALK VIDEO GENERATION (RunPod)
+// Video with voiceover sync capability
+// ==========================================
+
+/**
+ * creationWizardGenerateMultitalkVideo - Generate video with Multitalk (RunPod)
+ *
+ * Multitalk takes an image and audio, generating video with lip-sync/animation
+ * that matches the voiceover.
+ */
+exports.creationWizardGenerateMultitalkVideo = functions
+  .runWith({
+    timeoutSeconds: 300,
+    memory: '512MB'
+  })
+  .https.onCall(async (data, context) => {
+    const uid = await verifyAuth(context);
+    const {
+      projectId,
+      sceneId,
+      shotId,
+      shotIndex,
+      imageUrl,
+      audioUrl,
+      audioDuration,
+      prompt,
+      aspectRatio
+    } = data;
+
+    if (!imageUrl) {
+      throw new functions.https.HttpsError('invalid-argument', 'Image URL is required');
+    }
+    if (!audioUrl) {
+      throw new functions.https.HttpsError('invalid-argument', 'Audio URL is required');
+    }
+
+    const runpodKey = functions.config().runpod?.key;
+    if (!runpodKey) {
+      throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+    }
+
+    try {
+      // Generate seed
+      const seed = Math.floor(Math.random() * 999999999999);
+
+      // Generate unique filename for video output
+      const fileName = `creation-projects/${projectId || uid}/multitalk-videos/scene_${sceneId}_shot_${shotIndex}_${Date.now()}_${seed}.mp4`;
+
+      // Create signed URL for upload
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(fileName);
+      const [uploadUrl] = await file.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 30 * 60 * 1000, // 30 minutes
+        contentType: 'application/octet-stream',
+      });
+
+      // Map aspect ratio to Multitalk format
+      const aspectRatioMap = {
+        '16:9': '16:9',
+        '9:16': '9:16',
+        '1:1': '1:1',
+        '4:3': '4:3'
+      };
+
+      // Calculate num_frames based on audio duration (assuming ~24fps)
+      const fps = 24;
+      const numFrames = Math.ceil((audioDuration || 10) * fps);
+
+      // Build RunPod input for Multitalk
+      // Based on handler.py required params
+      const runpodInput = {
+        image_url: imageUrl,
+        audio_url: audioUrl,
+        video_upload_url: uploadUrl,
+        audio_crop_start_time: 0,
+        audio_crop_end_time: audioDuration || 10,
+        positive_prompt: prompt || 'natural motion, expressive, cinematic',
+        negative_prompt: 'blurry, distorted, glitchy, artifact, low quality',
+        aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
+        scale_to_length: 1280,
+        scale_to_side: 'width',
+        fps: fps,
+        num_frames: numFrames,
+        embeds_audio_scale: 1.0,
+        embeds_cfg_audio_scale: 1.0,
+        embeds_multi_audio_type: 'single',
+        embeds_normalize_loudness: true,
+        steps: 25,
+        seed: seed,
+        scheduler: 'euler'
+      };
+
+      console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
+        imageUrl: imageUrl.substring(0, 50) + '...',
+        audioUrl: audioUrl.substring(0, 50) + '...',
+        audioDuration,
+        numFrames,
+        aspectRatio: runpodInput.aspect_ratio
+      });
+
+      // Call RunPod Multitalk endpoint
+      const runpodEndpoint = 'https://api.runpod.ai/v2/mekewddvpqb0b4/run';
+      const runpodResponse = await axios.post(runpodEndpoint, {
+        input: runpodInput
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${runpodKey}`
+        },
+        timeout: 60000
+      });
+
+      const jobId = runpodResponse.data.id;
+      const status = runpodResponse.data.status;
+
+      console.log('[creationWizardGenerateMultitalkVideo] RunPod job started:', { jobId, status });
+
+      // Generate public URL
+      const encodedFileName = encodeURIComponent(fileName);
+      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
+
+      // Log usage
+      await db.collection('apiUsage').add({
+        userId: uid,
+        type: 'multitalk_video',
+        model: 'runpod-multitalk',
+        projectId: projectId || null,
+        sceneId,
+        shotIndex,
+        audioDuration,
+        timestamp: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return {
+        success: true,
+        jobId,
+        status,
+        sceneId,
+        shotIndex,
+        videoUrl: publicUrl,
+        fileName,
+        checkEndpoint: `https://api.runpod.ai/v2/mekewddvpqb0b4/status/${jobId}`
+      };
+
+    } catch (error) {
+      console.error('[creationWizardGenerateMultitalkVideo] Error:', error);
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to start Multitalk video generation'));
+    }
+  });
+
+/**
+ * creationWizardCheckMultitalkStatus - Check status of Multitalk video generation
+ */
+exports.creationWizardCheckMultitalkStatus = functions.https.onCall(async (data, context) => {
+  await verifyAuth(context);
+  const { jobId } = data;
+
+  if (!jobId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Job ID is required');
+  }
+
+  const runpodKey = functions.config().runpod?.key;
+  if (!runpodKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'RunPod API key not configured');
+  }
+
+  try {
+    const statusResponse = await axios.get(
+      `https://api.runpod.ai/v2/mekewddvpqb0b4/status/${jobId}`,
+      {
+        headers: { 'Authorization': `Bearer ${runpodKey}` },
+        timeout: 30000
+      }
+    );
+
+    const result = statusResponse.data;
+    console.log('[creationWizardCheckMultitalkStatus] RunPod status:', result.status);
+
+    // Map RunPod status to our status
+    let mappedStatus = 'IN_PROGRESS';
+    let videoUrl = null;
+    let errorMsg = null;
+
+    if (result.status === 'COMPLETED') {
+      mappedStatus = 'COMPLETED';
+      // Video URL should be in the payload or we constructed it earlier
+      if (result.output?.payload?.videoUrl) {
+        videoUrl = result.output.payload.videoUrl;
+      }
+    } else if (result.status === 'FAILED') {
+      mappedStatus = 'FAILED';
+      errorMsg = result.error || result.output?.message || 'Multitalk generation failed';
+    } else if (result.status === 'IN_QUEUE' || result.status === 'IN_PROGRESS') {
+      mappedStatus = 'IN_PROGRESS';
+    }
+
+    return {
+      success: true,
+      jobId,
+      status: mappedStatus,
+      videoUrl,
+      error: errorMsg,
+      rawOutput: result.output
+    };
+
+  } catch (error) {
+    console.error('[creationWizardCheckMultitalkStatus] Error:', error);
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to check Multitalk status'));
+  }
+});
+
 /**
  * uploadBase64Image - Upload a base64 encoded image to Firebase Storage
  * Used for frame transfer functionality in video wizard
