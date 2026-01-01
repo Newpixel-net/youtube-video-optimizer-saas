@@ -9052,15 +9052,14 @@
                                                 const borderColor = hasDialogue ? 'rgba(251, 191, 36, 0.6)' :
                                                                    durationClass === 'quick' ? 'rgba(34, 197, 94, 0.5)' :
                                                                    durationClass === 'short' ? 'rgba(234, 179, 8, 0.5)' : 'rgba(59, 130, 246, 0.5)';
-                                                return \`
-                                                <div style="width: \${widthPercent}%; min-width: 30px; background: \${bgColor}; border-right: 1px solid \${borderColor}; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s;"
-                                                     onclick="openShotPreviewModal(\${sceneId}, \${idx})"
-                                                     title="Shot \${idx + 1}: \${duration}s\${hasDialogue ? ' (dialogue)' : ''}">
-                                                    <div style="font-size: 0.6rem; font-weight: 600; color: white;">\${idx + 1}</div>
-                                                    <div style="font-size: 0.5rem; color: rgba(255,255,255,0.7);">\${duration}s</div>
-                                                    \${hasDialogue ? '<div style="font-size: 0.4rem;">💬</div>' : ''}
-                                                </div>
-                                            \`}).join('')}
+                                                return '<div style="width: ' + widthPercent + '%; min-width: 30px; background: ' + bgColor + '; border-right: 1px solid ' + borderColor + '; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s;" ' +
+                                                     'onclick="openShotPreviewModal(' + sceneId + ', ' + idx + ')" ' +
+                                                     'title="Shot ' + (idx + 1) + ': ' + duration + 's' + (hasDialogue ? ' (dialogue)' : '') + '">' +
+                                                    '<div style="font-size: 0.6rem; font-weight: 600; color: white;">' + (idx + 1) + '</div>' +
+                                                    '<div style="font-size: 0.5rem; color: rgba(255,255,255,0.7);">' + duration + 's</div>' +
+                                                    (hasDialogue ? '<div style="font-size: 0.4rem;">💬</div>' : '') +
+                                                '</div>';
+                                            }).join('')}
                                         </div>
                                         <!-- Legend -->
                                         <div style="display: flex; gap: 1rem; margin-top: 0.35rem; justify-content: center;">
@@ -10438,20 +10437,18 @@
                         const recommendedDuration = hasDialogue ? '10s' : '5s';
                         const currentDuration = selector.selectedDuration || (shot?.duration === 5 ? '5s' : '10s');
 
-                        return \`
-                            <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">
-                                <div style="font-size: 0.5rem; color: rgba(255,255,255,0.7); margin-bottom: 0.25rem;">⏱️ Duration \${hasDialogue ? '(has dialogue)' : '(no dialogue)'}</div>
-                                <div style="display: flex; gap: 0.25rem;">
-                                    <button onclick="selectVideoDuration('5s')" style="flex: 1; padding: 0.25rem; border-radius: 0.2rem; border: 1px solid \${currentDuration === '5s' ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.2)'}; background: \${currentDuration === '5s' ? 'rgba(6, 182, 212, 0.2)' : 'transparent'}; color: \${currentDuration === '5s' ? '#06b6d4' : 'rgba(255,255,255,0.7)'}; cursor: pointer; font-size: 0.5rem; font-weight: \${currentDuration === '5s' ? '600' : '400'};">
-                                        5s \${recommendedDuration === '5s' ? '✓' : ''}
-                                    </button>
-                                    <button onclick="selectVideoDuration('10s')" style="flex: 1; padding: 0.25rem; border-radius: 0.2rem; border: 1px solid \${currentDuration === '10s' ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.2)'}; background: \${currentDuration === '10s' ? 'rgba(6, 182, 212, 0.2)' : 'transparent'}; color: \${currentDuration === '10s' ? '#06b6d4' : 'rgba(255,255,255,0.7)'}; cursor: pointer; font-size: 0.5rem; font-weight: \${currentDuration === '10s' ? '600' : '400'};">
-                                        10s \${recommendedDuration === '10s' ? '✓' : ''}
-                                    </button>
-                                </div>
-                                <div style="font-size: 0.4rem; color: rgba(255,255,255,0.4); margin-top: 0.2rem; text-align: center;">✓ = recommended for this shot</div>
-                            </div>
-                        \`;
+                        return '<div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">' +
+                                '<div style="font-size: 0.5rem; color: rgba(255,255,255,0.7); margin-bottom: 0.25rem;">⏱️ Duration ' + (hasDialogue ? '(has dialogue)' : '(no dialogue)') + '</div>' +
+                                '<div style="display: flex; gap: 0.25rem;">' +
+                                    '<button onclick="selectVideoDuration(\'5s\')" style="flex: 1; padding: 0.25rem; border-radius: 0.2rem; border: 1px solid ' + (currentDuration === '5s' ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.2)') + '; background: ' + (currentDuration === '5s' ? 'rgba(6, 182, 212, 0.2)' : 'transparent') + '; color: ' + (currentDuration === '5s' ? '#06b6d4' : 'rgba(255,255,255,0.7)') + '; cursor: pointer; font-size: 0.5rem; font-weight: ' + (currentDuration === '5s' ? '600' : '400') + ';">' +
+                                        '5s ' + (recommendedDuration === '5s' ? '✓' : '') +
+                                    '</button>' +
+                                    '<button onclick="selectVideoDuration(\'10s\')" style="flex: 1; padding: 0.25rem; border-radius: 0.2rem; border: 1px solid ' + (currentDuration === '10s' ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.2)') + '; background: ' + (currentDuration === '10s' ? 'rgba(6, 182, 212, 0.2)' : 'transparent') + '; color: ' + (currentDuration === '10s' ? '#06b6d4' : 'rgba(255,255,255,0.7)') + '; cursor: pointer; font-size: 0.5rem; font-weight: ' + (currentDuration === '10s' ? '600' : '400') + ';">' +
+                                        '10s ' + (recommendedDuration === '10s' ? '✓' : '') +
+                                    '</button>' +
+                                '</div>' +
+                                '<div style="font-size: 0.4rem; color: rgba(255,255,255,0.4); margin-top: 0.2rem; text-align: center;">✓ = recommended for this shot</div>' +
+                            '</div>';
                     })() : ''}
 
                     <!-- Multitalk Audio Upload (shown when Multitalk selected) -->
