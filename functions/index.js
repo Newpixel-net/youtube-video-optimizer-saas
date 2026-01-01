@@ -44605,6 +44605,143 @@ const SHOT_SEQUENCE_VALIDATOR = {
 };
 
 // =============================================================================
+// =============================================================================
+//
+//  HOLLYWOOD DIALOGUE FLOW SYSTEM - COMPLETE ARCHITECTURE DOCUMENTATION
+//
+//  A comprehensive system for Hollywood-style dialogue distribution in AI video
+//  generation. Enables natural character conversations with per-character voices,
+//  flexible shot durations, and professional quality assurance.
+//
+// =============================================================================
+// =============================================================================
+/**
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │                    HOLLYWOOD DIALOGUE FLOW - DATA PIPELINE                  │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │                                                                             │
+ * │  PHASE 1: DIALOGUE FLOW ARCHITECTURE                                        │
+ * │  ├─ Script Generation creates scene.audioLayer.dialogue[]                  │
+ * │  │  └─ Each entry: { character, line, emotion, delivery }                  │
+ * │  ├─ DIALOGUE_DISTRIBUTION_ENGINE distributes to shots                      │
+ * │  │  └─ Based on narrative beats and timing                                 │
+ * │  └─ Output: shot.dialogue[], shot.hasDialogue, shot.dialogueDuration       │
+ * │                                                                             │
+ * │  PHASE 2: FLEXIBLE DURATION SYSTEM                                          │
+ * │  ├─ FLEXIBLE_DURATION_ENGINE calculates per-shot durations                 │
+ * │  │  └─ Considers: dialogue length, action complexity, shot type            │
+ * │  ├─ Duration options: 5s (quick), 6s (short), 10s (standard)               │
+ * │  ├─ Multi-clip stitching for shots > 10s                                   │
+ * │  └─ Output: shot.calculatedDuration, shot.durationClass, shot.stitching    │
+ * │                                                                             │
+ * │  PHASE 3: CHARACTER VOICE SYSTEM                                            │
+ * │  ├─ CHARACTER_VOICE_ENGINE assigns voices to characters                    │
+ * │  │  └─ Based on archetype and gender detection                             │
+ * │  ├─ 13 voice profiles (hero, villain, mentor, etc.)                        │
+ * │  ├─ Integrates with ElevenLabs TTS                                         │
+ * │  └─ Output: script.voiceAssignments, shot.ttsConfig, shot.voiceRequirements│
+ * │                                                                             │
+ * │  PHASE 4: UI/UX ENHANCEMENTS                                                │
+ * │  ├─ Voice & Dialogue Status panel in script view                           │
+ * │  ├─ Duration timeline visualization in shot modal                          │
+ * │  ├─ Audio type indicators (dialogue/multi-voice/ambient)                   │
+ * │  ├─ Scene Production Summary with shot & voice stats                       │
+ * │  └─ Speaker voice badges in scene cards                                    │
+ * │                                                                             │
+ * │  PHASE 5: QUALITY ASSURANCE                                                 │
+ * │  ├─ QUALITY_ASSURANCE_ENGINE validates all data                            │
+ * │  │  ├─ validateDialogue() - sanitizes dialogue data                        │
+ * │  │  ├─ validateVoiceAssignments() - ensures voice coverage                 │
+ * │  │  ├─ validateDuration() - bounds checking (3-30s)                        │
+ * │  │  └─ validateTTSConfig() - validates before Multitalk                    │
+ * │  ├─ runHealthCheck() - comprehensive integration verification              │
+ * │  ├─ applyGracefulDegradation() - fallbacks for missing data                │
+ * │  └─ Output: qualityAssurance report in decomposition response              │
+ * │                                                                             │
+ * │  PHASE 6: END-TO-END INTEGRATION                                            │
+ * │  ├─ Complete pipeline verification                                          │
+ * │  ├─ Comprehensive logging for debugging                                     │
+ * │  ├─ UI health indicators                                                    │
+ * │  └─ Error handling and recovery                                             │
+ * │                                                                             │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │                                                                             │
+ * │  DATA FLOW DIAGRAM:                                                         │
+ * │                                                                             │
+ * │  Script Generation                                                          │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  ┌────────────────────────────────────────┐                                 │
+ * │  │ scene.audioLayer.dialogue[]            │                                 │
+ * │  │ script.characters[]                    │                                 │
+ * │  │ script.voiceAssignments{}              │  ◄── Phase 3: Voice Assignment │
+ * │  └────────────────────────────────────────┘                                 │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  Shot Decomposition (creationWizardDecomposeSceneToShots)                   │
+ * │       │                                                                     │
+ * │       ├─► Phase 5: QUALITY_ASSURANCE_ENGINE.validateDialogue()              │
+ * │       │                                                                     │
+ * │       ├─► Phase 1: DIALOGUE_DISTRIBUTION_ENGINE.distributeDialogueToShots() │
+ * │       │                                                                     │
+ * │       ├─► Phase 5: QUALITY_ASSURANCE_ENGINE.validateVoiceAssignments()      │
+ * │       │                                                                     │
+ * │       ├─► Phase 3: CHARACTER_VOICE_ENGINE (voice enhancement)               │
+ * │       │       └─► shot.dialogue[].voice, shot.ttsConfig                    │
+ * │       │                                                                     │
+ * │       ├─► Phase 2: FLEXIBLE_DURATION_ENGINE.calculateSceneDurations()       │
+ * │       │       └─► shot.calculatedDuration, shot.durationClass              │
+ * │       │                                                                     │
+ * │       ├─► Phase 5: QUALITY_ASSURANCE_ENGINE.runHealthCheck()                │
+ * │       │                                                                     │
+ * │       └─► Phase 5: QUALITY_ASSURANCE_ENGINE.applyGracefulDegradation()      │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  ┌────────────────────────────────────────┐                                 │
+ * │  │ Finalized Shots with:                  │                                 │
+ * │  │  - dialogue[], hasDialogue             │                                 │
+ * │  │  - voice, voiceRequirements, ttsConfig │                                 │
+ * │  │  - calculatedDuration, durationClass   │                                 │
+ * │  │  - qualityAssurance report             │                                 │
+ * │  └────────────────────────────────────────┘                                 │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  Frontend Display (Phase 4 UI)                                              │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  Multitalk Video Generation                                                 │
+ * │       │                                                                     │
+ * │       ├─► Phase 5: validateTTSConfigForMultitalk() (frontend)               │
+ * │       │                                                                     │
+ * │       └─► creationWizardGenerateMultitalkVideo()                            │
+ * │               └─► TTS synthesis + lip-sync video                            │
+ * │                                                                             │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ENGINES OVERVIEW:
+ *
+ * 1. DIALOGUE_DISTRIBUTION_ENGINE
+ *    - Distributes scene dialogue to individual shots
+ *    - Calculates speaking time per line (2.5 words/second)
+ *    - Assigns dialogue to shots based on narrative beats
+ *
+ * 2. FLEXIBLE_DURATION_ENGINE
+ *    - Calculates optimal duration for each shot
+ *    - Considers dialogue, action, and shot type
+ *    - Handles multi-clip stitching for long shots
+ *
+ * 3. CHARACTER_VOICE_ENGINE
+ *    - Assigns voice profiles to characters
+ *    - 13 profiles: male/female × hero/villain/mentor/young/neutral + narrator
+ *    - Generates TTS configuration for Multitalk
+ *
+ * 4. QUALITY_ASSURANCE_ENGINE
+ *    - Validates all data before processing
+ *    - Provides graceful fallbacks
+ *    - Runs integration health checks
+ */
+
+// =============================================================================
 // PHASE 5: QUALITY_ASSURANCE_ENGINE - Validation & Integration Health
 // =============================================================================
 /**
@@ -45016,6 +45153,224 @@ const QUALITY_ASSURANCE_ENGINE = {
     }
 
     return enhanced;
+  },
+
+  /**
+   * PHASE 6: End-to-end pipeline verification
+   * Verifies the complete Hollywood Dialogue Flow pipeline from script to shots
+   * @param {Object} script - Full script object
+   * @param {Object} scene - Scene being processed
+   * @param {Array} shots - Processed shots
+   * @returns {Object} Comprehensive pipeline verification report
+   */
+  verifyPipeline(script, scene, shots) {
+    const report = {
+      timestamp: new Date().toISOString(),
+      pipelineVersion: '1.0.0',
+      status: 'pass',
+      phases: {},
+      summary: {
+        totalChecks: 0,
+        passed: 0,
+        failed: 0,
+        warnings: 0
+      }
+    };
+
+    // Phase 1: Dialogue Flow Architecture
+    report.phases.dialogueFlow = {
+      phase: 1,
+      name: 'Dialogue Flow Architecture',
+      checks: []
+    };
+    // Check 1.1: Scene has audioLayer
+    const hasAudioLayer = !!scene?.audioLayer;
+    report.phases.dialogueFlow.checks.push({
+      name: 'Scene has audioLayer',
+      passed: hasAudioLayer,
+      value: hasAudioLayer ? 'present' : 'missing'
+    });
+    // Check 1.2: Dialogue distributed to shots
+    const dialogueShots = shots?.filter(s => s.hasDialogue) || [];
+    const sceneDialogueCount = scene?.audioLayer?.dialogue?.length || 0;
+    const distributedDialogueCount = dialogueShots.reduce((sum, s) => sum + (s.dialogue?.length || 0), 0);
+    report.phases.dialogueFlow.checks.push({
+      name: 'Dialogue distribution',
+      passed: sceneDialogueCount === 0 || distributedDialogueCount >= sceneDialogueCount,
+      value: `${distributedDialogueCount}/${sceneDialogueCount} lines distributed`
+    });
+
+    // Phase 2: Flexible Duration System
+    report.phases.flexibleDuration = {
+      phase: 2,
+      name: 'Flexible Duration System',
+      checks: []
+    };
+    // Check 2.1: All shots have valid durations
+    const shotsWithDuration = shots?.filter(s => s.calculatedDuration || s.selectedDuration || s.duration) || [];
+    report.phases.flexibleDuration.checks.push({
+      name: 'Shots have durations',
+      passed: shotsWithDuration.length === (shots?.length || 0),
+      value: `${shotsWithDuration.length}/${shots?.length || 0} shots`
+    });
+    // Check 2.2: Durations within bounds
+    const validDurations = shots?.filter(s => {
+      const dur = s.selectedDuration || s.calculatedDuration || s.duration || 0;
+      return dur >= 3 && dur <= 30;
+    }) || [];
+    report.phases.flexibleDuration.checks.push({
+      name: 'Durations within bounds (3-30s)',
+      passed: validDurations.length === (shots?.length || 0),
+      value: `${validDurations.length}/${shots?.length || 0} valid`
+    });
+
+    // Phase 3: Character Voice System
+    report.phases.characterVoice = {
+      phase: 3,
+      name: 'Character Voice System',
+      checks: []
+    };
+    // Check 3.1: Voice assignments exist
+    const hasVoiceAssignments = Object.keys(script?.voiceAssignments || {}).length > 0;
+    report.phases.characterVoice.checks.push({
+      name: 'Voice assignments in script',
+      passed: !sceneDialogueCount || hasVoiceAssignments,
+      value: hasVoiceAssignments ? `${Object.keys(script?.voiceAssignments || {}).length} characters` : 'none'
+    });
+    // Check 3.2: TTS configs generated
+    const shotsWithTTS = dialogueShots.filter(s => s.ttsConfig?.lines?.length > 0);
+    report.phases.characterVoice.checks.push({
+      name: 'TTS configs generated',
+      passed: dialogueShots.length === 0 || shotsWithTTS.length === dialogueShots.length,
+      value: `${shotsWithTTS.length}/${dialogueShots.length} dialogue shots`
+    });
+
+    // Phase 4: UI/UX (frontend - just verify data is present for UI)
+    report.phases.uiData = {
+      phase: 4,
+      name: 'UI Data Availability',
+      checks: []
+    };
+    // Check 4.1: Duration class for color coding
+    const shotsWithDurationClass = shots?.filter(s => s.durationClass) || [];
+    report.phases.uiData.checks.push({
+      name: 'Duration class for UI',
+      passed: shotsWithDurationClass.length === (shots?.length || 0),
+      value: `${shotsWithDurationClass.length}/${shots?.length || 0} shots`
+    });
+    // Check 4.2: Voice requirements for UI badges
+    const shotsWithVoiceReqs = dialogueShots.filter(s => s.voiceRequirements);
+    report.phases.uiData.checks.push({
+      name: 'Voice requirements for UI',
+      passed: dialogueShots.length === 0 || shotsWithVoiceReqs.length === dialogueShots.length,
+      value: `${shotsWithVoiceReqs.length}/${dialogueShots.length} dialogue shots`
+    });
+
+    // Phase 5: Quality Assurance (check that health check ran)
+    report.phases.qualityAssurance = {
+      phase: 5,
+      name: 'Quality Assurance',
+      checks: []
+    };
+    // Check 5.1: No fallback markers on shots
+    const shotsWithFallbacks = shots?.filter(s => s._durationFallback || s._dialogueFallback) || [];
+    report.phases.qualityAssurance.checks.push({
+      name: 'No fallback markers',
+      passed: shotsWithFallbacks.length === 0,
+      value: shotsWithFallbacks.length === 0 ? 'clean' : `${shotsWithFallbacks.length} shots used fallbacks`
+    });
+
+    // Calculate summary
+    Object.values(report.phases).forEach(phase => {
+      phase.checks.forEach(check => {
+        report.summary.totalChecks++;
+        if (check.passed) {
+          report.summary.passed++;
+        } else {
+          report.summary.failed++;
+        }
+      });
+    });
+
+    // Determine overall status
+    if (report.summary.failed === 0) {
+      report.status = 'pass';
+    } else if (report.summary.failed <= 2) {
+      report.status = 'warning';
+    } else {
+      report.status = 'fail';
+    }
+
+    report.summary.passRate = Math.round((report.summary.passed / report.summary.totalChecks) * 100);
+
+    return report;
+  },
+
+  /**
+   * PHASE 6: Generate comprehensive debug log
+   * Creates a detailed log for debugging pipeline issues
+   * @param {Object} scene - Scene object
+   * @param {Array} shots - Processed shots
+   * @param {Object} options - Additional context
+   * @returns {string} Formatted debug log
+   */
+  generateDebugLog(scene, shots, options = {}) {
+    const lines = [];
+    const separator = '─'.repeat(60);
+
+    lines.push(separator);
+    lines.push('HOLLYWOOD DIALOGUE FLOW - DEBUG LOG');
+    lines.push(separator);
+    lines.push(`Timestamp: ${new Date().toISOString()}`);
+    lines.push(`Scene ID: ${scene?.id || scene?.sceneId || 'unknown'}`);
+    lines.push(`Total Shots: ${shots?.length || 0}`);
+    lines.push('');
+
+    // Dialogue Summary
+    lines.push('DIALOGUE SUMMARY:');
+    const sceneDialogue = scene?.audioLayer?.dialogue || [];
+    lines.push(`  Scene dialogue lines: ${sceneDialogue.length}`);
+    if (sceneDialogue.length > 0) {
+      const speakers = [...new Set(sceneDialogue.map(d => d.character))];
+      lines.push(`  Speakers: ${speakers.join(', ')}`);
+    }
+    lines.push('');
+
+    // Shot-by-Shot Breakdown
+    lines.push('SHOT BREAKDOWN:');
+    (shots || []).forEach((shot, idx) => {
+      lines.push(`  Shot ${idx + 1}:`);
+      lines.push(`    Duration: ${shot.selectedDuration || shot.calculatedDuration || shot.duration || 'N/A'}s (${shot.durationClass || 'unknown'})`);
+      lines.push(`    Has Dialogue: ${shot.hasDialogue ? 'YES' : 'no'}`);
+      if (shot.hasDialogue && shot.dialogue?.length > 0) {
+        lines.push(`    Dialogue Lines: ${shot.dialogue.length}`);
+        shot.dialogue.slice(0, 2).forEach(d => {
+          lines.push(`      - ${d.character}: "${(d.line || '').substring(0, 40)}..."`);
+        });
+        if (shot.dialogue.length > 2) {
+          lines.push(`      ... and ${shot.dialogue.length - 2} more`);
+        }
+      }
+      lines.push(`    TTS Config: ${shot.ttsConfig ? 'present' : 'none'}`);
+      lines.push(`    Voice Reqs: ${shot.voiceRequirements ? `${shot.voiceRequirements.voicesNeeded} voice(s)` : 'none'}`);
+    });
+    lines.push('');
+
+    // Quality Status
+    if (options.healthReport) {
+      lines.push('QUALITY STATUS:');
+      lines.push(`  Status: ${options.healthReport.status}`);
+      if (options.healthReport.issues?.length > 0) {
+        lines.push('  Issues:');
+        options.healthReport.issues.forEach(issue => {
+          lines.push(`    - ${issue}`);
+        });
+      }
+    }
+
+    lines.push(separator);
+
+    return lines.join('\n');
   }
 };
 
@@ -52719,6 +53074,20 @@ exports.creationWizardDecomposeSceneToShots = functions
       console.log(`[creationWizardDecomposeSceneToShots] Graceful degradation applied to ${fallbacksApplied.length} shots`);
     }
 
+    // PHASE 6: Run end-to-end pipeline verification
+    // Pass the script context if available (for voice assignments check)
+    const scriptContext = { voiceAssignments: scene.voiceAssignments || {} };
+    const pipelineReport = QUALITY_ASSURANCE_ENGINE.verifyPipeline(scriptContext, scene, finalizedShots);
+
+    // PHASE 6: Generate debug log for development
+    const debugLog = QUALITY_ASSURANCE_ENGINE.generateDebugLog(scene, finalizedShots, { healthReport });
+    console.log(`[creationWizardDecomposeSceneToShots] Pipeline verification: ${pipelineReport.status} (${pipelineReport.summary.passRate}% pass rate)`);
+
+    // Log debug info in development
+    if (pipelineReport.status !== 'pass') {
+      console.log(debugLog);
+    }
+
     return {
       success: true,
       sceneId: scene.id,
@@ -52742,6 +53111,20 @@ exports.creationWizardDecomposeSceneToShots = functions
           hasFallbacks: voiceValidation.hasFallbacks || false,
           requiredCharacters: requiredCharacters.length
         }
+      },
+      // PHASE 6: Pipeline Verification Report
+      pipelineVerification: {
+        status: pipelineReport.status,
+        passRate: pipelineReport.summary.passRate,
+        totalChecks: pipelineReport.summary.totalChecks,
+        passed: pipelineReport.summary.passed,
+        failed: pipelineReport.summary.failed,
+        phases: Object.entries(pipelineReport.phases).map(([key, phase]) => ({
+          name: phase.name,
+          phase: phase.phase,
+          checksPassed: phase.checks.filter(c => c.passed).length,
+          totalChecks: phase.checks.length
+        }))
       },
       decompositionMethod: decompositionMethod,
       // Cross-scene continuity data (Upgrade 3)

@@ -8659,8 +8659,20 @@
                         totalDuration: result.data.totalDuration,
                         shots: result.data.shots,
                         consistencyAnchors: result.data.consistencyAnchors,
-                        selectedShot: 0
+                        selectedShot: 0,
+                        // PHASE 5-6: Store quality assurance and pipeline verification reports
+                        qualityAssurance: result.data.qualityAssurance || null,
+                        pipelineVerification: result.data.pipelineVerification || null
                     };
+
+                    // PHASE 6: Log pipeline status for debugging
+                    if (result.data.pipelineVerification) {
+                        const pv = result.data.pipelineVerification;
+                        console.log(`[decomposeSceneToShots] Pipeline: ${pv.status} (${pv.passRate}% pass rate)`);
+                        if (pv.status !== 'pass') {
+                            console.warn('[decomposeSceneToShots] Pipeline issues detected - check qualityAssurance for details');
+                        }
+                    }
 
                     // CRITICAL: Auto-sync scene image to Shot 1
                     // Shot 1 should automatically use the scene's existing image as its starting frame
@@ -8673,7 +8685,12 @@
                         console.log('[decomposeSceneToShots] Auto-synced scene image to Shot 1:', storyboardScene.imageUrl);
                     }
 
-                    showToast(`✅ Scene decomposed into ${result.data.shotCount} shots!`, 'success');
+                    // PHASE 6: Show toast with pipeline status
+                    const pipelineStatus = result.data.pipelineVerification?.status || 'unknown';
+                    const qaStatus = result.data.qualityAssurance?.status || 'unknown';
+                    const statusEmoji = pipelineStatus === 'pass' && qaStatus === 'healthy' ? '✅' :
+                                       pipelineStatus === 'warning' || qaStatus === 'degraded' ? '⚠️' : '✅';
+                    showToast(`${statusEmoji} Scene decomposed into ${result.data.shotCount} shots!`, 'success');
                     render();
                     scheduleAutoSave();
                 } else {
@@ -9054,6 +9071,58 @@
                                         </div>
                                     </div>
                                 `})()}
+
+                                <!-- PHASE 6: Pipeline Health Status Indicator -->
+                                ${(() => {
+                                    const qa = decomposed.qualityAssurance || {};
+                                    const pipeline = decomposed.pipelineVerification || {};
+                                    const qaStatus = qa.status || 'unknown';
+                                    const pipelineStatus = pipeline.status || 'unknown';
+                                    const passRate = pipeline.passRate || 0;
+
+                                    const statusConfig = {
+                                        'healthy': { icon: '✅', color: '#22c55e', label: 'Healthy' },
+                                        'pass': { icon: '✅', color: '#22c55e', label: 'Pass' },
+                                        'degraded': { icon: '⚠️', color: '#fbbf24', label: 'Degraded' },
+                                        'warning': { icon: '⚠️', color: '#fbbf24', label: 'Warning' },
+                                        'unhealthy': { icon: '❌', color: '#ef4444', label: 'Unhealthy' },
+                                        'fail': { icon: '❌', color: '#ef4444', label: 'Failed' },
+                                        'unknown': { icon: '❓', color: '#6b7280', label: 'Unknown' }
+                                    };
+
+                                    const qaConfig = statusConfig[qaStatus] || statusConfig['unknown'];
+                                    const pipelineConfig = statusConfig[pipelineStatus] || statusConfig['unknown'];
+
+                                    // Only show if we have status data
+                                    if (!qa.status && !pipeline.status) return '';
+
+                                    return \`
+                                    <div style="margin: 0.75rem 0; padding: 0.5rem 0.75rem; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 0.5rem;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                                            <!-- QA Status -->
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <span style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Quality:</span>
+                                                <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(\${qaConfig.color === '#22c55e' ? '34, 197, 94' : qaConfig.color === '#fbbf24' ? '251, 191, 36' : '239, 68, 68'}, 0.15); border: 1px solid \${qaConfig.color}40; border-radius: 0.25rem; color: \${qaConfig.color};">
+                                                    \${qaConfig.icon} \${qaConfig.label}
+                                                </span>
+                                            </div>
+                                            <!-- Pipeline Status -->
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <span style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Pipeline:</span>
+                                                <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(\${pipelineConfig.color === '#22c55e' ? '34, 197, 94' : pipelineConfig.color === '#fbbf24' ? '251, 191, 36' : '239, 68, 68'}, 0.15); border: 1px solid \${pipelineConfig.color}40; border-radius: 0.25rem; color: \${pipelineConfig.color};">
+                                                    \${pipelineConfig.icon} \${pipelineConfig.label} (\${passRate}%)
+                                                </span>
+                                            </div>
+                                            <!-- Issues Count -->
+                                            \${qa.issues && qa.issues.length > 0 ? \`
+                                                <div style="font-size: 0.55rem; color: #fbbf24;" title="\${qa.issues.join('\\n')}">
+                                                    ⚠️ \${qa.issues.length} issue\${qa.issues.length > 1 ? 's' : ''}
+                                                </div>
+                                            \` : ''}
+                                        </div>
+                                    </div>
+                                    \`;
+                                })()}
 
                                 <!-- Frame Chain Pipeline Header -->
                                 <div style="margin-top: 1rem;">
