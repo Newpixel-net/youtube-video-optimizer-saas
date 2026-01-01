@@ -9202,8 +9202,8 @@
                                                         }
 
                                                         const audioConfig = {
-                                                            'narrator': { icon: '🎙️', label: 'Narrator', bg: 'rgba(34, 197, 94, 0.9)', title: 'Narrator voiceover (no lip-sync)', border: 'rgba(34, 197, 94, 1)' },
-                                                            'character': { icon: '🗣️', label: 'Character', bg: 'rgba(251, 191, 36, 0.9)', title: 'Character dialogue (lip-sync)', border: 'rgba(251, 191, 36, 1)' },
+                                                            'narrator': { icon: '🎙', label: 'Narrator', bg: 'rgba(34, 197, 94, 0.9)', title: 'Narrator voiceover (no lip-sync)', border: 'rgba(34, 197, 94, 1)' },
+                                                            'character': { icon: '💬', label: 'Character', bg: 'rgba(251, 191, 36, 0.9)', title: 'Character dialogue (lip-sync)', border: 'rgba(251, 191, 36, 1)' },
                                                             'multi-voice': { icon: '🎭', label: 'Multi', bg: 'rgba(167, 139, 250, 0.9)', title: 'Multiple characters (lip-sync)', border: 'rgba(167, 139, 250, 1)' },
                                                             'internal': { icon: '💭', label: 'Thought', bg: 'rgba(96, 165, 250, 0.9)', title: 'Internal monologue (no lip-sync)', border: 'rgba(96, 165, 250, 1)' },
                                                             'sfx': { icon: '🔊', label: 'SFX', bg: 'rgba(249, 115, 22, 0.9)', title: 'Sound effects', border: 'rgba(249, 115, 22, 1)' },
@@ -9353,25 +9353,20 @@
                                                             </div>
 
                                                             <!-- Duration Factors Breakdown (when available) -->
-                                                            ${shot.durationFactors ? `
-                                                                <div style="display: flex; flex-wrap: wrap; gap: 0.2rem; margin-bottom: 0.15rem;">
-                                                                    ${shot.durationFactors.dialogue?.hasDialogue ? `
-                                                                        <span style="background: rgba(251, 191, 36, 0.2); border: 1px solid rgba(251, 191, 36, 0.4); padding: 0.1rem 0.2rem; border-radius: 0.15rem; color: #fbbf24; font-size: 0.4rem;" title="Duration based on ${shot.durationFactors.dialogue.wordCount} words at 2.5 words/sec + buffer">
-                                                                            💬 ${shot.durationFactors.dialogue.totalWithBuffer?.toFixed(1) || 0}s dialogue
-                                                                        </span>
-                                                                    ` : ''}
-                                                                    ${shot.durationFactors.shotType?.preset?.name ? `
-                                                                        <span style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); padding: 0.1rem 0.2rem; border-radius: 0.15rem; color: #a78bfa; font-size: 0.4rem;" title="${shot.durationFactors.shotType.preset.description || 'Shot type preset'}">
-                                                                            🎬 ${shot.durationFactors.shotType.name || 'default'}
-                                                                        </span>
-                                                                    ` : ''}
-                                                                    ${shot.durationFactors.action?.actionCount > 0 ? `
-                                                                        <span style="background: rgba(249, 115, 22, 0.2); border: 1px solid rgba(249, 115, 22, 0.4); padding: 0.1rem 0.2rem; border-radius: 0.15rem; color: #fb923c; font-size: 0.4rem;" title="${shot.durationFactors.action.actionCount} action verbs detected">
-                                                                            ⚡ ${shot.durationFactors.action.minimum?.toFixed(1) || 0}s action
-                                                                        </span>
-                                                                    ` : ''}
-                                                                </div>
-                                                            ` : ''}
+                                                            ${shot.durationFactors ? (() => {
+                                                                const df = shot.durationFactors;
+                                                                let factors = [];
+                                                                if (df.dialogue && df.dialogue.hasDialogue) {
+                                                                    factors.push('<span style="background: rgba(251, 191, 36, 0.2); border: 1px solid rgba(251, 191, 36, 0.4); padding: 0.1rem 0.2rem; border-radius: 0.15rem; color: #fbbf24; font-size: 0.4rem;" title="Dialogue duration">💬 ' + (df.dialogue.totalWithBuffer ? df.dialogue.totalWithBuffer.toFixed(1) : '0') + 's</span>');
+                                                                }
+                                                                if (df.shotType && df.shotType.name) {
+                                                                    factors.push('<span style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); padding: 0.1rem 0.2rem; border-radius: 0.15rem; color: #a78bfa; font-size: 0.4rem;" title="Shot type">🎬 ' + df.shotType.name + '</span>');
+                                                                }
+                                                                if (df.action && df.action.actionCount > 0) {
+                                                                    factors.push('<span style="background: rgba(249, 115, 22, 0.2); border: 1px solid rgba(249, 115, 22, 0.4); padding: 0.1rem 0.2rem; border-radius: 0.15rem; color: #fb923c; font-size: 0.4rem;" title="Action">⚡ ' + (df.action.minimum ? df.action.minimum.toFixed(1) : '0') + 's</span>');
+                                                                }
+                                                                return factors.length > 0 ? '<div style="display: flex; flex-wrap: wrap; gap: 0.2rem; margin-bottom: 0.15rem;">' + factors.join('') + '</div>' : '';
+                                                            })() : ''}
 
                                                             <div style="display: flex; gap: 0.2rem; margin-bottom: 0.15rem;">
                                                                 <button onclick="setShotDuration(${sceneId}, ${idx}, 5); event.stopPropagation();"
