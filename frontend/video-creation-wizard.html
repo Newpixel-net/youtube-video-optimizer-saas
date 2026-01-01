@@ -9006,6 +9006,55 @@
                             ` : ''}
 
                             ${hasShots ? `
+                                <!-- PHASE 4: Duration Timeline Visualization -->
+                                ${(() => {
+                                    const totalDuration = decomposed.shots.reduce((sum, s) => sum + (s.selectedDuration || s.calculatedDuration || s.duration || 10), 0);
+                                    const dialogueShots = decomposed.shots.filter(s => s.hasDialogue);
+                                    const multiVoiceShots = decomposed.shots.filter(s => s.isMultiVoice);
+                                    return `
+                                    <div style="margin-top: 1rem; margin-bottom: 1rem;">
+                                        <!-- Timeline Header -->
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                            <div style="font-size: 0.8rem; color: white; font-weight: 600;">⏱️ Duration Timeline</div>
+                                            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                                <span style="font-size: 0.65rem; color: rgba(255,255,255,0.6);">Total: <span style="color: #3b82f6; font-weight: 600;">${totalDuration}s</span></span>
+                                                ${dialogueShots.length > 0 ? `<span style="font-size: 0.65rem; color: #fbbf24;">💬 ${dialogueShots.length} with dialogue</span>` : ''}
+                                                ${multiVoiceShots.length > 0 ? `<span style="font-size: 0.65rem; color: #a78bfa;">🎤 ${multiVoiceShots.length} multi-voice</span>` : ''}
+                                            </div>
+                                        </div>
+                                        <!-- Visual Timeline Bar -->
+                                        <div style="display: flex; height: 32px; background: rgba(0,0,0,0.3); border-radius: 0.5rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
+                                            ${decomposed.shots.map((shot, idx) => {
+                                                const duration = shot.selectedDuration || shot.calculatedDuration || shot.duration || 10;
+                                                const widthPercent = (duration / totalDuration) * 100;
+                                                const hasDialogue = shot.hasDialogue;
+                                                const durationClass = duration <= 5 ? 'quick' : duration <= 6 ? 'short' : 'standard';
+                                                const bgColor = hasDialogue ? 'rgba(251, 191, 36, 0.4)' :
+                                                               durationClass === 'quick' ? 'rgba(34, 197, 94, 0.3)' :
+                                                               durationClass === 'short' ? 'rgba(234, 179, 8, 0.3)' : 'rgba(59, 130, 246, 0.3)';
+                                                const borderColor = hasDialogue ? 'rgba(251, 191, 36, 0.6)' :
+                                                                   durationClass === 'quick' ? 'rgba(34, 197, 94, 0.5)' :
+                                                                   durationClass === 'short' ? 'rgba(234, 179, 8, 0.5)' : 'rgba(59, 130, 246, 0.5)';
+                                                return \`
+                                                <div style="width: \${widthPercent}%; min-width: 30px; background: \${bgColor}; border-right: 1px solid \${borderColor}; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s;"
+                                                     onclick="openShotPreviewModal(\${sceneId}, \${idx})"
+                                                     title="Shot \${idx + 1}: \${duration}s\${hasDialogue ? ' (dialogue)' : ''}">
+                                                    <div style="font-size: 0.6rem; font-weight: 600; color: white;">\${idx + 1}</div>
+                                                    <div style="font-size: 0.5rem; color: rgba(255,255,255,0.7);">\${duration}s</div>
+                                                    \${hasDialogue ? '<div style="font-size: 0.4rem;">💬</div>' : ''}
+                                                </div>
+                                            \`}).join('')}
+                                        </div>
+                                        <!-- Legend -->
+                                        <div style="display: flex; gap: 1rem; margin-top: 0.35rem; justify-content: center;">
+                                            <span style="font-size: 0.5rem; display: flex; align-items: center; gap: 0.2rem;"><span style="width: 8px; height: 8px; background: rgba(34, 197, 94, 0.5); border-radius: 2px;"></span> 5s</span>
+                                            <span style="font-size: 0.5rem; display: flex; align-items: center; gap: 0.2rem;"><span style="width: 8px; height: 8px; background: rgba(234, 179, 8, 0.5); border-radius: 2px;"></span> 6s</span>
+                                            <span style="font-size: 0.5rem; display: flex; align-items: center; gap: 0.2rem;"><span style="width: 8px; height: 8px; background: rgba(59, 130, 246, 0.5); border-radius: 2px;"></span> 10s</span>
+                                            <span style="font-size: 0.5rem; display: flex; align-items: center; gap: 0.2rem;"><span style="width: 8px; height: 8px; background: rgba(251, 191, 36, 0.5); border-radius: 2px;"></span> 💬 Dialogue</span>
+                                        </div>
+                                    </div>
+                                `})()}
+
                                 <!-- Frame Chain Pipeline Header -->
                                 <div style="margin-top: 1rem;">
                                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
@@ -9061,6 +9110,25 @@
                                                     <div style="position: absolute; top: 0.25rem; right: 0.25rem; background: rgba(139, 92, 246, 0.8); color: white; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.55rem; z-index: 2;">
                                                         ${shot.shotType || 'shot'}
                                                     </div>
+
+                                                    <!-- PHASE 4: Audio Type Indicator Badge -->
+                                                    ${(() => {
+                                                        const hasDialogue = shot.hasDialogue && shot.dialogue?.length > 0;
+                                                        const isMultiVoice = shot.isMultiVoice || (shot.uniqueVoiceCount && shot.uniqueVoiceCount > 1);
+                                                        const hasTTS = shot.ttsConfig && shot.ttsConfig.lines?.length > 0;
+                                                        const audioType = hasDialogue ? (isMultiVoice ? 'multi-voice' : 'dialogue') : 'ambient';
+                                                        const audioConfig = {
+                                                            'multi-voice': { icon: '🎭', label: 'Multi', bg: 'rgba(167, 139, 250, 0.9)', title: 'Multiple character voices' },
+                                                            'dialogue': { icon: '💬', label: 'Voice', bg: 'rgba(251, 191, 36, 0.9)', title: 'Single character voice' },
+                                                            'ambient': { icon: '🎵', label: 'Music', bg: 'rgba(59, 130, 246, 0.7)', title: 'Background music/ambient' }
+                                                        };
+                                                        const config = audioConfig[audioType];
+                                                        return `
+                                                            <div style="position: absolute; top: 1.5rem; right: 0.25rem; background: ${config.bg}; color: white; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.45rem; z-index: 2; display: flex; align-items: center; gap: 0.1rem;" title="${config.title}${hasTTS ? ' - TTS Ready' : ''}">
+                                                                ${config.icon} ${config.label}${hasTTS ? ' ✓' : ''}
+                                                            </div>
+                                                        `;
+                                                    })()}
 
                                                     <!-- Video Model Badge (shows which AI model will be used) -->
                                                     ${(() => {
@@ -15656,6 +15724,81 @@
                     ` : ''}
                 </div>
 
+                <!-- PHASE 4: Voice & Dialogue Status Panel -->
+                ${(() => {
+                    const voiceAssignments = script.voiceAssignments || {};
+                    const characters = script.characters || [];
+                    const allScenes = script.scenes || [];
+
+                    // Collect dialogue info from all scenes
+                    const scenesWithDialogue = allScenes.filter(s => s.audioLayer?.dialogue?.length > 0);
+                    const totalDialogueLines = allScenes.reduce((sum, s) => sum + (s.audioLayer?.dialogue?.length || 0), 0);
+                    const uniqueSpeakers = [...new Set(allScenes.flatMap(s => s.audioLayer?.dialogue?.map(d => d.character) || []))];
+                    const assignedVoices = uniqueSpeakers.filter(name => voiceAssignments[name]?.voiceProfileId);
+                    const unassignedVoices = uniqueSpeakers.filter(name => !voiceAssignments[name]?.voiceProfileId);
+
+                    // Skip if no dialogue in the script
+                    if (totalDialogueLines === 0 && characters.length === 0) return '';
+
+                    const allAssigned = unassignedVoices.length === 0 && uniqueSpeakers.length > 0;
+                    const statusColor = allAssigned ? '#22c55e' : '#fbbf24';
+                    const statusIcon = allAssigned ? '✅' : '⚠️';
+                    const statusText = allAssigned ? 'All voices assigned' : \`\${unassignedVoices.length} voice\${unassignedVoices.length > 1 ? 's' : ''} pending\`;
+
+                    return \`
+                    <div class="content-card" style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 1.1rem;">🎤</span>
+                                <span style="font-size: 0.9rem; font-weight: 600; color: white;">Voice & Dialogue Status</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.6rem; background: rgba(\${allAssigned ? '34, 197, 94' : '251, 191, 36'}, 0.15); border: 1px solid rgba(\${allAssigned ? '34, 197, 94' : '251, 191, 36'}, 0.3); border-radius: 0.4rem;">
+                                <span style="font-size: 0.75rem;">\${statusIcon}</span>
+                                <span style="font-size: 0.7rem; color: \${statusColor}; font-weight: 500;">\${statusText}</span>
+                            </div>
+                        </div>
+
+                        <!-- Stats Grid -->
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 0.75rem;">
+                            <div style="background: rgba(251, 191, 36, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">
+                                <div style="font-size: 1.2rem; font-weight: 700; color: #fbbf24;">\${totalDialogueLines}</div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Dialogue Lines</div>
+                            </div>
+                            <div style="background: rgba(167, 139, 250, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">
+                                <div style="font-size: 1.2rem; font-weight: 700; color: #a78bfa;">\${uniqueSpeakers.length}</div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Speakers</div>
+                            </div>
+                            <div style="background: rgba(34, 197, 94, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">
+                                <div style="font-size: 1.2rem; font-weight: 700; color: #22c55e;">\${assignedVoices.length}</div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Voices Assigned</div>
+                            </div>
+                            <div style="background: rgba(59, 130, 246, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">
+                                <div style="font-size: 1.2rem; font-weight: 700; color: #3b82f6;">\${scenesWithDialogue.length}</div>
+                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Scenes w/ Dialogue</div>
+                            </div>
+                        </div>
+
+                        <!-- Voice Assignments List -->
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                            \${uniqueSpeakers.map(name => {
+                                const voice = voiceAssignments[name];
+                                const hasVoice = voice?.voiceProfileId;
+                                const bgRgb = hasVoice ? '34, 197, 94' : '251, 191, 36';
+                                const iconColor = hasVoice ? '#22c55e' : '#fbbf24';
+                                const voiceName = hasVoice ? (voice.voiceProfile?.name || voice.voiceProfileId) : '';
+                                return '<div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.6rem; background: rgba(' + bgRgb + ', 0.1); border: 1px solid rgba(' + bgRgb + ', 0.3); border-radius: 0.3rem;">' +
+                                    '<span style="font-size: 0.7rem; color: ' + iconColor + ';">' + (hasVoice ? '✓' : '○') + '</span>' +
+                                    '<span style="font-size: 0.7rem; color: white; font-weight: 500;">' + name + '</span>' +
+                                    (hasVoice ? '<span style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">→ ' + voiceName + '</span>' : '') +
+                                '</div>';
+                            }).join('')}
+                        </div>
+
+                        \${!allAssigned && uniqueSpeakers.length > 0 ? '<div style="margin-top: 0.6rem; padding: 0.5rem 0.75rem; background: rgba(251, 191, 36, 0.08); border-radius: 0.4rem; font-size: 0.65rem; color: rgba(255,255,255,0.6);">💡 Voices will be auto-assigned during shot decomposition based on character archetypes</div>' : ''}
+                    </div>
+                    \`;
+                })()}
+
                 <!-- Scenes -->
                 <div class="content-card">
                     <div class="content-card-header">
@@ -15706,13 +15849,41 @@
             const dialogueCount = scene.audioLayer?.dialogue?.length || 0;
             const audioType = scene.audioLayer?.type || (hasNarration ? 'voiceover' : 'music_only');
 
+            // PHASE 3: Get unique speakers and their voices
+            const uniqueSpeakers = hasDialogue ?
+                [...new Set(scene.audioLayer.dialogue.map(d => d.character))] : [];
+            const speakerCount = uniqueSpeakers.length;
+
+            // PHASE 4: Get voice assignments for speakers
+            const voiceAssignments = state.script?.voiceAssignments || {};
+            const speakerVoices = uniqueSpeakers.map(name => ({
+                name,
+                voice: voiceAssignments[name] || null
+            }));
+
+            // PHASE 2: Duration classification
+            const durationClass = scene.duration <= 20 ? 'short' :
+                                  scene.duration <= 40 ? 'medium' : 'long';
+            const durationColor = durationClass === 'short' ? '#22c55e' :
+                                  durationClass === 'medium' ? '#eab308' : '#f97316';
+
+            // Check if scene has been decomposed into shots
+            const decomposed = state.storyboard?.multiShotMode?.decomposedScenes?.[scene.id];
+            const hasShots = decomposed?.status === 'ready' && decomposed?.shots?.length > 0;
+            const shotCount = decomposed?.shots?.length || 0;
+
             return `
                 <div class="scene-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; overflow: hidden;">
                     <!-- Scene Header -->
                     <div onclick="toggleSceneExpand(${scene.id})"
                          style="padding: 1rem; cursor: pointer; display: flex; align-items: center; gap: 1rem; border-bottom: ${isExpanded ? '1px solid rgba(255,255,255,0.1)' : 'none'};">
-                        <div style="width: 2rem; height: 2rem; background: linear-gradient(135deg, #8b5cf6, #06b6d4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;">
-                            ${index + 1}
+                        <!-- Scene Number with Audio Type Indicator -->
+                        <div style="position: relative;">
+                            <div style="width: 2rem; height: 2rem; background: linear-gradient(135deg, ${hasDialogue ? '#fbbf24, #f59e0b' : hasNarration ? '#8b5cf6, #06b6d4' : '#6b7280, #4b5563'}); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;">
+                                ${index + 1}
+                            </div>
+                            ${hasDialogue ? `<div style="position: absolute; bottom: -2px; right: -2px; width: 12px; height: 12px; background: #fbbf24; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 7px; border: 2px solid #1a1a2e;">💬</div>` : ''}
+                            ${hasShots ? `<div style="position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; background: #22c55e; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 7px; border: 2px solid #1a1a2e; color: white;">${shotCount}</div>` : ''}
                         </div>
                         <div style="flex: 1; min-width: 0;">
                             <div style="color: white; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -15724,10 +15895,30 @@
                                 }
                             </div>
                             <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                <span>${scene.duration}s • ${scene.transition || 'cut'} ${scene.mood ? '• ' + scene.mood : ''}</span>
-                                ${hasDialogue ? `<span style="font-size: 0.6rem; padding: 0.1rem 0.35rem; background: rgba(251, 191, 36, 0.2); color: #fbbf24; border-radius: 0.2rem;">${dialogueCount} dialogue${dialogueCount > 1 ? 's' : ''}</span>` : ''}
-                                ${scene.audioLayer ? `<span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">[${scene.audioLayer.type || 'auto'}]</span>` : ''}
+                                <!-- Duration with color coding -->
+                                <span style="color: ${durationColor};">${scene.duration}s</span>
+                                <span>• ${scene.transition || 'cut'}</span>
+                                ${scene.mood ? `<span>• ${scene.mood}</span>` : ''}
+                                <!-- Dialogue count badge -->
+                                ${hasDialogue ? `<span style="font-size: 0.6rem; padding: 0.1rem 0.35rem; background: rgba(251, 191, 36, 0.2); color: #fbbf24; border-radius: 0.2rem;">${dialogueCount} line${dialogueCount > 1 ? 's' : ''}</span>` : ''}
+                                <!-- Speaker count badge (Phase 4) -->
+                                ${speakerCount > 1 ? `<span style="font-size: 0.6rem; padding: 0.1rem 0.35rem; background: rgba(167, 139, 250, 0.2); color: #a78bfa; border-radius: 0.2rem;">🎤 ${speakerCount} voices</span>` : ''}
+                                <!-- Shot decomposition status -->
+                                ${hasShots ? `<span style="font-size: 0.6rem; padding: 0.1rem 0.35rem; background: rgba(34, 197, 94, 0.2); color: #22c55e; border-radius: 0.2rem;">📹 ${shotCount} shots</span>` : ''}
+                                <!-- Audio type indicator -->
+                                ${scene.audioLayer ? `<span style="font-size: 0.55rem; color: rgba(255,255,255,0.3);">[${audioType}]</span>` : ''}
                             </div>
+                            <!-- PHASE 4: Speaker Voice Badges (compact view) -->
+                            ${speakerCount > 0 ? `
+                                <div style="display: flex; gap: 0.25rem; margin-top: 0.3rem; flex-wrap: wrap;">
+                                    ${speakerVoices.slice(0, 3).map(sv => `
+                                        <span style="font-size: 0.5rem; padding: 0.1rem 0.25rem; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); color: #c4b5fd; border-radius: 0.15rem;">
+                                            ${sv.name}${sv.voice?.voiceProfile?.name ? ` → ${sv.voice.voiceProfile.name}` : ''}
+                                        </span>
+                                    `).join('')}
+                                    ${speakerCount > 3 ? `<span style="font-size: 0.5rem; color: rgba(255,255,255,0.4);">+${speakerCount - 3} more</span>` : ''}
+                                </div>
+                            ` : ''}
                         </div>
                         <div style="color: rgba(255,255,255,0.5); transform: rotate(${isExpanded ? '180deg' : '0deg'}); transition: transform 0.2s;">▼</div>
                     </div>
@@ -15774,27 +15965,46 @@
                                 `}
                             </div>
 
-                            <!-- PHASE 1: Character Dialogue Display (from audioLayer) -->
+                            <!-- PHASE 1 + PHASE 4: Character Dialogue Display with Voice Info -->
                             ${scene.audioLayer?.dialogue?.length > 0 ? `
                                 <div style="margin-bottom: 1rem;">
-                                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                        <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">💬 Character Dialogue</label>
-                                        <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(251, 191, 36, 0.2); color: #fbbf24; border-radius: 0.25rem;">Characters speak</span>
-                                        <span style="font-size: 0.55rem; color: rgba(255,255,255,0.4);">${scene.audioLayer.dialogue.length} line${scene.audioLayer.dialogue.length > 1 ? 's' : ''}</span>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">💬 Character Dialogue</label>
+                                            <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(251, 191, 36, 0.2); color: #fbbf24; border-radius: 0.25rem;">${scene.audioLayer.dialogue.length} line${scene.audioLayer.dialogue.length > 1 ? 's' : ''}</span>
+                                            <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(167, 139, 250, 0.2); color: #a78bfa; border-radius: 0.25rem;">🎤 ${speakerCount} voice${speakerCount > 1 ? 's' : ''}</span>
+                                        </div>
+                                        <!-- Estimated dialogue duration -->
+                                        <span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">
+                                            ~${Math.ceil(scene.audioLayer.dialogue.reduce((sum, d) => sum + (d.line?.split(' ').length || 0), 0) / 2.5)}s speaking time
+                                        </span>
                                     </div>
-                                    <div style="background: rgba(251, 191, 36, 0.05); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 0.5rem; padding: 0.75rem; max-height: 150px; overflow-y: auto;">
-                                        ${scene.audioLayer.dialogue.map((d, dIdx) => `
+                                    <div style="background: rgba(251, 191, 36, 0.05); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 0.5rem; padding: 0.75rem; max-height: 200px; overflow-y: auto;">
+                                        ${scene.audioLayer.dialogue.map((d, dIdx) => {
+                                            const charVoice = voiceAssignments[d.character];
+                                            return `
                                             <div style="margin-bottom: ${dIdx < scene.audioLayer.dialogue.length - 1 ? '0.5rem' : '0'}; padding-bottom: ${dIdx < scene.audioLayer.dialogue.length - 1 ? '0.5rem' : '0'}; border-bottom: ${dIdx < scene.audioLayer.dialogue.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none'};">
-                                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem;">
+                                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; flex-wrap: wrap;">
                                                     <span style="font-size: 0.75rem; font-weight: 600; color: #fbbf24;">${d.character || 'Character'}</span>
+                                                    ${charVoice?.voiceProfile?.name ? `<span style="font-size: 0.5rem; padding: 0.1rem 0.25rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.3); color: #c4b5fd; border-radius: 0.15rem;">${charVoice.voiceProfile.name}</span>` : ''}
                                                     ${d.emotion ? `<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(255,255,255,0.1); border-radius: 0.2rem; color: rgba(255,255,255,0.5);">${d.emotion}</span>` : ''}
+                                                    ${d.delivery ? `<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(6, 182, 212, 0.1); border-radius: 0.2rem; color: rgba(6, 182, 212, 0.7);">${d.delivery}</span>` : ''}
                                                 </div>
-                                                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); font-style: italic;">"${d.line || ''}"</div>
+                                                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); font-style: italic; line-height: 1.4;">"${d.line || ''}"</div>
+                                                <div style="font-size: 0.5rem; color: rgba(255,255,255,0.3); margin-top: 0.15rem;">
+                                                    ~${Math.ceil((d.line?.split(' ').length || 0) / 2.5)}s
+                                                </div>
                                             </div>
-                                        `).join('')}
+                                        `}).join('')}
                                     </div>
-                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.35rem;">
-                                        💡 Dialogue will be distributed to shots during decomposition. Use Multitalk to generate voice-synced videos.
+                                    <!-- PHASE 4: Voice Summary -->
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; padding: 0.5rem; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 0.4rem;">
+                                        <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">
+                                            🎤 Voices: ${speakerVoices.map(sv => `<span style="color: #c4b5fd;">${sv.name}</span>`).join(', ')}
+                                        </div>
+                                        <div style="font-size: 0.55rem; color: rgba(255,255,255,0.4);">
+                                            Use Multitalk for lip-sync
+                                        </div>
                                     </div>
                                 </div>
                             ` : ''}
@@ -15819,6 +16029,61 @@
                                     </select>
                                 </div>
                             </div>
+
+                            <!-- PHASE 2 & 3: Shot & Voice Summary Panel -->
+                            ${(() => {
+                                const sceneDecomp = state.storyboard?.multiShotMode?.decomposedScenes?.[scene.id];
+                                const hasDecompShots = sceneDecomp?.status === 'ready' && sceneDecomp?.shots?.length > 0;
+                                const shots = sceneDecomp?.shots || [];
+                                const dialogueShots = shots.filter(s => s.hasDialogue);
+                                const multiVoiceShots = shots.filter(s => s.isMultiVoice);
+                                const totalShotDuration = shots.reduce((sum, s) => sum + (s.selectedDuration || s.calculatedDuration || s.duration || 10), 0);
+
+                                if (!hasDecompShots && !hasDialogue) return '';
+
+                                return `
+                                <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                        <span style="font-size: 0.75rem; color: #3b82f6; font-weight: 600;">📊 Scene Production Summary</span>
+                                    </div>
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem;">
+                                        ${hasDecompShots ? `
+                                            <!-- Shot Statistics -->
+                                            <div style="background: rgba(34, 197, 94, 0.1); padding: 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(34, 197, 94, 0.2);">
+                                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Total Shots</div>
+                                                <div style="font-size: 1rem; color: #22c55e; font-weight: 700;">${shots.length}</div>
+                                                <div style="font-size: 0.5rem; color: rgba(255,255,255,0.4);">${totalShotDuration}s total</div>
+                                            </div>
+                                            <div style="background: rgba(251, 191, 36, 0.1); padding: 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(251, 191, 36, 0.2);">
+                                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Dialogue Shots</div>
+                                                <div style="font-size: 1rem; color: #fbbf24; font-weight: 700;">${dialogueShots.length}</div>
+                                                <div style="font-size: 0.5rem; color: rgba(255,255,255,0.4);">${Math.round(dialogueShots.length / shots.length * 100)}% of scene</div>
+                                            </div>
+                                            <div style="background: rgba(167, 139, 250, 0.1); padding: 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(167, 139, 250, 0.2);">
+                                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Multi-Voice</div>
+                                                <div style="font-size: 1rem; color: #a78bfa; font-weight: 700;">${multiVoiceShots.length}</div>
+                                                <div style="font-size: 0.5rem; color: rgba(255,255,255,0.4);">needs Multitalk</div>
+                                            </div>
+                                        ` : ''}
+                                        ${speakerCount > 0 ? `
+                                            <!-- Voice Statistics -->
+                                            <div style="background: rgba(139, 92, 246, 0.1); padding: 0.5rem; border-radius: 0.4rem; border: 1px solid rgba(139, 92, 246, 0.2);">
+                                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Characters</div>
+                                                <div style="font-size: 1rem; color: #c4b5fd; font-weight: 700;">${speakerCount}</div>
+                                                <div style="font-size: 0.5rem; color: rgba(255,255,255,0.4);">${speakerVoices.filter(sv => sv.voice).length} voices assigned</div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                    ${hasDecompShots && speakerCount > 0 ? `
+                                        <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                            <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5);">
+                                                🎬 Production: ${shots.length} shots × ${speakerCount} voices = ${dialogueShots.length} dialogue animations via Multitalk
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                            })()}
 
                             <!-- Scene Actions -->
                             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
