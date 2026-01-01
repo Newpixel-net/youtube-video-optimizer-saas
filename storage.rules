@@ -60,6 +60,18 @@ service firebase.storage {
                    && request.resource.contentType.matches('video/.*');
     }
 
+    // [FIX-2026-01-01] Creation Projects folder (for Video Creation Wizard)
+    // Storyboard images and generated videos need public read access
+    // Path structure: creation-projects/{projectId}/storyboard/{fileName}
+    // Note: Cloud Functions using Admin SDK handle all writes
+    match /creation-projects/{projectId}/{allPaths=**} {
+      // Allow public read access for storyboard images and videos
+      allow read: if true;
+
+      // All writes are handled by Cloud Functions with Admin SDK
+      allow write: if false;
+    }
+
     // Deny access to all other paths
     match /{allPaths=**} {
       allow read, write: if false;
