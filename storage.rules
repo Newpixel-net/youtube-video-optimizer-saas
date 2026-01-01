@@ -60,6 +60,22 @@ service firebase.storage {
                    && request.resource.contentType.matches('video/.*');
     }
 
+    // [FIX-2026-01-01] Creation Projects folder (for Video Creation Wizard)
+    // Storyboard images and generated videos need public read access
+    // Path structure: creation-projects/{projectId}/storyboard/{fileName}
+    // Note: Cloud Functions using Admin SDK handle most writes
+    match /creation-projects/{projectId}/{allPaths=**} {
+      // Allow public read access for storyboard images and videos
+      allow read: if true;
+
+      // Allow authenticated users to write to their own project folder
+      // This is needed for Multitalk audio uploads from frontend
+      // Limit audio files to 50MB
+      allow write: if request.auth != null
+                   && request.auth.uid == projectId
+                   && request.resource.size < 50 * 1024 * 1024;
+    }
+
     // Deny access to all other paths
     match /{allPaths=**} {
       allow read, write: if false;

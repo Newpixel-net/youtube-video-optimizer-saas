@@ -9813,7 +9813,8 @@
 
                 // Upload to Firebase Storage
                 const { sceneId, shotIndex } = state.storyboard.videoModelSelector;
-                const fileName = `creation-projects/${state.project.id}/multitalk-audio/scene_${sceneId}_shot_${shotIndex}_${Date.now()}.${file.name.split('.').pop()}`;
+                const projectId = state.project.id || firebase.auth().currentUser?.uid || 'temp';
+                const fileName = `creation-projects/${projectId}/multitalk-audio/scene_${sceneId}_shot_${shotIndex}_${Date.now()}.${file.name.split('.').pop()}`;
 
                 const storageRef = firebase.storage().ref(fileName);
                 const uploadTask = await storageRef.put(file);
