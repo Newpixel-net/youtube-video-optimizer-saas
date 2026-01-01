@@ -9137,7 +9137,7 @@
                                                     <!-- Shot Info & Actions -->
                                                     <div style="padding: 0.4rem;">
                                                         <div style="font-size: 0.6rem; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                                            ${shot.cameraMovement || 'static'} • ${shot.duration || 2}s
+                                                            ${shot.cameraMovement || 'static'} • <span style="color: ${shot.durationClass === 'quick' ? '#22c55e' : shot.durationClass === 'short' ? '#eab308' : '#3b82f6'};">${shot.selectedDuration || shot.calculatedDuration || shot.duration || 10}s</span>${shot.hasDialogue ? ' 💬' : ''}
                                                         </div>
                                                         <!-- NEW: Narrative Beat Display - shows ACTION for video -->
                                                         ${shot.narrativeBeat?.motionDescription ? `
@@ -9158,6 +9158,41 @@
                                                                 ${shot.dialogue.length > 2 ? `<div style="color: rgba(255,255,255,0.5);">+${shot.dialogue.length - 2} more...</div>` : ''}
                                                             </div>
                                                         ` : ''}
+
+                                                        <!-- PHASE 2: Duration Control - flexible shot timing -->
+                                                        <div style="font-size: 0.5rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 0.25rem; padding: 0.25rem; margin-bottom: 0.3rem;">
+                                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.15rem;">
+                                                                <span style="color: #3b82f6; font-weight: 600;">⏱️ Duration</span>
+                                                                <span style="color: ${shot.durationClass === 'quick' ? '#22c55e' : shot.durationClass === 'short' ? '#eab308' : '#3b82f6'}; font-weight: 500;">
+                                                                    ${shot.selectedDuration || shot.calculatedDuration || shot.duration || 10}s
+                                                                    ${shot.requiresStitching ? ' (stitched)' : ''}
+                                                                </span>
+                                                            </div>
+                                                            <div style="display: flex; gap: 0.2rem; margin-bottom: 0.15rem;">
+                                                                <button onclick="setShotDuration(${sceneId}, ${idx}, 5); event.stopPropagation();"
+                                                                        style="flex: 1; padding: 0.15rem 0.25rem; background: ${(shot.selectedDuration || shot.calculatedDuration || 10) === 5 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.1)'}; border: 1px solid ${(shot.selectedDuration || shot.calculatedDuration || 10) === 5 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(255,255,255,0.2)'}; border-radius: 0.2rem; color: white; cursor: pointer; font-size: 0.5rem;">
+                                                                    5s
+                                                                </button>
+                                                                <button onclick="setShotDuration(${sceneId}, ${idx}, 6); event.stopPropagation();"
+                                                                        style="flex: 1; padding: 0.15rem 0.25rem; background: ${(shot.selectedDuration || shot.calculatedDuration || 10) === 6 ? 'rgba(234, 179, 8, 0.3)' : 'rgba(255,255,255,0.1)'}; border: 1px solid ${(shot.selectedDuration || shot.calculatedDuration || 10) === 6 ? 'rgba(234, 179, 8, 0.5)' : 'rgba(255,255,255,0.2)'}; border-radius: 0.2rem; color: white; cursor: pointer; font-size: 0.5rem;">
+                                                                    6s
+                                                                </button>
+                                                                <button onclick="setShotDuration(${sceneId}, ${idx}, 10); event.stopPropagation();"
+                                                                        style="flex: 1; padding: 0.15rem 0.25rem; background: ${(shot.selectedDuration || shot.calculatedDuration || 10) === 10 ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.1)'}; border: 1px solid ${(shot.selectedDuration || shot.calculatedDuration || 10) === 10 ? 'rgba(59, 130, 246, 0.5)' : 'rgba(255,255,255,0.2)'}; border-radius: 0.2rem; color: white; cursor: pointer; font-size: 0.5rem;">
+                                                                    10s
+                                                                </button>
+                                                            </div>
+                                                            ${shot.durationRecommendation ? `
+                                                                <div style="color: rgba(255,255,255,0.5); font-size: 0.45rem; line-height: 1.2;">
+                                                                    ${shot.durationRecommendation}
+                                                                </div>
+                                                            ` : ''}
+                                                            ${shot.requiresStitching && shot.stitchingStrategy ? `
+                                                                <div style="color: rgba(251, 146, 60, 0.8); font-size: 0.45rem; margin-top: 0.1rem;">
+                                                                    ${shot.stitchingStrategy.clipCount} clips: ${shot.stitchingStrategy.clips?.map(c => c.duration + 's').join(' + ')}
+                                                                </div>
+                                                            ` : ''}
+                                                        </div>
 
                                                         <!-- Action Buttons Grid -->
                                                         <div style="display: flex; flex-direction: column; gap: 0.25rem;">
@@ -9816,6 +9851,87 @@
             state.storyboard.videoModelSelector.selectedDuration = duration;
             render();
             renderShotDecompositionModal();
+        }
+
+        /**
+         * PHASE 2: Set individual shot duration
+         * Updates the shot's selected duration and persists to state
+         * @param {number} sceneId - Scene ID containing the shot
+         * @param {number} shotIndex - Index of the shot within decomposed shots
+         * @param {number} duration - Duration in seconds (5, 6, or 10)
+         */
+        function setShotDuration(sceneId, shotIndex, duration) {
+            const scene = state.storyboard.scenes.find(s => s.id === sceneId);
+            if (!scene || !scene.decomposedShots || !scene.decomposedShots[shotIndex]) {
+                console.warn(`[setShotDuration] Shot not found: scene ${sceneId}, shot ${shotIndex}`);
+                return;
+            }
+
+            // Update shot's selected duration
+            scene.decomposedShots[shotIndex].selectedDuration = duration;
+            scene.decomposedShots[shotIndex].duration = duration;
+
+            // Recalculate duration class
+            scene.decomposedShots[shotIndex].durationClass =
+                duration <= 5 ? 'quick' : duration <= 6 ? 'short' : 'standard';
+
+            console.log(`[setShotDuration] Set shot ${shotIndex} duration to ${duration}s (${scene.decomposedShots[shotIndex].durationClass})`);
+
+            // Re-render to update UI
+            render();
+            renderShotDecompositionModal();
+        }
+
+        /**
+         * PHASE 2: Auto-calculate duration for a shot based on its content
+         * Uses the FLEXIBLE_DURATION_ENGINE logic (client-side approximation)
+         * @param {number} sceneId - Scene ID
+         * @param {number} shotIndex - Shot index
+         */
+        function autoCalculateShotDuration(sceneId, shotIndex) {
+            const scene = state.storyboard.scenes.find(s => s.id === sceneId);
+            if (!scene || !scene.decomposedShots || !scene.decomposedShots[shotIndex]) {
+                console.warn(`[autoCalculateShotDuration] Shot not found: scene ${sceneId}, shot ${shotIndex}`);
+                return;
+            }
+
+            const shot = scene.decomposedShots[shotIndex];
+
+            // Calculate based on dialogue (client-side approximation)
+            let suggestedDuration = 10; // Default
+
+            if (shot.hasDialogue && shot.dialogue && shot.dialogue.length > 0) {
+                // Calculate dialogue duration: ~2.5 words/second + buffer
+                const WORDS_PER_SECOND = 2.5;
+                const VISUAL_BUFFER = 1.5;
+
+                let totalWords = 0;
+                shot.dialogue.forEach(d => {
+                    const words = (d.line || '').trim().split(/\s+/).length;
+                    totalWords += words;
+                });
+
+                const dialogueDuration = totalWords / WORDS_PER_SECOND + VISUAL_BUFFER;
+
+                // Round to Minimax durations
+                if (dialogueDuration <= 5.5) suggestedDuration = 5;
+                else if (dialogueDuration <= 8) suggestedDuration = 6;
+                else suggestedDuration = 10;
+            } else {
+                // Non-dialogue shots: use shot type hints
+                const shotType = (shot.shotType || '').toLowerCase();
+                if (/establishing|wide|master/.test(shotType)) {
+                    suggestedDuration = 5;
+                } else if (/close.*up|insert|detail|reaction/.test(shotType)) {
+                    suggestedDuration = 5;
+                } else {
+                    suggestedDuration = 10;
+                }
+            }
+
+            // Apply the calculated duration
+            setShotDuration(sceneId, shotIndex, suggestedDuration);
+            showToast(`Duration auto-set to ${suggestedDuration}s`, 'success');
         }
 
         /**

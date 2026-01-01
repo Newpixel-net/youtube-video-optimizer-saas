@@ -26544,7 +26544,15 @@ exports.creationWizardGenerateScript = functions
     // Scenes are narrative units (30-60s) composed of multiple shots (6-10s each)
     // This mirrors professional film production where:
     // - Scene = narrative beat (30-60 seconds)
-    // - Shot = individual video clip (6 or 10 seconds from Minimax)
+    // - Shot = individual video clip (Minimax supports 5s, 6s, or 10s)
+    //
+    // PHASE 2: FLEXIBLE DURATION SYSTEM
+    // Individual shot durations are calculated dynamically during shot decomposition:
+    // - Dialogue shots: Duration based on word count (~2.5 words/sec + buffer)
+    // - Non-dialogue shots: Duration based on shot type presets (reaction=5s, establishing=5s, etc.)
+    // - Extended shots (>10s): Automatically split into multiple stitched clips
+    // The clipDuration here is the DEFAULT for scene-level planning.
+    // FLEXIBLE_DURATION_ENGINE calculates optimal per-shot durations.
 
     const clipDuration = videoModel.duration === '10s' ? 10 : 6;
     const isExtendedClip = clipDuration === 10;
@@ -44832,6 +44840,471 @@ const DIALOGUE_DISTRIBUTION_ENGINE = {
 };
 
 // =============================================================================
+// FLEXIBLE_DURATION_ENGINE - Hollywood-Style Dynamic Shot Timing (Phase 2)
+// =============================================================================
+/**
+ * FLEXIBLE_DURATION_ENGINE
+ *
+ * Calculates optimal shot durations based on dialogue, action, and shot type.
+ * Implements Hollywood pacing principles where content drives timing.
+ *
+ * Key features:
+ * - Shot type presets (reaction=3s, dialogue_exchange=10s, establishing=5s)
+ * - Dynamic duration from dialogue word count
+ * - Action complexity analysis
+ * - Multi-clip stitching for shots > 10s (Minimax limit)
+ * - Supports 5s, 6s, 10s Minimax durations
+ *
+ * Output: Calculated duration + stitching strategy if needed
+ */
+const FLEXIBLE_DURATION_ENGINE = {
+
+  // ==========================================================================
+  // SHOT TYPE DURATION PRESETS
+  // Based on Hollywood editing conventions and AI video constraints
+  // ==========================================================================
+  SHOT_TYPE_PRESETS: {
+    // Quick shots (3-5s) - minimal content, quick cuts
+    reaction: { min: 3, default: 4, max: 5, description: 'Character reaction, no dialogue' },
+    insert: { min: 3, default: 4, max: 5, description: 'Detail/insert shot' },
+    cutaway: { min: 3, default: 4, max: 5, description: 'Cutaway to element' },
+
+    // Short shots (5-6s) - single action or brief moment
+    establishing: { min: 4, default: 5, max: 6, description: 'Scene establishing shot' },
+    transition: { min: 4, default: 5, max: 6, description: 'Scene transition' },
+    atmosphere: { min: 4, default: 5, max: 6, description: 'Mood/atmosphere shot' },
+    movement: { min: 4, default: 5, max: 6, description: 'Character movement' },
+
+    // Medium shots (6-10s) - single dialogue or action
+    dialogue_single: { min: 6, default: 8, max: 10, description: 'Single character speaking' },
+    action_single: { min: 6, default: 8, max: 10, description: 'Single action sequence' },
+    reveal: { min: 6, default: 8, max: 10, description: 'Dramatic reveal' },
+
+    // Long shots (10s) - dialogue exchanges or complex action
+    dialogue_exchange: { min: 8, default: 10, max: 12, description: 'Back-and-forth dialogue' },
+    action_sequence: { min: 8, default: 10, max: 15, description: 'Multi-beat action' },
+    emotional_moment: { min: 8, default: 10, max: 12, description: 'Emotional/dramatic beat' },
+
+    // Extended shots (10-20s) - complex scenes requiring stitching
+    conversation: { min: 10, default: 15, max: 20, description: 'Extended conversation' },
+    chase: { min: 10, default: 15, max: 20, description: 'Chase/pursuit sequence' },
+    battle: { min: 12, default: 18, max: 25, description: 'Combat/battle scene' },
+
+    // Default fallback
+    default: { min: 5, default: 10, max: 10, description: 'Standard shot' }
+  },
+
+  // Minimax supported durations
+  MINIMAX_DURATIONS: [5, 6, 10],
+  MAX_SINGLE_CLIP: 10,  // Maximum single clip duration
+
+  // ==========================================================================
+  // CORE DURATION CALCULATION
+  // ==========================================================================
+
+  /**
+   * Calculate optimal duration for a shot based on all content factors
+   * @param {Object} shot - Shot data with dialogue, action, shotType
+   * @param {Object} options - Configuration options
+   * @returns {Object} Duration calculation result
+   */
+  calculateOptimalDuration(shot, options = {}) {
+    const {
+      defaultDuration = 10,
+      respectMinimaxLimits = true,
+      allowStitching = true
+    } = options;
+
+    // Factor 1: Dialogue duration (highest priority)
+    const dialogueDuration = this.calculateDialogueDuration(shot);
+
+    // Factor 2: Shot type preset
+    const shotTypeInfo = this.getShotTypeInfo(shot);
+
+    // Factor 3: Action complexity
+    const actionDuration = this.calculateActionDuration(shot);
+
+    // Factor 4: Content density (from prompt analysis)
+    const contentDensity = this.analyzeContentDensity(shot);
+
+    // Calculate raw optimal duration
+    let rawDuration = Math.max(
+      dialogueDuration.totalWithBuffer,
+      shotTypeInfo.preset.default,
+      actionDuration.minimum
+    );
+
+    // Apply content density modifier
+    rawDuration = rawDuration * (1 + contentDensity.modifier);
+
+    // Clamp to shot type bounds
+    rawDuration = Math.max(shotTypeInfo.preset.min, Math.min(rawDuration, shotTypeInfo.preset.max));
+
+    // Round to nearest Minimax-compatible duration
+    const minimaxDuration = this.roundToMinimaxDuration(rawDuration, respectMinimaxLimits);
+
+    // Determine if stitching is needed
+    const stitchingStrategy = allowStitching && rawDuration > this.MAX_SINGLE_CLIP
+      ? this.calculateStitchingStrategy(rawDuration, dialogueDuration, shotTypeInfo)
+      : null;
+
+    return {
+      rawDuration: Math.round(rawDuration * 10) / 10,
+      calculatedDuration: minimaxDuration,
+      requiresStitching: stitchingStrategy !== null,
+      stitchingStrategy,
+      factors: {
+        dialogue: dialogueDuration,
+        shotType: shotTypeInfo,
+        action: actionDuration,
+        contentDensity
+      },
+      recommendation: this.generateDurationRecommendation(shot, minimaxDuration, stitchingStrategy)
+    };
+  },
+
+  /**
+   * Calculate dialogue-based duration
+   */
+  calculateDialogueDuration(shot) {
+    const dialogue = shot.dialogue || [];
+    if (!dialogue.length) {
+      return {
+        hasDialogue: false,
+        lineCount: 0,
+        wordCount: 0,
+        speakingDuration: 0,
+        pauseDuration: 0,
+        totalDuration: 0,
+        totalWithBuffer: 0
+      };
+    }
+
+    const WORDS_PER_SECOND = 2.5;
+    const MIN_LINE_DURATION = 1.5;
+    const PAUSE_BETWEEN_SPEAKERS = 0.5;
+    const VISUAL_BUFFER = 1.5;
+
+    let totalWords = 0;
+    let speakingDuration = 0;
+    let pauseDuration = 0;
+    let prevCharacter = null;
+
+    dialogue.forEach(d => {
+      const words = (d.line || '').trim().split(/\s+/).length;
+      totalWords += words;
+      speakingDuration += Math.max(words / WORDS_PER_SECOND, MIN_LINE_DURATION);
+
+      if (prevCharacter && prevCharacter !== d.character) {
+        pauseDuration += PAUSE_BETWEEN_SPEAKERS;
+      }
+      prevCharacter = d.character;
+    });
+
+    const totalDuration = speakingDuration + pauseDuration;
+    const totalWithBuffer = totalDuration + VISUAL_BUFFER;
+
+    return {
+      hasDialogue: true,
+      lineCount: dialogue.length,
+      wordCount: totalWords,
+      speakingDuration: Math.round(speakingDuration * 10) / 10,
+      pauseDuration: Math.round(pauseDuration * 10) / 10,
+      totalDuration: Math.round(totalDuration * 10) / 10,
+      totalWithBuffer: Math.round(totalWithBuffer * 10) / 10,
+      characters: [...new Set(dialogue.map(d => d.character))]
+    };
+  },
+
+  /**
+   * Get shot type preset information
+   */
+  getShotTypeInfo(shot) {
+    // Detect shot type from various sources
+    const shotType = shot.shotType || 'medium';
+    const hasDialogue = shot.hasDialogue || (shot.dialogue && shot.dialogue.length > 0);
+    const dialogueCount = (shot.dialogue || []).length;
+    const speakerCount = new Set((shot.dialogue || []).map(d => d.character)).size;
+
+    // Classify based on content
+    let presetKey = 'default';
+
+    if (hasDialogue) {
+      if (speakerCount > 1 || dialogueCount > 2) {
+        presetKey = 'dialogue_exchange';
+      } else {
+        presetKey = 'dialogue_single';
+      }
+    } else {
+      // Use shot type to determine preset
+      const shotTypeLower = shotType.toLowerCase();
+      if (/establishing|wide|master/.test(shotTypeLower)) {
+        presetKey = 'establishing';
+      } else if (/close.*up|insert|detail/.test(shotTypeLower)) {
+        presetKey = 'insert';
+      } else if (/reaction/.test(shotTypeLower)) {
+        presetKey = 'reaction';
+      } else if (/action|chase|fight/.test(shotTypeLower)) {
+        presetKey = 'action_single';
+      } else if (/reveal/.test(shotTypeLower)) {
+        presetKey = 'reveal';
+      } else if (/movement|tracking|dolly/.test(shotTypeLower)) {
+        presetKey = 'movement';
+      }
+    }
+
+    // Check prompts for action indicators
+    const videoPrompt = (shot.videoPrompt || shot.prompt || '').toLowerCase();
+    if (!hasDialogue && /battle|fight|combat|explosion|chase/.test(videoPrompt)) {
+      presetKey = 'action_sequence';
+    }
+    if (/emotional|tearful|dramatic|crying|laughing/.test(videoPrompt)) {
+      presetKey = 'emotional_moment';
+    }
+
+    return {
+      detectedType: presetKey,
+      preset: this.SHOT_TYPE_PRESETS[presetKey] || this.SHOT_TYPE_PRESETS.default,
+      hasDialogue,
+      dialogueCount,
+      speakerCount,
+      reasoning: `Shot classified as '${presetKey}' based on ${hasDialogue ? `${dialogueCount} dialogue lines` : `shot type '${shotType}'`}`
+    };
+  },
+
+  /**
+   * Calculate action-based duration from video prompt
+   */
+  calculateActionDuration(shot) {
+    const videoPrompt = (shot.videoPrompt || shot.prompt || '').toLowerCase();
+
+    // Count action verbs and complexity indicators
+    const actionVerbs = videoPrompt.match(/\b(walks?|runs?|jumps?|turns?|moves?|reaches?|grabs?|opens?|closes?|sits?|stands?|looks?|gazes?|enters?|exits?|falls?|rises?|pushes?|pulls?|throws?|catches?|kicks?|punches?|dodges?|climbs?|crawls?|swims?|flies?|drives?|rides?)\b/g) || [];
+
+    const complexActions = videoPrompt.match(/\b(slowly|gradually|carefully|quickly|suddenly|dramatically|gracefully|violently|smoothly|steadily)\b/g) || [];
+
+    const multiStepIndicators = videoPrompt.match(/\b(then|and then|afterwards|before|after|while|during|as|continues?|begins?|starts?|finishes?|ends?)\b/g) || [];
+
+    const actionCount = actionVerbs.length;
+    const complexityBonus = complexActions.length * 0.5;
+    const multiStepBonus = multiStepIndicators.length * 1.0;
+
+    // Base: 2 seconds per action, with complexity and multi-step modifiers
+    const actionTime = (actionCount * 2) + complexityBonus + multiStepBonus;
+
+    return {
+      actionCount,
+      complexityLevel: complexActions.length,
+      multiStepCount: multiStepIndicators.length,
+      estimatedDuration: Math.round(actionTime * 10) / 10,
+      minimum: Math.max(5, actionTime),  // At least 5 seconds
+      reasoning: `${actionCount} actions, ${complexActions.length} complex modifiers, ${multiStepIndicators.length} multi-step sequences`
+    };
+  },
+
+  /**
+   * Analyze content density from prompts
+   */
+  analyzeContentDensity(shot) {
+    const imagePrompt = (shot.imagePrompt || '').toLowerCase();
+    const videoPrompt = (shot.videoPrompt || shot.prompt || '').toLowerCase();
+    const fullPrompt = `${imagePrompt} ${videoPrompt}`;
+
+    // Character count
+    const characterMentions = fullPrompt.match(/\b(character|person|man|woman|boy|girl|child|figure|protagonist|antagonist|hero|villain)\b/g) || [];
+
+    // Environmental detail count
+    const envDetails = fullPrompt.match(/\b(room|street|forest|building|car|table|chair|window|door|wall|floor|ceiling|sky|ground|tree|flower|water|fire|light|shadow|sun|moon|star)\b/g) || [];
+
+    // Emotional/dramatic intensity
+    const intensityWords = fullPrompt.match(/\b(intense|dramatic|emotional|powerful|explosive|gentle|subtle|fierce|calm|chaotic|peaceful|violent)\b/g) || [];
+
+    const totalElements = characterMentions.length + (envDetails.length * 0.3) + (intensityWords.length * 0.5);
+
+    // Calculate modifier: more elements = slightly more time
+    const modifier = Math.min(0.3, totalElements * 0.03);  // Cap at 30% increase
+
+    return {
+      characterCount: characterMentions.length,
+      environmentalDetails: envDetails.length,
+      intensityLevel: intensityWords.length,
+      totalElements: Math.round(totalElements * 10) / 10,
+      modifier: Math.round(modifier * 100) / 100,
+      reasoning: `${characterMentions.length} characters, ${envDetails.length} env elements, ${intensityWords.length} intensity markers`
+    };
+  },
+
+  // ==========================================================================
+  // MINIMAX DURATION ROUNDING
+  // ==========================================================================
+
+  /**
+   * Round duration to nearest Minimax-compatible value
+   */
+  roundToMinimaxDuration(duration, respectLimits = true) {
+    if (!respectLimits) {
+      return Math.round(duration);
+    }
+
+    // Find closest supported duration
+    if (duration <= 5.5) return 5;
+    if (duration <= 8) return 6;
+    return 10;
+  },
+
+  /**
+   * Select best Minimax duration for a shot
+   */
+  selectMinimaxDuration(shot) {
+    const hasDialogue = shot.hasDialogue || (shot.dialogue && shot.dialogue.length > 0);
+    const dialogueDuration = this.calculateDialogueDuration(shot);
+
+    // For dialogue shots, prefer longer durations
+    if (hasDialogue) {
+      if (dialogueDuration.totalWithBuffer > 8) return 10;
+      if (dialogueDuration.totalWithBuffer > 5) return 6;
+      return 5;
+    }
+
+    // For non-dialogue shots, use shot type preset
+    const shotTypeInfo = this.getShotTypeInfo(shot);
+    const presetDefault = shotTypeInfo.preset.default;
+
+    return this.roundToMinimaxDuration(presetDefault, true);
+  },
+
+  // ==========================================================================
+  // MULTI-CLIP STITCHING STRATEGY
+  // ==========================================================================
+
+  /**
+   * Calculate stitching strategy for shots > 10s
+   * @param {number} totalDuration - Required total duration
+   * @param {Object} dialogueInfo - Dialogue timing info
+   * @param {Object} shotTypeInfo - Shot type info
+   * @returns {Object} Stitching strategy
+   */
+  calculateStitchingStrategy(totalDuration, dialogueInfo, shotTypeInfo) {
+    if (totalDuration <= this.MAX_SINGLE_CLIP) {
+      return null;
+    }
+
+    const clips = [];
+    let remainingDuration = totalDuration;
+    let clipIndex = 0;
+
+    // Distribute duration across clips
+    while (remainingDuration > 0) {
+      let clipDuration;
+
+      if (remainingDuration <= 10) {
+        // Last clip - use exact remaining
+        clipDuration = this.roundToMinimaxDuration(remainingDuration);
+      } else if (remainingDuration <= 15) {
+        // Split into roughly equal clips
+        clipDuration = this.roundToMinimaxDuration(remainingDuration / 2);
+      } else {
+        // Use max duration for this clip
+        clipDuration = 10;
+      }
+
+      // Determine clip purpose
+      let purpose = 'continuation';
+      if (clipIndex === 0) purpose = 'opening';
+
+      // Check if dialogue falls in this clip
+      const clipStartTime = clips.reduce((sum, c) => sum + c.duration, 0);
+      const clipEndTime = clipStartTime + clipDuration;
+
+      let dialogueInClip = [];
+      if (dialogueInfo.hasDialogue) {
+        // This would need actual dialogue timing data
+        dialogueInClip = []; // Placeholder - would be calculated from dialogue timing
+      }
+
+      clips.push({
+        index: clipIndex,
+        duration: clipDuration,
+        startTime: clipStartTime,
+        endTime: clipEndTime,
+        purpose,
+        hasDialogue: dialogueInClip.length > 0,
+        dialogueCount: dialogueInClip.length,
+        // Capture frame for chaining
+        captureFrameAt: clipDuration - 0.5,  // Capture at end for next clip
+        requiresImageGeneration: clipIndex === 0  // Only first clip needs image
+      });
+
+      remainingDuration -= clipDuration;
+      clipIndex++;
+    }
+
+    // Mark last clip
+    if (clips.length > 0) {
+      clips[clips.length - 1].purpose = 'closing';
+      clips[clips.length - 1].captureFrameAt = null;  // No capture needed for last
+    }
+
+    return {
+      totalDuration: Math.round(totalDuration * 10) / 10,
+      clipCount: clips.length,
+      clips,
+      transitionType: 'seamless_chain',  // Use last frame as next first frame
+      assemblyMethod: 'sequential_stitch',
+      notes: `Shot split into ${clips.length} clips: ${clips.map(c => `${c.duration}s`).join(' + ')}`
+    };
+  },
+
+  // ==========================================================================
+  // RECOMMENDATIONS
+  // ==========================================================================
+
+  /**
+   * Generate human-readable duration recommendation
+   */
+  generateDurationRecommendation(shot, duration, stitchingStrategy) {
+    const hasDialogue = shot.hasDialogue || (shot.dialogue && shot.dialogue.length > 0);
+
+    if (stitchingStrategy) {
+      return `Extended shot (${stitchingStrategy.totalDuration}s) - will be stitched from ${stitchingStrategy.clipCount} clips`;
+    }
+
+    if (hasDialogue) {
+      const dialogueCount = (shot.dialogue || []).length;
+      return `${duration}s recommended for ${dialogueCount} dialogue line${dialogueCount > 1 ? 's' : ''}`;
+    }
+
+    const shotType = shot.shotType || 'standard';
+    return `${duration}s optimal for ${shotType} shot`;
+  },
+
+  /**
+   * Batch calculate durations for all shots in a scene
+   * @param {Array} shots - Array of shots
+   * @param {Object} options - Configuration options
+   * @returns {Array} Shots with calculated durations
+   */
+  calculateSceneDurations(shots, options = {}) {
+    return shots.map((shot, idx) => {
+      const calculation = this.calculateOptimalDuration(shot, options);
+
+      return {
+        ...shot,
+        // Phase 2: Flexible duration fields
+        calculatedDuration: calculation.calculatedDuration,
+        rawOptimalDuration: calculation.rawDuration,
+        durationFactors: calculation.factors,
+        requiresStitching: calculation.requiresStitching,
+        stitchingStrategy: calculation.stitchingStrategy,
+        durationRecommendation: calculation.recommendation,
+        // Use calculated duration as suggested
+        suggestedDuration: calculation.calculatedDuration
+      };
+    });
+  }
+};
+
+// =============================================================================
 // KEYFRAME_QUALITY_ENGINE - Image Quality Validation for Video Generation
 // =============================================================================
 /**
@@ -51092,11 +51565,34 @@ exports.creationWizardDecomposeSceneToShots = functions
     console.log(`[creationWizardDecomposeSceneToShots] ${dialogueSummary}`);
     console.log(`[creationWizardDecomposeSceneToShots] Scene audio type: ${sceneAudioType}`);
 
+    // STEP 5.999: FLEXIBLE DURATION CALCULATION (Phase 2)
+    // Calculate optimal duration for each shot based on dialogue, action, and shot type
+    // Also determines if multi-clip stitching is needed for shots > 10s
+    const durationEnhancedShots = FLEXIBLE_DURATION_ENGINE.calculateSceneDurations(
+      dialogueEnhancedShots,
+      {
+        defaultDuration: clipDuration,
+        respectMinimaxLimits: true,
+        allowStitching: true
+      }
+    );
+
+    // Log duration calculation results
+    const durationSummary = durationEnhancedShots.map(s =>
+      `Shot ${s.shotIndex || 'N/A'}: ${s.calculatedDuration}s (${s.durationRecommendation || 'default'})`
+    ).join(', ');
+    console.log(`[creationWizardDecomposeSceneToShots] Duration calculations: ${durationSummary}`);
+
+    const stitchingNeeded = durationEnhancedShots.filter(s => s.requiresStitching);
+    if (stitchingNeeded.length > 0) {
+      console.log(`[creationWizardDecomposeSceneToShots] ${stitchingNeeded.length} shot(s) require multi-clip stitching`);
+    }
+
     // STEP 6: Normalize shots with all required fields
     // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, visualContinuity, and dialogue
-    // IMPORTANT: Use dialogueEnhancedShots (with World-First + Physics + Character + Audio + Timeline + Dialogue) for final normalization
-    const normalizedShots = dialogueEnhancedShots.map((shot, idx) => {
-      const isLast = idx === dialogueEnhancedShots.length - 1;
+    // IMPORTANT: Use durationEnhancedShots (with World-First + Physics + Character + Audio + Timeline + Dialogue + Duration) for final normalization
+    const normalizedShots = durationEnhancedShots.map((shot, idx) => {
+      const isLast = idx === durationEnhancedShots.length - 1;
       const isFirst = idx === 0;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
@@ -51172,6 +51668,18 @@ exports.creationWizardDecomposeSceneToShots = functions
         dialogueDuration: shot.dialogueDuration || 0,  // Total dialogue time in seconds
         dialogueCount: shot.dialogueCount || 0,  // Number of dialogue lines
         suggestedDuration: shot.suggestedDuration || shot.duration,  // Optimal duration based on dialogue
+        // PHASE 2: FLEXIBLE DURATION SYSTEM - Hollywood-style pacing
+        // Dynamic duration based on dialogue, action, and shot type
+        calculatedDuration: shot.calculatedDuration || shot.duration,  // AI-calculated optimal duration
+        rawOptimalDuration: shot.rawOptimalDuration || null,  // Raw calculation before Minimax rounding
+        durationFactors: shot.durationFactors || null,  // Breakdown of duration calculation factors
+        durationRecommendation: shot.durationRecommendation || null,  // Human-readable recommendation
+        // Multi-clip stitching for extended shots (> 10s)
+        requiresStitching: shot.requiresStitching || false,  // True if shot needs multiple clips
+        stitchingStrategy: shot.stitchingStrategy || null,  // { clipCount, clips[], totalDuration }
+        // Duration classification for UI
+        durationClass: shot.calculatedDuration <= 5 ? 'quick' :
+                       shot.calculatedDuration <= 6 ? 'short' : 'standard',  // quick/short/standard
         // Generation status
         // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
         // This ensures when user regenerates scene image, Shot 1 stays in sync
