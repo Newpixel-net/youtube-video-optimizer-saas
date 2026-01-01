@@ -10119,6 +10119,18 @@
                 return;
             }
 
+            // PHASE 5: Validate TTS config before Multitalk API call
+            const ttsValidation = validateTTSConfigForMultitalk(shot);
+            if (ttsValidation.warnings.length > 0) {
+                console.warn('[Multitalk] TTS config warnings:', ttsValidation.warnings);
+            }
+            if (!ttsValidation.valid) {
+                console.error('[Multitalk] TTS config errors:', ttsValidation.errors);
+                showToast('TTS config issue: ' + ttsValidation.errors.join(', '), 'warning');
+                // Continue anyway with enhanced config - graceful degradation
+            }
+            const validatedTTSConfig = ttsValidation.enhanced;
+
             shot.videoStatus = 'generating';
             shot.videoModel = 'multitalk';
             shot.videoModelReason = 'Multitalk with voiceover';
@@ -10143,8 +10155,8 @@
                     audioDuration: audioDuration || 10,
                     prompt: videoPromptToUse,
                     aspectRatio: state.platform.aspectRatio || '16:9',
-                    // PHASE 3: Pass voice info for TTS integration
-                    ttsConfig: shot.ttsConfig || null,
+                    // PHASE 3 + 5: Pass validated voice info for TTS integration
+                    ttsConfig: validatedTTSConfig,
                     voiceRequirements: shot.voiceRequirements || null,
                     characterVoices: state.animation?.characterVoices || {}
                 });
@@ -19033,6 +19045,85 @@
             }
 
             return null;
+        }
+
+        /**
+         * PHASE 5: Validate TTS config before Multitalk API call
+         * Ensures all required fields are present and valid
+         * @param {Object} shot - Shot object containing ttsConfig
+         * @returns {Object} { valid, errors, warnings, enhanced }
+         */
+        function validateTTSConfigForMultitalk(shot) {
+            const errors = [];
+            const warnings = [];
+            const ttsConfig = shot?.ttsConfig;
+
+            // If no ttsConfig, return empty but valid (no TTS needed)
+            if (!ttsConfig) {
+                return {
+                    valid: true,
+                    errors: [],
+                    warnings: ['No TTS config - using audio file only'],
+                    enhanced: null,
+                    isEmpty: true
+                };
+            }
+
+            const enhanced = { ...ttsConfig };
+
+            // Validate lines array
+            if (!ttsConfig.lines || !Array.isArray(ttsConfig.lines)) {
+                warnings.push('TTS config missing lines array');
+                enhanced.lines = [];
+            } else {
+                enhanced.lines = ttsConfig.lines.map((line, idx) => {
+                    const enhancedLine = { ...line };
+
+                    // Ensure voice is set - fallback to default
+                    if (!line.voice) {
+                        warnings.push(`Line ${idx + 1}: No voice, using default 'adam'`);
+                        enhancedLine.voice = 'adam';
+                    }
+
+                    // Ensure text is present
+                    if (!line.text || typeof line.text !== 'string' || line.text.trim().length === 0) {
+                        errors.push(`Line ${idx + 1}: Empty text`);
+                        enhancedLine._invalid = true;
+                    }
+
+                    // Ensure character is set
+                    if (!line.character) {
+                        warnings.push(`Line ${idx + 1}: No character name`);
+                        enhancedLine.character = 'Character';
+                    }
+
+                    return enhancedLine;
+                }).filter(line => !line._invalid);
+            }
+
+            // Validate total duration
+            if (!ttsConfig.totalDuration || typeof ttsConfig.totalDuration !== 'number') {
+                const estimatedDuration = enhanced.lines.reduce((sum, l) => {
+                    const words = (l.text?.split(/\s+/).length || 0);
+                    return sum + Math.max(1.5, words / 2.5);
+                }, 0);
+                enhanced.totalDuration = Math.ceil(estimatedDuration) || 5;
+                warnings.push(`Estimated TTS duration: ${enhanced.totalDuration}s`);
+            }
+
+            // Check if we have any valid lines
+            if (enhanced.lines.length === 0) {
+                warnings.push('No valid TTS lines after validation');
+            }
+
+            return {
+                valid: errors.length === 0,
+                errors,
+                warnings,
+                enhanced: enhanced.lines.length > 0 ? enhanced : null,
+                isEmpty: enhanced.lines.length === 0,
+                lineCount: enhanced.lines.length
+            };
         }
 
         function getVoiceForScene(sceneId) {

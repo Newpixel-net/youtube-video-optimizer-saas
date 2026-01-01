@@ -44605,6 +44605,421 @@ const SHOT_SEQUENCE_VALIDATOR = {
 };
 
 // =============================================================================
+// PHASE 5: QUALITY_ASSURANCE_ENGINE - Validation & Integration Health
+// =============================================================================
+/**
+ * QUALITY_ASSURANCE_ENGINE
+ *
+ * Validates data integrity across all dialogue, voice, and duration systems.
+ * Provides graceful degradation and fallback values when data is missing.
+ *
+ * Key features:
+ * - Validates dialogue data structure before processing
+ * - Validates voice assignments with fallback defaults
+ * - Validates duration calculations with bounds checking
+ * - Validates TTS config before Multitalk API calls
+ * - Provides integration health checks
+ * - Logs validation issues for debugging
+ *
+ * Phase 5 of the Hollywood Dialogue Flow improvement plan.
+ */
+const QUALITY_ASSURANCE_ENGINE = {
+
+  // Validation thresholds
+  THRESHOLDS: {
+    MIN_DIALOGUE_LENGTH: 1,       // Minimum characters in a line
+    MAX_DIALOGUE_LENGTH: 500,     // Maximum characters in a line
+    MIN_SHOT_DURATION: 3,         // Minimum seconds per shot
+    MAX_SHOT_DURATION: 30,        // Maximum seconds per shot
+    MAX_DIALOGUE_PER_SHOT: 5,     // Maximum dialogue lines per shot
+    MIN_WORDS_PER_LINE: 1,        // Minimum words per dialogue line
+    MAX_WORDS_PER_LINE: 100       // Maximum words per dialogue line
+  },
+
+  // Default fallback values
+  DEFAULTS: {
+    voiceProfile: {
+      voiceProfileId: 'male-hero',
+      voiceProfile: { id: 'male-hero', name: 'Heroic Male', gender: 'male' },
+      elevenLabsVoice: 'adam',
+      detected: false,
+      fallback: true
+    },
+    duration: 6,
+    emotion: 'neutral',
+    delivery: 'normal'
+  },
+
+  /**
+   * Validate dialogue data structure
+   * @param {Array} dialogue - Array of dialogue objects
+   * @returns {Object} { valid, errors, sanitized }
+   */
+  validateDialogue(dialogue) {
+    const errors = [];
+    const warnings = [];
+
+    // Handle null/undefined
+    if (!dialogue) {
+      return { valid: true, errors: [], warnings: [], sanitized: [], isEmpty: true };
+    }
+
+    // Ensure it's an array
+    if (!Array.isArray(dialogue)) {
+      errors.push('Dialogue must be an array');
+      return { valid: false, errors, warnings, sanitized: [], isEmpty: true };
+    }
+
+    // Validate and sanitize each line
+    const sanitized = dialogue.map((line, idx) => {
+      const sanitizedLine = { ...line };
+
+      // Validate character name
+      if (!line.character || typeof line.character !== 'string') {
+        warnings.push(`Line ${idx + 1}: Missing or invalid character name, using 'Character'`);
+        sanitizedLine.character = 'Character';
+      } else {
+        sanitizedLine.character = line.character.trim();
+      }
+
+      // Validate dialogue text
+      if (!line.line || typeof line.line !== 'string') {
+        errors.push(`Line ${idx + 1}: Missing dialogue text`);
+        sanitizedLine.line = '';
+        sanitizedLine._invalid = true;
+      } else {
+        // Trim and validate length
+        sanitizedLine.line = line.line.trim();
+        if (sanitizedLine.line.length < this.THRESHOLDS.MIN_DIALOGUE_LENGTH) {
+          warnings.push(`Line ${idx + 1}: Dialogue too short, may cause issues`);
+        }
+        if (sanitizedLine.line.length > this.THRESHOLDS.MAX_DIALOGUE_LENGTH) {
+          warnings.push(`Line ${idx + 1}: Dialogue truncated (${sanitizedLine.line.length} chars)`);
+          sanitizedLine.line = sanitizedLine.line.substring(0, this.THRESHOLDS.MAX_DIALOGUE_LENGTH) + '...';
+        }
+      }
+
+      // Validate optional fields
+      if (line.emotion && typeof line.emotion !== 'string') {
+        sanitizedLine.emotion = this.DEFAULTS.emotion;
+      }
+      if (line.delivery && typeof line.delivery !== 'string') {
+        sanitizedLine.delivery = this.DEFAULTS.delivery;
+      }
+
+      return sanitizedLine;
+    }).filter(line => !line._invalid); // Remove invalid lines
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      sanitized,
+      isEmpty: sanitized.length === 0,
+      originalCount: dialogue.length,
+      sanitizedCount: sanitized.length
+    };
+  },
+
+  /**
+   * Validate voice assignments
+   * @param {Object} voiceAssignments - Character to voice mapping
+   * @param {Array} requiredCharacters - Characters that need voices
+   * @returns {Object} { valid, errors, enhanced }
+   */
+  validateVoiceAssignments(voiceAssignments, requiredCharacters = []) {
+    const errors = [];
+    const warnings = [];
+    const enhanced = { ...voiceAssignments };
+
+    // Handle null/undefined
+    if (!voiceAssignments || typeof voiceAssignments !== 'object') {
+      // Create fallback assignments for all required characters
+      requiredCharacters.forEach(char => {
+        enhanced[char] = { ...this.DEFAULTS.voiceProfile };
+        warnings.push(`Voice fallback applied for: ${char}`);
+      });
+      return {
+        valid: true,
+        errors,
+        warnings,
+        enhanced,
+        hasFallbacks: true
+      };
+    }
+
+    // Check each required character has a voice
+    requiredCharacters.forEach(char => {
+      const voice = enhanced[char];
+      if (!voice) {
+        enhanced[char] = { ...this.DEFAULTS.voiceProfile };
+        warnings.push(`No voice assigned for '${char}', using fallback`);
+      } else if (!voice.voiceProfileId) {
+        enhanced[char] = { ...voice, ...this.DEFAULTS.voiceProfile };
+        warnings.push(`Invalid voice profile for '${char}', using fallback`);
+      }
+    });
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      enhanced,
+      hasFallbacks: warnings.length > 0
+    };
+  },
+
+  /**
+   * Validate shot duration
+   * @param {number} duration - Proposed duration in seconds
+   * @param {Object} shot - Shot context for intelligent adjustment
+   * @returns {Object} { valid, duration, adjusted, reason }
+   */
+  validateDuration(duration, shot = {}) {
+    let adjustedDuration = duration;
+    let reason = null;
+    let adjusted = false;
+
+    // Handle non-numeric
+    if (typeof duration !== 'number' || isNaN(duration)) {
+      adjustedDuration = this.DEFAULTS.duration;
+      adjusted = true;
+      reason = 'Invalid duration, using default';
+    }
+    // Check minimum
+    else if (duration < this.THRESHOLDS.MIN_SHOT_DURATION) {
+      adjustedDuration = this.THRESHOLDS.MIN_SHOT_DURATION;
+      adjusted = true;
+      reason = `Duration below minimum (${this.THRESHOLDS.MIN_SHOT_DURATION}s)`;
+    }
+    // Check maximum
+    else if (duration > this.THRESHOLDS.MAX_SHOT_DURATION) {
+      adjustedDuration = this.THRESHOLDS.MAX_SHOT_DURATION;
+      adjusted = true;
+      reason = `Duration above maximum (${this.THRESHOLDS.MAX_SHOT_DURATION}s)`;
+    }
+
+    // Adjust for dialogue if present
+    if (shot.hasDialogue && shot.dialogue?.length > 0) {
+      const minDialogueDuration = this.calculateMinDialogueDuration(shot.dialogue);
+      if (adjustedDuration < minDialogueDuration) {
+        adjustedDuration = Math.min(minDialogueDuration, this.THRESHOLDS.MAX_SHOT_DURATION);
+        adjusted = true;
+        reason = `Adjusted for dialogue timing (min ${minDialogueDuration}s)`;
+      }
+    }
+
+    return {
+      valid: !adjusted,
+      duration: adjustedDuration,
+      original: duration,
+      adjusted,
+      reason
+    };
+  },
+
+  /**
+   * Calculate minimum duration needed for dialogue
+   */
+  calculateMinDialogueDuration(dialogue) {
+    if (!dialogue || !Array.isArray(dialogue)) return 5;
+    const totalWords = dialogue.reduce((sum, d) => {
+      return sum + (d.line?.split(/\s+/).length || 0);
+    }, 0);
+    // 2.5 words per second + 0.5s buffer per line for pauses
+    return Math.ceil((totalWords / 2.5) + (dialogue.length * 0.5));
+  },
+
+  /**
+   * Validate TTS configuration before API call
+   * @param {Object} ttsConfig - TTS configuration object
+   * @returns {Object} { valid, errors, enhanced }
+   */
+  validateTTSConfig(ttsConfig) {
+    const errors = [];
+    const warnings = [];
+
+    if (!ttsConfig) {
+      return { valid: true, errors, warnings, enhanced: null, isEmpty: true };
+    }
+
+    const enhanced = { ...ttsConfig };
+
+    // Validate lines array
+    if (!ttsConfig.lines || !Array.isArray(ttsConfig.lines)) {
+      errors.push('TTS config missing lines array');
+      enhanced.lines = [];
+    } else {
+      enhanced.lines = ttsConfig.lines.map((line, idx) => {
+        const enhancedLine = { ...line };
+
+        // Ensure voice is set
+        if (!line.voice) {
+          warnings.push(`TTS line ${idx + 1}: No voice specified, using default`);
+          enhancedLine.voice = this.DEFAULTS.voiceProfile.elevenLabsVoice;
+        }
+
+        // Ensure text is present
+        if (!line.text || typeof line.text !== 'string' || line.text.trim().length === 0) {
+          errors.push(`TTS line ${idx + 1}: Empty text`);
+          enhancedLine._invalid = true;
+        }
+
+        return enhancedLine;
+      }).filter(line => !line._invalid);
+    }
+
+    // Validate total duration
+    if (ttsConfig.totalDuration && typeof ttsConfig.totalDuration !== 'number') {
+      warnings.push('TTS config has invalid totalDuration');
+      enhanced.totalDuration = enhanced.lines.reduce((sum, l) => sum + (l.estimatedDuration || 2), 0);
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      enhanced,
+      isEmpty: enhanced.lines.length === 0
+    };
+  },
+
+  /**
+   * Run full integration health check
+   * @param {Object} scene - Full scene object
+   * @param {Array} shots - Array of processed shots
+   * @returns {Object} Comprehensive health report
+   */
+  runHealthCheck(scene, shots) {
+    const report = {
+      timestamp: new Date().toISOString(),
+      scene: scene?.sceneId || scene?.id || 'unknown',
+      shotCount: shots?.length || 0,
+      status: 'healthy',
+      checks: {},
+      issues: [],
+      recommendations: []
+    };
+
+    // Check 1: Dialogue distribution
+    const dialogueShots = shots?.filter(s => s.hasDialogue) || [];
+    const totalDialogue = scene?.audioLayer?.dialogue?.length || 0;
+    const distributedDialogue = dialogueShots.reduce((sum, s) => sum + (s.dialogue?.length || 0), 0);
+    report.checks.dialogueDistribution = {
+      passed: distributedDialogue >= totalDialogue,
+      total: totalDialogue,
+      distributed: distributedDialogue,
+      coverage: totalDialogue > 0 ? Math.round((distributedDialogue / totalDialogue) * 100) : 100
+    };
+    if (!report.checks.dialogueDistribution.passed) {
+      report.issues.push(`Only ${distributedDialogue}/${totalDialogue} dialogue lines distributed`);
+    }
+
+    // Check 2: Voice assignments
+    const voiceShots = shots?.filter(s => s.voiceRequirements?.ttsRequired) || [];
+    const missingVoices = voiceShots.filter(s =>
+      s.dialogue?.some(d => !d.voice?.voiceProfileId)
+    );
+    report.checks.voiceAssignments = {
+      passed: missingVoices.length === 0,
+      totalVoicedShots: voiceShots.length,
+      missingVoices: missingVoices.length
+    };
+    if (!report.checks.voiceAssignments.passed) {
+      report.issues.push(`${missingVoices.length} shots have dialogue without voice assignments`);
+      report.recommendations.push('Ensure voiceAssignments are passed to shot decomposition');
+    }
+
+    // Check 3: Duration validity
+    const invalidDurations = shots?.filter(s => {
+      const dur = s.selectedDuration || s.calculatedDuration || s.duration;
+      return !dur || dur < this.THRESHOLDS.MIN_SHOT_DURATION || dur > this.THRESHOLDS.MAX_SHOT_DURATION;
+    }) || [];
+    report.checks.durations = {
+      passed: invalidDurations.length === 0,
+      totalShots: shots?.length || 0,
+      invalidCount: invalidDurations.length
+    };
+    if (!report.checks.durations.passed) {
+      report.issues.push(`${invalidDurations.length} shots have invalid durations`);
+    }
+
+    // Check 4: TTS readiness
+    const ttsRequired = voiceShots.length;
+    const ttsReady = shots?.filter(s => s.ttsConfig?.lines?.length > 0).length || 0;
+    report.checks.ttsReadiness = {
+      passed: ttsRequired === ttsReady,
+      required: ttsRequired,
+      ready: ttsReady
+    };
+    if (!report.checks.ttsReadiness.passed) {
+      report.issues.push(`Only ${ttsReady}/${ttsRequired} shots have TTS configs`);
+    }
+
+    // Determine overall status
+    const failedChecks = Object.values(report.checks).filter(c => !c.passed).length;
+    if (failedChecks === 0) {
+      report.status = 'healthy';
+    } else if (failedChecks <= 2) {
+      report.status = 'degraded';
+    } else {
+      report.status = 'unhealthy';
+    }
+
+    return report;
+  },
+
+  /**
+   * Apply graceful degradation to a shot
+   * @param {Object} shot - Shot with potential missing data
+   * @returns {Object} Shot with fallbacks applied
+   */
+  applyGracefulDegradation(shot) {
+    const enhanced = { ...shot };
+
+    // Ensure duration is valid
+    if (!enhanced.duration && !enhanced.selectedDuration && !enhanced.calculatedDuration) {
+      enhanced.duration = this.DEFAULTS.duration;
+      enhanced._durationFallback = true;
+    }
+
+    // Ensure dialogue array exists if hasDialogue is true
+    if (enhanced.hasDialogue && (!enhanced.dialogue || !Array.isArray(enhanced.dialogue))) {
+      enhanced.dialogue = [];
+      enhanced.hasDialogue = false;
+      enhanced._dialogueFallback = true;
+    }
+
+    // Ensure voice requirements exist
+    if (enhanced.hasDialogue && !enhanced.voiceRequirements) {
+      enhanced.voiceRequirements = {
+        voicesNeeded: 1,
+        voices: [],
+        ttsRequired: true,
+        isMultiVoice: false,
+        _fallback: true
+      };
+    }
+
+    // Ensure TTS config exists for dialogue shots
+    if (enhanced.hasDialogue && enhanced.dialogue?.length > 0 && !enhanced.ttsConfig) {
+      enhanced.ttsConfig = {
+        lines: enhanced.dialogue.map(d => ({
+          character: d.character,
+          text: d.line,
+          voice: d.voice?.elevenLabsVoice || this.DEFAULTS.voiceProfile.elevenLabsVoice,
+          estimatedDuration: Math.ceil((d.line?.split(/\s+/).length || 5) / 2.5)
+        })),
+        totalDuration: 5,
+        _fallback: true
+      };
+    }
+
+    return enhanced;
+  }
+};
+
+// =============================================================================
 // DIALOGUE_DISTRIBUTION_ENGINE - Character Dialogue to Shot Mapping
 // =============================================================================
 /**
@@ -52060,9 +52475,19 @@ exports.creationWizardDecomposeSceneToShots = functions
     const sceneDialogue = audioLayer?.dialogue || [];
     const sceneAudioType = DIALOGUE_DISTRIBUTION_ENGINE.classifyAudioType(audioLayer);
 
-    // Apply dialogue distribution to shots
+    // PHASE 5: Validate dialogue data before distribution
+    const dialogueValidation = QUALITY_ASSURANCE_ENGINE.validateDialogue(sceneDialogue);
+    if (dialogueValidation.warnings.length > 0) {
+      console.warn(`[creationWizardDecomposeSceneToShots] Dialogue validation warnings:`, dialogueValidation.warnings.join('; '));
+    }
+    if (!dialogueValidation.valid) {
+      console.error(`[creationWizardDecomposeSceneToShots] Dialogue validation errors:`, dialogueValidation.errors.join('; '));
+    }
+    const sanitizedDialogue = dialogueValidation.sanitized || [];
+
+    // Apply dialogue distribution to shots (using sanitized dialogue)
     const dialogueEnhancedShots = DIALOGUE_DISTRIBUTION_ENGINE.distributeDialogueToShots(
-      sceneDialogue,
+      sanitizedDialogue,
       timelineEnhancedShots
     );
 
@@ -52074,7 +52499,15 @@ exports.creationWizardDecomposeSceneToShots = functions
     // STEP 5.995: CHARACTER VOICE ENHANCEMENT (Phase 3)
     // Attach voice profile information to each dialogue line in each shot
     // Voice assignments come from script.voiceAssignments (set during script generation)
-    const voiceAssignments = scene.voiceAssignments || {};
+    const rawVoiceAssignments = scene.voiceAssignments || {};
+
+    // PHASE 5: Validate voice assignments with fallbacks for missing characters
+    const requiredCharacters = [...new Set(sanitizedDialogue.map(d => d.character))];
+    const voiceValidation = QUALITY_ASSURANCE_ENGINE.validateVoiceAssignments(rawVoiceAssignments, requiredCharacters);
+    if (voiceValidation.warnings.length > 0) {
+      console.warn(`[creationWizardDecomposeSceneToShots] Voice assignment warnings:`, voiceValidation.warnings.join('; '));
+    }
+    const voiceAssignments = voiceValidation.enhanced;
     const voiceEnhancedShots = dialogueEnhancedShots.map(shot => {
       if (!shot.hasDialogue || !shot.dialogue || shot.dialogue.length === 0) {
         return {
@@ -52271,14 +52704,45 @@ exports.creationWizardDecomposeSceneToShots = functions
                       'Scene concluded';
     }
 
+    // PHASE 5: Run integration health check
+    const healthReport = QUALITY_ASSURANCE_ENGINE.runHealthCheck(scene, normalizedShots);
+    if (healthReport.status !== 'healthy') {
+      console.warn(`[creationWizardDecomposeSceneToShots] Health check status: ${healthReport.status}`, healthReport.issues);
+    }
+
+    // PHASE 5: Apply graceful degradation to all shots
+    const finalizedShots = normalizedShots.map(shot => QUALITY_ASSURANCE_ENGINE.applyGracefulDegradation(shot));
+
+    // Log any fallbacks applied
+    const fallbacksApplied = finalizedShots.filter(s => s._durationFallback || s._dialogueFallback);
+    if (fallbacksApplied.length > 0) {
+      console.log(`[creationWizardDecomposeSceneToShots] Graceful degradation applied to ${fallbacksApplied.length} shots`);
+    }
+
     return {
       success: true,
       sceneId: scene.id,
       sceneType: sceneType,
       totalDuration: sceneDuration,
-      shotCount: normalizedShots.length,
-      shots: normalizedShots,
+      shotCount: finalizedShots.length,
+      shots: finalizedShots,
       consistencyAnchors: consistencyAnchors,
+      // PHASE 5: Quality Assurance Health Report
+      qualityAssurance: {
+        status: healthReport.status,
+        checks: healthReport.checks,
+        issues: healthReport.issues,
+        recommendations: healthReport.recommendations,
+        dialogueValidation: {
+          originalCount: dialogueValidation.originalCount || 0,
+          sanitizedCount: dialogueValidation.sanitizedCount || 0,
+          hasWarnings: dialogueValidation.warnings?.length > 0
+        },
+        voiceValidation: {
+          hasFallbacks: voiceValidation.hasFallbacks || false,
+          requiredCharacters: requiredCharacters.length
+        }
+      },
       decompositionMethod: decompositionMethod,
       // Cross-scene continuity data (Upgrade 3)
       crossSceneContinuity: {
@@ -52300,68 +52764,68 @@ exports.creationWizardDecomposeSceneToShots = functions
       hollywoodChoreography: {
         applied: hasChoreography,
         enrichmentSource: hasChoreography ? 'script_generation' : 'none',
-        shotsWithChoreography: normalizedShots.filter(s => s.hasChoreography).length
+        shotsWithChoreography: finalizedShots.filter(s => s.hasChoreography).length
       },
       // Opening Scene World-First status
       openingSceneEnforcement: {
         isOpeningScene: OPENING_SCENE_HANDLER.isOpeningScene(scene, currentSceneIndex),
         worldFirstApplied: worldFirstShots !== continuityShots,
-        shotsWithWorldFirst: normalizedShots.filter(s => s.isWorldFirst).length,
-        openingStructure: normalizedShots.slice(0, 4).map(s => s.openingStructure?.role || null).filter(Boolean)
+        shotsWithWorldFirst: finalizedShots.filter(s => s.isWorldFirst).length,
+        openingStructure: finalizedShots.slice(0, 4).map(s => s.openingStructure?.role || null).filter(Boolean)
       },
       // Shot-Scene Image Sync status
       shotSceneSync: {
-        shot1SyncedWithScene: normalizedShots[0]?.syncedWithScene || false,
+        shot1SyncedWithScene: finalizedShots[0]?.syncedWithScene || false,
         sceneImageUrl: scene.imageUrl || null,
-        shot1ImageUrl: normalizedShots[0]?.imageUrl || null
+        shot1ImageUrl: finalizedShots[0]?.imageUrl || null
       },
       // Cinematic Physics Enhancement status
       cinematicPhysics: {
         applied: physicsEnhancedShots.some(s => s.cinematicPhysics?.applied),
-        shotsWithPhysics: normalizedShots.filter(s => s.hasPhysicsEnhancement).length,
+        shotsWithPhysics: finalizedShots.filter(s => s.hasPhysicsEnhancement).length,
         physicsTypes: {
-          hasObjectPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasObjectPhysics),
-          hasEnvironmentalForces: normalizedShots.some(s => s.cinematicPhysics?.hasEnvironmentalForces),
-          hasMaterialPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasMaterialPhysics),
-          hasContactPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasContactPhysics),
-          hasCauseEffectChains: normalizedShots.some(s => s.cinematicPhysics?.causeEffectChains > 0)
+          hasObjectPhysics: finalizedShots.some(s => s.cinematicPhysics?.hasObjectPhysics),
+          hasEnvironmentalForces: finalizedShots.some(s => s.cinematicPhysics?.hasEnvironmentalForces),
+          hasMaterialPhysics: finalizedShots.some(s => s.cinematicPhysics?.hasMaterialPhysics),
+          hasContactPhysics: finalizedShots.some(s => s.cinematicPhysics?.hasContactPhysics),
+          hasCauseEffectChains: finalizedShots.some(s => s.cinematicPhysics?.causeEffectChains > 0)
         }
       },
       // Character Reference System status
       characterReferenceSystem: {
         applied: characterEnhancedShots.some(s => s.characterReference?.applied),
-        shotsWithCharacterConsistency: normalizedShots.filter(s => s.hasCharacterConsistency).length,
+        shotsWithCharacterConsistency: finalizedShots.filter(s => s.hasCharacterConsistency).length,
         totalCharacters: characterBible?.length || 0,
-        characterAnchorsExtracted: normalizedShots.some(s => s.characterReference?.totalCharacters > 0),
-        charactersTracked: [...new Set(normalizedShots.flatMap(s => s.charactersInShot || []))]
+        characterAnchorsExtracted: finalizedShots.some(s => s.characterReference?.totalCharacters > 0),
+        charactersTracked: [...new Set(finalizedShots.flatMap(s => s.charactersInShot || []))]
       },
       // Audio Beat Mapping status
       audioBeatMapping: {
         applied: audioEnhancedShots.some(s => s.audioBeat?.applied),
-        shotsWithAudio: normalizedShots.filter(s => s.hasAudioMapping).length,
-        hasDialogue: normalizedShots.some(s => s.audioDialogue),
-        lipSyncRequired: normalizedShots.some(s => s.audioBeat?.lipSyncRequired),
-        ambienceTypes: [...new Set(normalizedShots.map(s => s.audioAmbience).filter(Boolean))],
-        musicMoods: [...new Set(normalizedShots.map(s => s.audioBeat?.musicMood).filter(Boolean))]
+        shotsWithAudio: finalizedShots.filter(s => s.hasAudioMapping).length,
+        hasDialogue: finalizedShots.some(s => s.audioDialogue),
+        lipSyncRequired: finalizedShots.some(s => s.audioBeat?.lipSyncRequired),
+        ambienceTypes: [...new Set(finalizedShots.map(s => s.audioAmbience).filter(Boolean))],
+        musicMoods: [...new Set(finalizedShots.map(s => s.audioBeat?.musicMood).filter(Boolean))]
       },
       // Beat Timeline Synthesis status - the Hollywood differentiator
       beatTimelineSynthesis: {
         applied: timelineEnhancedShots.some(s => s.beatTimeline?.applied),
-        shotsWithTimeline: normalizedShots.filter(s => s.hasTimeline).length,
-        progressionTypes: [...new Set(normalizedShots.map(s => s.timelineProgression).filter(Boolean))],
-        primaryCharacters: [...new Set(normalizedShots.map(s => s.beatTimeline?.primaryCharacter).filter(Boolean))],
-        peakIntensities: normalizedShots.map(s => s.beatTimeline?.peakIntensity).filter(Boolean)
+        shotsWithTimeline: finalizedShots.filter(s => s.hasTimeline).length,
+        progressionTypes: [...new Set(finalizedShots.map(s => s.timelineProgression).filter(Boolean))],
+        primaryCharacters: [...new Set(finalizedShots.map(s => s.beatTimeline?.primaryCharacter).filter(Boolean))],
+        peakIntensities: finalizedShots.map(s => s.beatTimeline?.peakIntensity).filter(Boolean)
       },
       // Shot Sequence Validation status
-      shotSequenceValidation: SHOT_SEQUENCE_VALIDATOR.getSequenceSummary(normalizedShots),
+      shotSequenceValidation: SHOT_SEQUENCE_VALIDATOR.getSequenceSummary(finalizedShots),
       // Keyframe Quality Check status
       keyframeQuality: {
-        averageScore: Math.round(normalizedShots.reduce((sum, shot) => {
+        averageScore: Math.round(finalizedShots.reduce((sum, shot) => {
           const quality = KEYFRAME_QUALITY_ENGINE.getKeyframeSummary(shot, scene);
           return sum + quality.score;
-        }, 0) / (normalizedShots.length || 1)),
-        shotsAnalyzed: normalizedShots.length,
-        shotGrades: normalizedShots.map(shot => {
+        }, 0) / (finalizedShots.length || 1)),
+        shotsAnalyzed: finalizedShots.length,
+        shotGrades: finalizedShots.map(shot => {
           const quality = KEYFRAME_QUALITY_ENGINE.getKeyframeSummary(shot, scene);
           return { shotId: shot.id, grade: quality.grade, score: quality.score };
         })
