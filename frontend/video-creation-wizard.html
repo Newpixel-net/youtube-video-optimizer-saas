@@ -10029,68 +10029,62 @@
             const isMultitalkSelected = selectedModel === 'multitalk';
 
             return `
-                <div style="position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 0.5rem; background: rgba(20, 20, 35, 0.98); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.75rem; padding: 0.75rem; z-index: 100; box-shadow: 0 -4px 20px rgba(0,0,0,0.5);">
+                <div style="position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); width: 180px; background: rgba(20, 20, 35, 0.98); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; padding: 0.5rem; z-index: 100; box-shadow: 0 -4px 20px rgba(0,0,0,0.5);">
                     <!-- Header -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                        <div style="font-size: 0.75rem; font-weight: 600; color: white;">🎬 Select Video Model</div>
-                        <button onclick="closeVideoModelSelector()" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 1rem;">×</button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 0.6rem; font-weight: 600; color: white;">🎬 Video Model</div>
+                        <button onclick="closeVideoModelSelector()" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.85rem; line-height: 1; padding: 0;">×</button>
                     </div>
 
-                    <!-- Model Options -->
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <!-- Model Options - Horizontal layout -->
+                    <div style="display: flex; gap: 0.25rem; margin-bottom: 0.4rem;">
                         <!-- Minimax Option -->
-                        <div onclick="selectVideoModel('minimax')" style="padding: 0.6rem; border-radius: 0.5rem; background: ${isMinimaxSelected ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isMinimaxSelected ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255,255,255,0.1)'}; cursor: pointer;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <div style="width: 16px; height: 16px; border-radius: 50%; border: 2px solid ${isMinimaxSelected ? '#06b6d4' : 'rgba(255,255,255,0.3)'}; display: flex; align-items: center; justify-content: center;">
-                                    ${isMinimaxSelected ? '<div style="width: 8px; height: 8px; border-radius: 50%; background: #06b6d4;"></div>' : ''}
+                        <div onclick="selectVideoModel('minimax')" style="flex: 1; padding: 0.3rem; border-radius: 0.3rem; background: ${isMinimaxSelected ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isMinimaxSelected ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255,255,255,0.1)'}; cursor: pointer; text-align: center;">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 0.2rem; margin-bottom: 0.1rem;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid ${isMinimaxSelected ? '#06b6d4' : 'rgba(255,255,255,0.3)'}; display: flex; align-items: center; justify-content: center;">
+                                    ${isMinimaxSelected ? '<div style="width: 4px; height: 4px; border-radius: 50%; background: #06b6d4;"></div>' : ''}
                                 </div>
-                                <div>
-                                    <div style="font-size: 0.75rem; font-weight: 600; color: white;">🎬 Minimax Hailuo</div>
-                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Standard AI video animation</div>
-                                </div>
+                                <span style="font-size: 0.55rem; font-weight: 600; color: white;">Minimax</span>
                             </div>
+                            <div style="font-size: 0.45rem; color: rgba(255,255,255,0.5);">Standard</div>
                         </div>
 
                         <!-- Multitalk Option -->
-                        <div onclick="selectVideoModel('multitalk')" style="padding: 0.6rem; border-radius: 0.5rem; background: ${isMultitalkSelected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isMultitalkSelected ? 'rgba(139, 92, 246, 0.5)' : 'rgba(255,255,255,0.1)'}; cursor: pointer;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <div style="width: 16px; height: 16px; border-radius: 50%; border: 2px solid ${isMultitalkSelected ? '#8b5cf6' : 'rgba(255,255,255,0.3)'}; display: flex; align-items: center; justify-content: center;">
-                                    ${isMultitalkSelected ? '<div style="width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6;"></div>' : ''}
+                        <div onclick="selectVideoModel('multitalk')" style="flex: 1; padding: 0.3rem; border-radius: 0.3rem; background: ${isMultitalkSelected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isMultitalkSelected ? 'rgba(139, 92, 246, 0.5)' : 'rgba(255,255,255,0.1)'}; cursor: pointer; text-align: center;">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 0.2rem; margin-bottom: 0.1rem;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid ${isMultitalkSelected ? '#8b5cf6' : 'rgba(255,255,255,0.3)'}; display: flex; align-items: center; justify-content: center;">
+                                    ${isMultitalkSelected ? '<div style="width: 4px; height: 4px; border-radius: 50%; background: #8b5cf6;"></div>' : ''}
                                 </div>
-                                <div>
-                                    <div style="font-size: 0.75rem; font-weight: 600; color: white;">🎤 Multitalk</div>
-                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Video with voiceover sync</div>
-                                </div>
+                                <span style="font-size: 0.55rem; font-weight: 600; color: white;">Multitalk</span>
                             </div>
+                            <div style="font-size: 0.45rem; color: rgba(255,255,255,0.5);">Voice sync</div>
                         </div>
                     </div>
 
                     <!-- Multitalk Audio Upload (shown when Multitalk selected) -->
                     ${isMultitalkSelected ? `
-                        <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.5rem; padding: 0.6rem; margin-bottom: 0.75rem;">
-                            <div style="font-size: 0.65rem; color: #a78bfa; margin-bottom: 0.4rem;">🎤 Upload Voiceover Audio</div>
-
+                        <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">
                             ${multitalk.audioUploadStatus === 'ready' ? `
                                 <!-- Audio Uploaded -->
-                                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.35rem;">
-                                    <span style="font-size: 0.9rem;">✅</span>
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.6rem;">✅</span>
                                     <div style="flex: 1; overflow: hidden;">
-                                        <div style="font-size: 0.65rem; color: #10b981; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${multitalk.audioFileName}</div>
-                                        <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5);">${multitalk.audioDuration ? multitalk.audioDuration.toFixed(1) + 's' : ''}</div>
+                                        <div style="font-size: 0.5rem; color: #10b981; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${multitalk.audioFileName}</div>
+                                        <div style="font-size: 0.45rem; color: rgba(255,255,255,0.5);">${multitalk.audioDuration ? multitalk.audioDuration.toFixed(1) + 's' : ''}</div>
                                     </div>
-                                    <button onclick="document.getElementById('multitalk-audio-input').click()" style="padding: 0.2rem 0.4rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.25rem; color: white; cursor: pointer; font-size: 0.55rem;">Change</button>
+                                    <button onclick="document.getElementById('multitalk-audio-input').click()" style="padding: 0.1rem 0.25rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.15rem; color: white; cursor: pointer; font-size: 0.45rem;">Change</button>
                                 </div>
                             ` : multitalk.audioUploadStatus === 'uploading' ? `
                                 <!-- Uploading -->
-                                <div style="text-align: center; padding: 0.5rem;">
-                                    <div class="animate-spin" style="display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%;"></div>
-                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.6); margin-top: 0.3rem;">Uploading audio...</div>
+                                <div style="text-align: center; padding: 0.25rem;">
+                                    <div class="animate-spin" style="display: inline-block; width: 12px; height: 12px; border: 1.5px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%;"></div>
+                                    <div style="font-size: 0.45rem; color: rgba(255,255,255,0.6); margin-top: 0.15rem;">Uploading...</div>
                                 </div>
                             ` : `
                                 <!-- Upload Button -->
-                                <label style="display: flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.5rem; background: rgba(139, 92, 246, 0.2); border: 1px dashed rgba(139, 92, 246, 0.5); border-radius: 0.35rem; cursor: pointer;">
-                                    <span style="font-size: 0.9rem;">📁</span>
-                                    <span style="font-size: 0.65rem; color: #a78bfa;">Select MP3/WAV file</span>
+                                <label style="display: flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.3rem; background: rgba(139, 92, 246, 0.2); border: 1px dashed rgba(139, 92, 246, 0.5); border-radius: 0.2rem; cursor: pointer;">
+                                    <span style="font-size: 0.6rem;">📁</span>
+                                    <span style="font-size: 0.5rem; color: #a78bfa;">Select MP3/WAV</span>
                                     <input type="file" id="multitalk-audio-input" accept="audio/*" onchange="handleMultitalkAudioSelect(event)" style="display: none;">
                                 </label>
                             `}
@@ -10100,8 +10094,8 @@
                     <!-- Generate Button -->
                     <button onclick="generateVideoWithSelectedModel()"
                             ${isMultitalkSelected && !multitalk.audioUrl ? 'disabled' : ''}
-                            style="width: 100%; padding: 0.6rem; border-radius: 0.5rem; border: none; background: ${isMultitalkSelected && !multitalk.audioUrl ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #06b6d4)'}; color: ${isMultitalkSelected && !multitalk.audioUrl ? 'rgba(255,255,255,0.4)' : 'white'}; font-size: 0.75rem; font-weight: 600; cursor: ${isMultitalkSelected && !multitalk.audioUrl ? 'not-allowed' : 'pointer'};">
-                        ${isMinimaxSelected ? '🎬 Generate with Minimax' : '🎤 Generate with Multitalk'}
+                            style="width: 100%; padding: 0.35rem; border-radius: 0.3rem; border: none; background: ${isMultitalkSelected && !multitalk.audioUrl ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #06b6d4)'}; color: ${isMultitalkSelected && !multitalk.audioUrl ? 'rgba(255,255,255,0.4)' : 'white'}; font-size: 0.55rem; font-weight: 600; cursor: ${isMultitalkSelected && !multitalk.audioUrl ? 'not-allowed' : 'pointer'};">
+                        ${isMinimaxSelected ? '🎬 Generate' : '🎤 Generate'}
                     </button>
                 </div>
             `;
