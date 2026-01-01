@@ -46140,7 +46140,7 @@ const CHARACTER_VOICE_ENGINE = {
       lines: enhancedDialogue.map((d, idx) => ({
         index: idx,
         character: d.character,
-        line: d.line,
+        text: d.line,  // Use 'text' property to match validation expectations
         emotion: d.emotion,
         delivery: d.delivery,
         voiceId: d.voice.elevenLabsVoice,
@@ -54224,7 +54224,7 @@ Tone: Natural, expressive.`;
         // Video settings
         aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
         scale_to_length: 1024,
-        scale_to_side: 'None',
+        scale_to_side: 'longer',  // Scale longer side to 1024px for faster generation
         fps: fps,
         num_frames: numFrames,
 
