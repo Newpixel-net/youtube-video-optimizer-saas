@@ -8231,7 +8231,8 @@
                 // Check if using HiDream (RunPod) or NanoBanana (Gemini)
                 if (modelId === 'hidream') {
                     // Use RunPod HiDream endpoint
-                    const generateFn = functions.httpsCallable('creationWizardGenerateSceneImage');
+                    // CRITICAL: 5-minute timeout to handle RunPod cold starts
+                    const generateFn = functions.httpsCallable('creationWizardGenerateSceneImage', { timeout: 300000 });
 
                     // Build enhanced prompt with Location Bible description
                     let enhancedPrompt = prompt;
@@ -8254,6 +8255,11 @@
                         prompt: enhancedPrompt,
                         style: state.content.style,
                         aspectRatio: state.platform.aspectRatio,
+                        // HiDream settings - matching working thumbnail generator
+                        settings: {
+                            steps: 35,
+                            cfg: 5
+                        },
                         // Phase 3B: Visual Intelligence parameters
                         genre: state.content.genre || null,
                         productionMode: state.content.productionMode || 'standard',
@@ -11747,7 +11753,7 @@
             }
 
             let pollCount = 0;
-            const maxPolls = 90; // 3 minutes max (2s intervals) - handles cold starts
+            const maxPolls = 150; // 5 minutes max (2s intervals) - handles RunPod cold starts
 
             imagePollingIntervals[sceneId] = setInterval(async () => {
                 pollCount++;
