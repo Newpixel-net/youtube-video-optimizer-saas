@@ -8688,8 +8688,8 @@
                     // PHASE 6: Show toast with pipeline status
                     const pipelineStatus = result.data.pipelineVerification?.status || 'unknown';
                     const qaStatus = result.data.qualityAssurance?.status || 'unknown';
-                    const statusEmoji = pipelineStatus === 'pass' && qaStatus === 'healthy' ? '✅' :
-                                       pipelineStatus === 'warning' || qaStatus === 'degraded' ? '⚠️' : '✅';
+                    const statusEmoji = pipelineStatus === 'pass' && qaStatus === 'healthy' ? '✓' :
+                                       pipelineStatus === 'warning' || qaStatus === 'degraded' ? '⚠' : '✓';
                     showToast(`${statusEmoji} Scene decomposed into ${result.data.shotCount} shots!`, 'success');
                     render();
                     scheduleAutoSave();
@@ -8809,7 +8809,7 @@
                 shot.imageUrl = storyboardScene.imageUrl;
                 shot.status = 'ready';
                 shot.fromSceneImage = true; // Mark as derived from scene image
-                showToast(`✅ Shot 1 initialized with scene image. Use "Regen" for a different shot.`, 'success');
+                showToast(`✓ Shot 1 initialized with scene image. Use "Regen" for a different shot.`, 'success');
                 renderShotDecompositionModal();
                 scheduleAutoSave();
                 return;
@@ -8860,7 +8860,7 @@
                     // The scene's main image stays as it was originally generated.
                     // Shot images are independent and based on their specific prompts.
 
-                    showToast(`✅ Shot ${shotIndex + 1} generated!`, 'success');
+                    showToast(`✓ Shot ${shotIndex + 1} generated!`, 'success');
                 } else {
                     throw new Error(result.data.message || 'No image returned');
                 }
@@ -9009,7 +9009,7 @@
                                 <!-- Error State -->
                                 <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1rem;">
                                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <span style="font-size: 1.25rem;">⚠️</span>
+                                        <span style="font-size: 1.25rem;">⚠</span>
                                         <span style="color: #ef4444; font-weight: 600;">Decomposition Failed</span>
                                     </div>
                                     <div style="color: rgba(255,255,255,0.7); font-size: 0.85rem; margin-bottom: 1rem;">
@@ -9081,13 +9081,13 @@
                                     const passRate = pipeline.passRate || 0;
 
                                     const statusConfig = {
-                                        'healthy': { icon: '✅', color: '#22c55e', label: 'Healthy' },
-                                        'pass': { icon: '✅', color: '#22c55e', label: 'Pass' },
-                                        'degraded': { icon: '⚠️', color: '#fbbf24', label: 'Degraded' },
-                                        'warning': { icon: '⚠️', color: '#fbbf24', label: 'Warning' },
-                                        'unhealthy': { icon: '❌', color: '#ef4444', label: 'Unhealthy' },
-                                        'fail': { icon: '❌', color: '#ef4444', label: 'Failed' },
-                                        'unknown': { icon: '❓', color: '#6b7280', label: 'Unknown' }
+                                        'healthy': { icon: '[OK]', color: '#22c55e', label: 'Healthy' },
+                                        'pass': { icon: '[OK]', color: '#22c55e', label: 'Pass' },
+                                        'degraded': { icon: '[!]', color: '#fbbf24', label: 'Degraded' },
+                                        'warning': { icon: '[!]', color: '#fbbf24', label: 'Warning' },
+                                        'unhealthy': { icon: '[X]', color: '#ef4444', label: 'Unhealthy' },
+                                        'fail': { icon: '[X]', color: '#ef4444', label: 'Failed' },
+                                        'unknown': { icon: '[?]', color: '#6b7280', label: 'Unknown' }
                                     };
 
                                     const qaConfig = statusConfig[qaStatus] || statusConfig['unknown'];
@@ -9116,7 +9116,7 @@
                                             <!-- Issues Count -->
                                             \${qa.issues && qa.issues.length > 0 ? \`
                                                 <div style="font-size: 0.55rem; color: #fbbf24;" title="\${qa.issues.join('\\n')}">
-                                                    ⚠️ \${qa.issues.length} issue\${qa.issues.length > 1 ? 's' : ''}
+                                                    ⚠ \${qa.issues.length} issue\${qa.issues.length > 1 ? 's' : ''}
                                                 </div>
                                             \` : ''}
                                         </div>
@@ -9291,7 +9291,7 @@
                                                             </div>
                                                         ` : shot.status === 'error' ? `
                                                             <div style="text-align: center;">
-                                                                <span style="font-size: 1.25rem;">⚠️</span>
+                                                                <span style="font-size: 1.25rem;">⚠</span>
                                                                 <div style="font-size: 0.6rem; color: #ef4444; margin-top: 0.25rem;">Error</div>
                                                             </div>
                                                         ` : `
@@ -9404,7 +9404,7 @@
                                                                 <!-- Video Error State -->
                                                                 <div style="text-align: center; padding: 0.35rem; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.3rem;">
                                                                     <div style="font-size: 0.55rem; color: #f87171; font-weight: 500;">
-                                                                        ❌ Video failed
+                                                                        ✗ Video failed
                                                                     </div>
                                                                     <div style="font-size: 0.5rem; color: rgba(255,255,255,0.4); margin-top: 0.1rem; max-height: 24px; overflow: hidden;">
                                                                         ${(shot.videoError || 'Generation failed').substring(0, 50)}
@@ -9430,7 +9430,7 @@
                                                                         </div>
                                                                     ` : `
                                                                         <div style="text-align: center; padding: 0.25rem; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 0.3rem;">
-                                                                            <div style="font-size: 0.55rem; color: #f59e0b;">⚠️ Generate scene image first</div>
+                                                                            <div style="font-size: 0.55rem; color: #f59e0b;">⚠ Generate scene image first</div>
                                                                         </div>
                                                                     `}
                                                                 ` : `
@@ -9689,7 +9689,7 @@
             // Check results
             const successCount = decomposed.shots.filter(s => s.status === 'ready').length;
             if (successCount === decomposed.shots.length) {
-                showToast(`✅ All ${successCount} shots generated successfully!`, 'success');
+                showToast(`✓ All ${successCount} shots generated successfully!`, 'success');
             } else {
                 showToast(`Generated ${successCount}/${decomposed.shots.length} shots. Some failed.`, 'warning');
             }
@@ -10368,7 +10368,7 @@
                         shot.videoStatus = 'error';
                         shot.videoError = result.data.error || 'Multitalk generation failed';
                         shot.pendingVideoUrl = null;
-                        showToast('❌ Multitalk video failed: ' + shot.videoError, 'error');
+                        showToast('✗ Multitalk video failed: ' + shot.videoError, 'error');
                         render();
                         renderShotDecompositionModal();
                     }
@@ -10463,7 +10463,7 @@
                             ${multitalk.audioUploadStatus === 'ready' ? `
                                 <!-- Audio Uploaded -->
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <span style="font-size: 0.6rem;">✅</span>
+                                    <span style="font-size: 0.6rem;">✓</span>
                                     <div style="flex: 1; overflow: hidden;">
                                         <div style="font-size: 0.5rem; color: #10b981; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${multitalk.audioFileName}</div>
                                         <div style="font-size: 0.45rem; color: rgba(255,255,255,0.5);">${multitalk.audioDuration ? multitalk.audioDuration.toFixed(1) + 's' : ''}</div>
@@ -10644,7 +10644,7 @@
                             shot.videoError = 'Too many errors checking status. Please retry.';
                         }
                     });
-                    showToast('⚠️ Video status check failed repeatedly. Please retry.', 'error');
+                    showToast('⚠ Video status check failed repeatedly. Please retry.', 'error');
                     render();
                     return;
                 }
@@ -10694,7 +10694,7 @@
 
                     const readyCount = decomposed.shots.filter(s => s.videoStatus === 'ready').length;
                     if (readyCount === decomposed.shots.length) {
-                        showToast(`✅ All ${readyCount} shot videos ready!`, 'success');
+                        showToast(`✓ All ${readyCount} shot videos ready!`, 'success');
                     }
                     scheduleAutoSave();
                 }
@@ -10793,7 +10793,7 @@
                     delete shot.videoPollCount;
                     delete shot.videoPollStartTime;
                     delete shot.videoConsecutiveErrors;
-                    showToast(`⚠️ Shot ${shotIndex + 1} status check failed repeatedly. Please retry.`, 'error');
+                    showToast(`⚠ Shot ${shotIndex + 1} status check failed repeatedly. Please retry.`, 'error');
                     render();
                     renderShotDecompositionModal();
                     return;
@@ -10828,7 +10828,7 @@
                         delete shot.videoPollCount;
                         delete shot.videoPollStartTime;
                         delete shot.videoConsecutiveErrors;
-                        showToast(`❌ Shot ${shotIndex + 1} video failed`, 'error');
+                        showToast(`✗ Shot ${shotIndex + 1} video failed`, 'error');
                         render();
                         renderShotDecompositionModal();
                     }
@@ -12007,7 +12007,7 @@
                                     </div>
                                 ` : `
                                     <div style="width: 100%; height: 35px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); font-size: 0.7rem; color: rgba(255,255,255,0.4);">
-                                        ${shot.status === 'error' ? '⚠️' : idx === 0 ? '🔗' : '⏳'}
+                                        ${shot.status === 'error' ? '⚠' : idx === 0 ? '🔗' : '⏳'}
                                     </div>
                                 `}
                                 <div style="font-size: 0.45rem; text-align: center; padding: 0.1rem; color: rgba(255,255,255,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: rgba(0,0,0,0.5);">
@@ -14351,12 +14351,12 @@
                     const selectedStyleInfoStep1 = visualStyleModesStep1.find(s => s.id === selectedVisualStyleStep1);
                     const styleColorStep1 = selectedStyleInfoStep1?.color || '#10b981';
                     const bestForTextStep1 = {
-                        'photorealistic': '✅ Best for: Real stories, documentaries, live-action films with actual people',
-                        'cinematic': '✅ Best for: Hollywood-style dramatic films, blockbusters, music videos',
-                        'stylized_3d': '✅ Best for: Family content, animation projects, stylized characters',
-                        'illustrated': '✅ Best for: Artistic content, concept videos, unique visual narratives',
-                        'anime': '✅ Best for: Anime-style content, manga adaptations, Japanese aesthetics',
-                        'noir': '✅ Best for: Crime dramas, mysteries, dark atmospheric content'
+                        'photorealistic': '✓ Best for: Real stories, documentaries, live-action films with actual people',
+                        'cinematic': '✓ Best for: Hollywood-style dramatic films, blockbusters, music videos',
+                        'stylized_3d': '✓ Best for: Family content, animation projects, stylized characters',
+                        'illustrated': '✓ Best for: Artistic content, concept videos, unique visual narratives',
+                        'anime': '✓ Best for: Anime-style content, manga adaptations, Japanese aesthetics',
+                        'noir': '✓ Best for: Crime dramas, mysteries, dark atmospheric content'
                     }[selectedVisualStyleStep1] || '';
 
                     html += `
@@ -14655,7 +14655,7 @@
                             Style Inspiration (Optional)
                         </label>
                         <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.5rem;">
-                            ⚠️ This is for VISUAL STYLE only - your content will be 100% original
+                            ⚠ This is for VISUAL STYLE only - your content will be 100% original
                         </div>
                         <input type="text"
                                id="style-reference-input"
@@ -14917,7 +14917,7 @@
                                     };
                                     return `
                                         <span style="font-size: 0.7rem; padding: 0.25rem 0.5rem; background: rgba(139, 92, 246, 0.15); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.25rem; color: #a78bfa; display: flex; align-items: center; gap: 0.25rem;">
-                                            <span>${typeIcons[type] || '❓'}</span>
+                                            <span>${typeIcons[type] || '?'}</span>
                                             <span style="text-transform: capitalize;">${type.replace('-', ' ')}</span>
                                         </span>
                                     `;
@@ -15450,7 +15450,7 @@
                 html += `
                     <div class="content-card" style="border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1);">
                         <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-                            <div style="font-size: 1.5rem;">⚠️</div>
+                            <div style="font-size: 1.5rem;">⚠</div>
                             <div style="flex: 1;">
                                 <div style="font-weight: 600; color: #ef4444; margin-bottom: 0.25rem;">Script Generation Failed</div>
                                 <div style="color: rgba(255,255,255,0.7); font-size: 0.9rem;">${state.script.error}</div>
@@ -15882,7 +15882,7 @@
 
                     const allAssigned = unassignedVoices.length === 0 && uniqueSpeakers.length > 0;
                     const statusColor = allAssigned ? '#22c55e' : '#fbbf24';
-                    const statusIcon = allAssigned ? '✅' : '⚠️';
+                    const statusIcon = allAssigned ? '✓' : '⚠';
                     const statusText = allAssigned ? 'All voices assigned' : \`\${unassignedVoices.length} voice\${unassignedVoices.length > 1 ? 's' : ''} pending\`;
 
                     return \`
@@ -16730,7 +16730,7 @@
                 cardContent = `
                     <div style="height: 160px; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 0.5rem; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem;">
                         <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.75rem;">
-                            <span style="font-size: 1rem;">⚠️</span>
+                            <span style="font-size: 1rem;">⚠</span>
                             <span style="color: #ef4444; font-size: 0.75rem;">${errorMsg.substring(0, 40)}${errorMsg.length > 40 ? '...' : ''}</span>
                         </div>
                         <div style="color: rgba(255,255,255,0.6); font-size: 0.7rem; margin-bottom: 0.5rem;">Choose to retry:</div>
@@ -16902,7 +16902,7 @@
                         <!-- Footer -->
                         <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
                             <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">
-                                ${bible.enabled ? '✅ Style Bible is active' : '⚠️ Enable toggle to apply'}
+                                ${bible.enabled ? '✓ Style Bible is active' : '⚠ Enable toggle to apply'}
                             </div>
                             <div style="display: flex; gap: 0.5rem;">
                                 <button onclick="closeStyleBibleModal()" style="padding: 0.6rem 1.25rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white; font-size: 0.85rem; cursor: pointer;">Close</button>
@@ -17084,7 +17084,7 @@
                         <!-- Footer -->
                         <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
                             <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">
-                                ${bible.enabled ? '✅ Character Bible is active' : '⚠️ Enable toggle to apply'}
+                                ${bible.enabled ? '✓ Character Bible is active' : '⚠ Enable toggle to apply'}
                                 ${characters.length > 0 ? ' • ' + characters.length + ' character(s)' : ''}
                                 ${characters.filter(c => c.referenceImageStatus === 'ready').length > 0 ? ` • ${characters.filter(c => c.referenceImageStatus === 'ready').length} with portraits` : ''}
                             </div>
@@ -17332,7 +17332,7 @@
                         <!-- Footer -->
                         <div style="padding: 1rem 1.25rem; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
                             <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">
-                                ${bible.enabled ? '✅ Location Bible is active' : '⚠️ Enable toggle to apply'}
+                                ${bible.enabled ? '✓ Location Bible is active' : '⚠ Enable toggle to apply'}
                             </div>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.75rem; color: rgba(255,255,255,0.7);">
@@ -21767,7 +21767,7 @@
                             </div>
                             <div style="display: flex; gap: 0.5rem; font-size: 0.7rem; color: rgba(255,255,255,0.5);">
                                 <span>⏱️ ${scriptScene.duration || 8}s</span>
-                                ${hasVideo ? '<span style="color: #10b981;">✓ Video</span>' : '<span style="color: #f59e0b;">⚠️ No video</span>'}
+                                ${hasVideo ? '<span style="color: #10b981;">✓ Video</span>' : '<span style="color: #f59e0b;">⚠ No video</span>'}
                             </div>
                         </div>
 
@@ -24109,7 +24109,7 @@
             } else if (isCompleted && exportState.outputUrl) {
                 modalContent = `
                     <div style="text-align: center; padding: 2rem;">
-                        <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">✓</div>
                         <h2 style="color: white; margin-bottom: 0.5rem;">Export Complete!</h2>
                         <p style="color: rgba(255,255,255,0.6); margin-bottom: 1.5rem;">Your video is ready to download</p>
                         <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
@@ -24139,7 +24139,7 @@
             } else if (isFailed) {
                 modalContent = `
                     <div style="text-align: center; padding: 2rem;">
-                        <div style="font-size: 3rem; margin-bottom: 1rem;">❌</div>
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">✗</div>
                         <h2 style="color: #ef4444; margin-bottom: 0.5rem;">Export Failed</h2>
                         <p style="color: rgba(255,255,255,0.6); margin-bottom: 1.5rem;">
                             ${exportState.error || 'An error occurred during export'}
@@ -24255,7 +24255,7 @@
                             <div style="flex: 1;">
                                 <span style="color: rgba(255,255,255,0.5);">Video</span>
                                 <div style="color: ${animScene?.videoUrl ? '#10b981' : (storyboardScene?.source === 'stock-video' ? '#06b6d4' : '#f59e0b')}; margin-top: 0.1rem;">
-                                    ${animScene?.videoUrl ? '✓ Anim' : (storyboardScene?.source === 'stock-video' ? '✓ Stock' : '⚠️ Img')}
+                                    ${animScene?.videoUrl ? '✓ Anim' : (storyboardScene?.source === 'stock-video' ? '✓ Stock' : '⚠ Img')}
                                 </div>
                             </div>
                         </div>
@@ -25365,7 +25365,7 @@
                             <div style="flex: 1;">
                                 <span style="color: rgba(255,255,255,0.5);">Video</span>
                                 <div style="color: ${animScene?.videoUrl ? '#10b981' : (storyboardScene?.source === 'stock-video' ? '#06b6d4' : '#f59e0b')}; margin-top: 0.2rem;">
-                                    ${animScene?.videoUrl ? '✓ Animated' : (storyboardScene?.source === 'stock-video' ? '✓ Stock' : '⚠️ Image')}
+                                    ${animScene?.videoUrl ? '✓ Animated' : (storyboardScene?.source === 'stock-video' ? '✓ Stock' : '⚠ Image')}
                                 </div>
                             </div>
                         </div>
@@ -26320,7 +26320,7 @@
                             <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
                                 <span style="color: rgba(255,255,255,0.6); font-size: 0.85rem;">Animated Scenes</span>
                                 <span style="color: ${animatedCount === scriptScenes.length ? '#10b981' : '#f59e0b'}; font-size: 0.85rem;">
-                                    ${animatedCount}/${scriptScenes.length} ${animatedCount === scriptScenes.length ? '✓' : '⚠️'}
+                                    ${animatedCount}/${scriptScenes.length} ${animatedCount === scriptScenes.length ? '✓' : '⚠'}
                                 </span>
                             </div>
                             <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -26336,7 +26336,7 @@
                         ${animatedCount < scriptScenes.length ? `
                             <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 0.5rem;">
                                 <div style="font-size: 0.8rem; color: #f59e0b;">
-                                    ⚠️ ${scriptScenes.length - animatedCount} scene(s) don't have animated videos. They will use static images.
+                                    ⚠ ${scriptScenes.length - animatedCount} scene(s) don't have animated videos. They will use static images.
                                 </div>
                             </div>
                         ` : ''}
@@ -26563,7 +26563,7 @@
                         <!-- Share Info -->
                         <div style="padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.75rem; max-width: 500px; margin: 0 auto;">
                             <div style="font-size: 0.9rem; color: #10b981; margin-bottom: 0.5rem; font-weight: 600;">
-                                ✅ Ready to upload!
+                                ✓ Ready to upload!
                             </div>
                             <div style="font-size: 0.8rem; color: rgba(255,255,255,0.6);">
                                 Download your video and upload it directly to YouTube, TikTok, Instagram, or any other platform.
@@ -26663,7 +26663,7 @@
 
             return `
                 <div class="content-card" style="text-align: center; padding: 3rem 2rem; margin-top: 1rem;">
-                    <div style="font-size: 4rem; margin-bottom: 1.5rem;">❌</div>
+                    <div style="font-size: 4rem; margin-bottom: 1.5rem;">✗</div>
                     <div style="font-size: 1.5rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">
                         Export Failed
                     </div>
@@ -26979,7 +26979,7 @@
 
             if (durationWarning) {
                 html += '<div style="margin-bottom: 1rem; padding: 0.6rem; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 0.4rem;">';
-                html += '<div style="font-size: 0.75rem; color: #f59e0b;">⚠️ ' + durationWarning + '</div>';
+                html += '<div style="font-size: 0.75rem; color: #f59e0b;">⚠ ' + durationWarning + '</div>';
                 html += '</div>';
             }
 
@@ -27157,7 +27157,7 @@
             // Share info
             if (outputUrl) {
                 html += '<div style="padding: 1rem; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 0.5rem;">';
-                html += '<div style="font-size: 0.85rem; color: #10b981; margin-bottom: 0.25rem; font-weight: 600;">✅ Ready to upload!</div>';
+                html += '<div style="font-size: 0.85rem; color: #10b981; margin-bottom: 0.25rem; font-weight: 600;">✓ Ready to upload!</div>';
                 html += '<div style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">Download your video and upload it directly to YouTube, TikTok, Instagram, or any other platform.</div>';
                 html += '</div>';
             }
@@ -27172,7 +27172,7 @@
             var html = '';
             html += '<div style="text-align: center;">';
 
-            html += '<div style="font-size: 3rem; margin-bottom: 1rem;">❌</div>';
+            html += '<div style="font-size: 3rem; margin-bottom: 1rem;">✗</div>';
             html += '<div style="font-size: 1.25rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">Export Failed</div>';
             html += '<div style="color: rgba(255,255,255,0.6); margin-bottom: 1rem;">Something went wrong during export</div>';
 
