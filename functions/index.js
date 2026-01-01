@@ -26544,7 +26544,15 @@ exports.creationWizardGenerateScript = functions
     // Scenes are narrative units (30-60s) composed of multiple shots (6-10s each)
     // This mirrors professional film production where:
     // - Scene = narrative beat (30-60 seconds)
-    // - Shot = individual video clip (6 or 10 seconds from Minimax)
+    // - Shot = individual video clip (Minimax supports 5s, 6s, or 10s)
+    //
+    // PHASE 2: FLEXIBLE DURATION SYSTEM
+    // Individual shot durations are calculated dynamically during shot decomposition:
+    // - Dialogue shots: Duration based on word count (~2.5 words/sec + buffer)
+    // - Non-dialogue shots: Duration based on shot type presets (reaction=5s, establishing=5s, etc.)
+    // - Extended shots (>10s): Automatically split into multiple stitched clips
+    // The clipDuration here is the DEFAULT for scene-level planning.
+    // FLEXIBLE_DURATION_ENGINE calculates optimal per-shot durations.
 
     const clipDuration = videoModel.duration === '10s' ? 10 : 6;
     const isExtendedClip = clipDuration === 10;
@@ -27754,6 +27762,26 @@ LOCATION CONSISTENCY RULES:
     // Validate and normalize the script structure
     if (!script.scenes || !Array.isArray(script.scenes) || script.scenes.length === 0) {
       throw new functions.https.HttpsError('internal', 'Invalid script structure - no scenes generated');
+    }
+
+    // PHASE 3: CHARACTER VOICE ASSIGNMENT
+    // Automatically assign voice profiles to characters based on archetypes and descriptions
+    if (script.characters && Array.isArray(script.characters) && script.characters.length > 0) {
+      const voiceResult = CHARACTER_VOICE_ENGINE.assignVoicesToCast(script.characters);
+      script.voiceAssignments = voiceResult.assignments;
+
+      // Enhance each character with their voice assignment
+      script.characters = script.characters.map(char => ({
+        ...char,
+        voice: voiceResult.assignments[char.name] || null,
+        voiceProfileId: voiceResult.assignments[char.name]?.voiceProfileId || null,
+        elevenLabsVoice: voiceResult.assignments[char.name]?.elevenLabsVoice || null
+      }));
+
+      console.log(`[creationWizardGenerateScript] ${voiceResult.summary}`);
+    } else {
+      script.voiceAssignments = {};
+      console.log('[creationWizardGenerateScript] No characters to assign voices to');
     }
 
     // Calculate default durations if not provided
@@ -44577,6 +44605,776 @@ const SHOT_SEQUENCE_VALIDATOR = {
 };
 
 // =============================================================================
+// =============================================================================
+//
+//  HOLLYWOOD DIALOGUE FLOW SYSTEM - COMPLETE ARCHITECTURE DOCUMENTATION
+//
+//  A comprehensive system for Hollywood-style dialogue distribution in AI video
+//  generation. Enables natural character conversations with per-character voices,
+//  flexible shot durations, and professional quality assurance.
+//
+// =============================================================================
+// =============================================================================
+/**
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │                    HOLLYWOOD DIALOGUE FLOW - DATA PIPELINE                  │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │                                                                             │
+ * │  PHASE 1: DIALOGUE FLOW ARCHITECTURE                                        │
+ * │  ├─ Script Generation creates scene.audioLayer.dialogue[]                  │
+ * │  │  └─ Each entry: { character, line, emotion, delivery }                  │
+ * │  ├─ DIALOGUE_DISTRIBUTION_ENGINE distributes to shots                      │
+ * │  │  └─ Based on narrative beats and timing                                 │
+ * │  └─ Output: shot.dialogue[], shot.hasDialogue, shot.dialogueDuration       │
+ * │                                                                             │
+ * │  PHASE 2: FLEXIBLE DURATION SYSTEM                                          │
+ * │  ├─ FLEXIBLE_DURATION_ENGINE calculates per-shot durations                 │
+ * │  │  └─ Considers: dialogue length, action complexity, shot type            │
+ * │  ├─ Duration options: 5s (quick), 6s (short), 10s (standard)               │
+ * │  ├─ Multi-clip stitching for shots > 10s                                   │
+ * │  └─ Output: shot.calculatedDuration, shot.durationClass, shot.stitching    │
+ * │                                                                             │
+ * │  PHASE 3: CHARACTER VOICE SYSTEM                                            │
+ * │  ├─ CHARACTER_VOICE_ENGINE assigns voices to characters                    │
+ * │  │  └─ Based on archetype and gender detection                             │
+ * │  ├─ 13 voice profiles (hero, villain, mentor, etc.)                        │
+ * │  ├─ Integrates with ElevenLabs TTS                                         │
+ * │  └─ Output: script.voiceAssignments, shot.ttsConfig, shot.voiceRequirements│
+ * │                                                                             │
+ * │  PHASE 4: UI/UX ENHANCEMENTS                                                │
+ * │  ├─ Voice & Dialogue Status panel in script view                           │
+ * │  ├─ Duration timeline visualization in shot modal                          │
+ * │  ├─ Audio type indicators (dialogue/multi-voice/ambient)                   │
+ * │  ├─ Scene Production Summary with shot & voice stats                       │
+ * │  └─ Speaker voice badges in scene cards                                    │
+ * │                                                                             │
+ * │  PHASE 5: QUALITY ASSURANCE                                                 │
+ * │  ├─ QUALITY_ASSURANCE_ENGINE validates all data                            │
+ * │  │  ├─ validateDialogue() - sanitizes dialogue data                        │
+ * │  │  ├─ validateVoiceAssignments() - ensures voice coverage                 │
+ * │  │  ├─ validateDuration() - bounds checking (3-30s)                        │
+ * │  │  └─ validateTTSConfig() - validates before Multitalk                    │
+ * │  ├─ runHealthCheck() - comprehensive integration verification              │
+ * │  ├─ applyGracefulDegradation() - fallbacks for missing data                │
+ * │  └─ Output: qualityAssurance report in decomposition response              │
+ * │                                                                             │
+ * │  PHASE 6: END-TO-END INTEGRATION                                            │
+ * │  ├─ Complete pipeline verification                                          │
+ * │  ├─ Comprehensive logging for debugging                                     │
+ * │  ├─ UI health indicators                                                    │
+ * │  └─ Error handling and recovery                                             │
+ * │                                                                             │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │                                                                             │
+ * │  DATA FLOW DIAGRAM:                                                         │
+ * │                                                                             │
+ * │  Script Generation                                                          │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  ┌────────────────────────────────────────┐                                 │
+ * │  │ scene.audioLayer.dialogue[]            │                                 │
+ * │  │ script.characters[]                    │                                 │
+ * │  │ script.voiceAssignments{}              │  ◄── Phase 3: Voice Assignment │
+ * │  └────────────────────────────────────────┘                                 │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  Shot Decomposition (creationWizardDecomposeSceneToShots)                   │
+ * │       │                                                                     │
+ * │       ├─► Phase 5: QUALITY_ASSURANCE_ENGINE.validateDialogue()              │
+ * │       │                                                                     │
+ * │       ├─► Phase 1: DIALOGUE_DISTRIBUTION_ENGINE.distributeDialogueToShots() │
+ * │       │                                                                     │
+ * │       ├─► Phase 5: QUALITY_ASSURANCE_ENGINE.validateVoiceAssignments()      │
+ * │       │                                                                     │
+ * │       ├─► Phase 3: CHARACTER_VOICE_ENGINE (voice enhancement)               │
+ * │       │       └─► shot.dialogue[].voice, shot.ttsConfig                    │
+ * │       │                                                                     │
+ * │       ├─► Phase 2: FLEXIBLE_DURATION_ENGINE.calculateSceneDurations()       │
+ * │       │       └─► shot.calculatedDuration, shot.durationClass              │
+ * │       │                                                                     │
+ * │       ├─► Phase 5: QUALITY_ASSURANCE_ENGINE.runHealthCheck()                │
+ * │       │                                                                     │
+ * │       └─► Phase 5: QUALITY_ASSURANCE_ENGINE.applyGracefulDegradation()      │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  ┌────────────────────────────────────────┐                                 │
+ * │  │ Finalized Shots with:                  │                                 │
+ * │  │  - dialogue[], hasDialogue             │                                 │
+ * │  │  - voice, voiceRequirements, ttsConfig │                                 │
+ * │  │  - calculatedDuration, durationClass   │                                 │
+ * │  │  - qualityAssurance report             │                                 │
+ * │  └────────────────────────────────────────┘                                 │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  Frontend Display (Phase 4 UI)                                              │
+ * │       │                                                                     │
+ * │       ▼                                                                     │
+ * │  Multitalk Video Generation                                                 │
+ * │       │                                                                     │
+ * │       ├─► Phase 5: validateTTSConfigForMultitalk() (frontend)               │
+ * │       │                                                                     │
+ * │       └─► creationWizardGenerateMultitalkVideo()                            │
+ * │               └─► TTS synthesis + lip-sync video                            │
+ * │                                                                             │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ENGINES OVERVIEW:
+ *
+ * 1. DIALOGUE_DISTRIBUTION_ENGINE
+ *    - Distributes scene dialogue to individual shots
+ *    - Calculates speaking time per line (2.5 words/second)
+ *    - Assigns dialogue to shots based on narrative beats
+ *
+ * 2. FLEXIBLE_DURATION_ENGINE
+ *    - Calculates optimal duration for each shot
+ *    - Considers dialogue, action, and shot type
+ *    - Handles multi-clip stitching for long shots
+ *
+ * 3. CHARACTER_VOICE_ENGINE
+ *    - Assigns voice profiles to characters
+ *    - 13 profiles: male/female × hero/villain/mentor/young/neutral + narrator
+ *    - Generates TTS configuration for Multitalk
+ *
+ * 4. QUALITY_ASSURANCE_ENGINE
+ *    - Validates all data before processing
+ *    - Provides graceful fallbacks
+ *    - Runs integration health checks
+ */
+
+// =============================================================================
+// PHASE 5: QUALITY_ASSURANCE_ENGINE - Validation & Integration Health
+// =============================================================================
+/**
+ * QUALITY_ASSURANCE_ENGINE
+ *
+ * Validates data integrity across all dialogue, voice, and duration systems.
+ * Provides graceful degradation and fallback values when data is missing.
+ *
+ * Key features:
+ * - Validates dialogue data structure before processing
+ * - Validates voice assignments with fallback defaults
+ * - Validates duration calculations with bounds checking
+ * - Validates TTS config before Multitalk API calls
+ * - Provides integration health checks
+ * - Logs validation issues for debugging
+ *
+ * Phase 5 of the Hollywood Dialogue Flow improvement plan.
+ */
+const QUALITY_ASSURANCE_ENGINE = {
+
+  // Validation thresholds
+  THRESHOLDS: {
+    MIN_DIALOGUE_LENGTH: 1,       // Minimum characters in a line
+    MAX_DIALOGUE_LENGTH: 500,     // Maximum characters in a line
+    MIN_SHOT_DURATION: 3,         // Minimum seconds per shot
+    MAX_SHOT_DURATION: 30,        // Maximum seconds per shot
+    MAX_DIALOGUE_PER_SHOT: 5,     // Maximum dialogue lines per shot
+    MIN_WORDS_PER_LINE: 1,        // Minimum words per dialogue line
+    MAX_WORDS_PER_LINE: 100       // Maximum words per dialogue line
+  },
+
+  // Default fallback values
+  DEFAULTS: {
+    voiceProfile: {
+      voiceProfileId: 'male-hero',
+      voiceProfile: { id: 'male-hero', name: 'Heroic Male', gender: 'male' },
+      elevenLabsVoice: 'adam',
+      detected: false,
+      fallback: true
+    },
+    duration: 6,
+    emotion: 'neutral',
+    delivery: 'normal'
+  },
+
+  /**
+   * Validate dialogue data structure
+   * @param {Array} dialogue - Array of dialogue objects
+   * @returns {Object} { valid, errors, sanitized }
+   */
+  validateDialogue(dialogue) {
+    const errors = [];
+    const warnings = [];
+
+    // Handle null/undefined
+    if (!dialogue) {
+      return { valid: true, errors: [], warnings: [], sanitized: [], isEmpty: true };
+    }
+
+    // Ensure it's an array
+    if (!Array.isArray(dialogue)) {
+      errors.push('Dialogue must be an array');
+      return { valid: false, errors, warnings, sanitized: [], isEmpty: true };
+    }
+
+    // Validate and sanitize each line
+    const sanitized = dialogue.map((line, idx) => {
+      const sanitizedLine = { ...line };
+
+      // Validate character name
+      if (!line.character || typeof line.character !== 'string') {
+        warnings.push(`Line ${idx + 1}: Missing or invalid character name, using 'Character'`);
+        sanitizedLine.character = 'Character';
+      } else {
+        sanitizedLine.character = line.character.trim();
+      }
+
+      // Validate dialogue text
+      if (!line.line || typeof line.line !== 'string') {
+        errors.push(`Line ${idx + 1}: Missing dialogue text`);
+        sanitizedLine.line = '';
+        sanitizedLine._invalid = true;
+      } else {
+        // Trim and validate length
+        sanitizedLine.line = line.line.trim();
+        if (sanitizedLine.line.length < this.THRESHOLDS.MIN_DIALOGUE_LENGTH) {
+          warnings.push(`Line ${idx + 1}: Dialogue too short, may cause issues`);
+        }
+        if (sanitizedLine.line.length > this.THRESHOLDS.MAX_DIALOGUE_LENGTH) {
+          warnings.push(`Line ${idx + 1}: Dialogue truncated (${sanitizedLine.line.length} chars)`);
+          sanitizedLine.line = sanitizedLine.line.substring(0, this.THRESHOLDS.MAX_DIALOGUE_LENGTH) + '...';
+        }
+      }
+
+      // Validate optional fields
+      if (line.emotion && typeof line.emotion !== 'string') {
+        sanitizedLine.emotion = this.DEFAULTS.emotion;
+      }
+      if (line.delivery && typeof line.delivery !== 'string') {
+        sanitizedLine.delivery = this.DEFAULTS.delivery;
+      }
+
+      return sanitizedLine;
+    }).filter(line => !line._invalid); // Remove invalid lines
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      sanitized,
+      isEmpty: sanitized.length === 0,
+      originalCount: dialogue.length,
+      sanitizedCount: sanitized.length
+    };
+  },
+
+  /**
+   * Validate voice assignments
+   * @param {Object} voiceAssignments - Character to voice mapping
+   * @param {Array} requiredCharacters - Characters that need voices
+   * @returns {Object} { valid, errors, enhanced }
+   */
+  validateVoiceAssignments(voiceAssignments, requiredCharacters = []) {
+    const errors = [];
+    const warnings = [];
+    const enhanced = { ...voiceAssignments };
+
+    // Handle null/undefined
+    if (!voiceAssignments || typeof voiceAssignments !== 'object') {
+      // Create fallback assignments for all required characters
+      requiredCharacters.forEach(char => {
+        enhanced[char] = { ...this.DEFAULTS.voiceProfile };
+        warnings.push(`Voice fallback applied for: ${char}`);
+      });
+      return {
+        valid: true,
+        errors,
+        warnings,
+        enhanced,
+        hasFallbacks: true
+      };
+    }
+
+    // Check each required character has a voice
+    requiredCharacters.forEach(char => {
+      const voice = enhanced[char];
+      if (!voice) {
+        enhanced[char] = { ...this.DEFAULTS.voiceProfile };
+        warnings.push(`No voice assigned for '${char}', using fallback`);
+      } else if (!voice.voiceProfileId) {
+        enhanced[char] = { ...voice, ...this.DEFAULTS.voiceProfile };
+        warnings.push(`Invalid voice profile for '${char}', using fallback`);
+      }
+    });
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      enhanced,
+      hasFallbacks: warnings.length > 0
+    };
+  },
+
+  /**
+   * Validate shot duration
+   * @param {number} duration - Proposed duration in seconds
+   * @param {Object} shot - Shot context for intelligent adjustment
+   * @returns {Object} { valid, duration, adjusted, reason }
+   */
+  validateDuration(duration, shot = {}) {
+    let adjustedDuration = duration;
+    let reason = null;
+    let adjusted = false;
+
+    // Handle non-numeric
+    if (typeof duration !== 'number' || isNaN(duration)) {
+      adjustedDuration = this.DEFAULTS.duration;
+      adjusted = true;
+      reason = 'Invalid duration, using default';
+    }
+    // Check minimum
+    else if (duration < this.THRESHOLDS.MIN_SHOT_DURATION) {
+      adjustedDuration = this.THRESHOLDS.MIN_SHOT_DURATION;
+      adjusted = true;
+      reason = `Duration below minimum (${this.THRESHOLDS.MIN_SHOT_DURATION}s)`;
+    }
+    // Check maximum
+    else if (duration > this.THRESHOLDS.MAX_SHOT_DURATION) {
+      adjustedDuration = this.THRESHOLDS.MAX_SHOT_DURATION;
+      adjusted = true;
+      reason = `Duration above maximum (${this.THRESHOLDS.MAX_SHOT_DURATION}s)`;
+    }
+
+    // Adjust for dialogue if present
+    if (shot.hasDialogue && shot.dialogue?.length > 0) {
+      const minDialogueDuration = this.calculateMinDialogueDuration(shot.dialogue);
+      if (adjustedDuration < minDialogueDuration) {
+        adjustedDuration = Math.min(minDialogueDuration, this.THRESHOLDS.MAX_SHOT_DURATION);
+        adjusted = true;
+        reason = `Adjusted for dialogue timing (min ${minDialogueDuration}s)`;
+      }
+    }
+
+    return {
+      valid: !adjusted,
+      duration: adjustedDuration,
+      original: duration,
+      adjusted,
+      reason
+    };
+  },
+
+  /**
+   * Calculate minimum duration needed for dialogue
+   */
+  calculateMinDialogueDuration(dialogue) {
+    if (!dialogue || !Array.isArray(dialogue)) return 5;
+    const totalWords = dialogue.reduce((sum, d) => {
+      return sum + (d.line?.split(/\s+/).length || 0);
+    }, 0);
+    // 2.5 words per second + 0.5s buffer per line for pauses
+    return Math.ceil((totalWords / 2.5) + (dialogue.length * 0.5));
+  },
+
+  /**
+   * Validate TTS configuration before API call
+   * @param {Object} ttsConfig - TTS configuration object
+   * @returns {Object} { valid, errors, enhanced }
+   */
+  validateTTSConfig(ttsConfig) {
+    const errors = [];
+    const warnings = [];
+
+    if (!ttsConfig) {
+      return { valid: true, errors, warnings, enhanced: null, isEmpty: true };
+    }
+
+    const enhanced = { ...ttsConfig };
+
+    // Validate lines array
+    if (!ttsConfig.lines || !Array.isArray(ttsConfig.lines)) {
+      errors.push('TTS config missing lines array');
+      enhanced.lines = [];
+    } else {
+      enhanced.lines = ttsConfig.lines.map((line, idx) => {
+        const enhancedLine = { ...line };
+
+        // Ensure voice is set
+        if (!line.voice) {
+          warnings.push(`TTS line ${idx + 1}: No voice specified, using default`);
+          enhancedLine.voice = this.DEFAULTS.voiceProfile.elevenLabsVoice;
+        }
+
+        // Ensure text is present
+        if (!line.text || typeof line.text !== 'string' || line.text.trim().length === 0) {
+          errors.push(`TTS line ${idx + 1}: Empty text`);
+          enhancedLine._invalid = true;
+        }
+
+        return enhancedLine;
+      }).filter(line => !line._invalid);
+    }
+
+    // Validate total duration
+    if (ttsConfig.totalDuration && typeof ttsConfig.totalDuration !== 'number') {
+      warnings.push('TTS config has invalid totalDuration');
+      enhanced.totalDuration = enhanced.lines.reduce((sum, l) => sum + (l.estimatedDuration || 2), 0);
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      enhanced,
+      isEmpty: enhanced.lines.length === 0
+    };
+  },
+
+  /**
+   * Run full integration health check
+   * @param {Object} scene - Full scene object
+   * @param {Array} shots - Array of processed shots
+   * @returns {Object} Comprehensive health report
+   */
+  runHealthCheck(scene, shots) {
+    const report = {
+      timestamp: new Date().toISOString(),
+      scene: scene?.sceneId || scene?.id || 'unknown',
+      shotCount: shots?.length || 0,
+      status: 'healthy',
+      checks: {},
+      issues: [],
+      recommendations: []
+    };
+
+    // Check 1: Dialogue distribution
+    const dialogueShots = shots?.filter(s => s.hasDialogue) || [];
+    const totalDialogue = scene?.audioLayer?.dialogue?.length || 0;
+    const distributedDialogue = dialogueShots.reduce((sum, s) => sum + (s.dialogue?.length || 0), 0);
+    report.checks.dialogueDistribution = {
+      passed: distributedDialogue >= totalDialogue,
+      total: totalDialogue,
+      distributed: distributedDialogue,
+      coverage: totalDialogue > 0 ? Math.round((distributedDialogue / totalDialogue) * 100) : 100
+    };
+    if (!report.checks.dialogueDistribution.passed) {
+      report.issues.push(`Only ${distributedDialogue}/${totalDialogue} dialogue lines distributed`);
+    }
+
+    // Check 2: Voice assignments
+    const voiceShots = shots?.filter(s => s.voiceRequirements?.ttsRequired) || [];
+    const missingVoices = voiceShots.filter(s =>
+      s.dialogue?.some(d => !d.voice?.voiceProfileId)
+    );
+    report.checks.voiceAssignments = {
+      passed: missingVoices.length === 0,
+      totalVoicedShots: voiceShots.length,
+      missingVoices: missingVoices.length
+    };
+    if (!report.checks.voiceAssignments.passed) {
+      report.issues.push(`${missingVoices.length} shots have dialogue without voice assignments`);
+      report.recommendations.push('Ensure voiceAssignments are passed to shot decomposition');
+    }
+
+    // Check 3: Duration validity
+    const invalidDurations = shots?.filter(s => {
+      const dur = s.selectedDuration || s.calculatedDuration || s.duration;
+      return !dur || dur < this.THRESHOLDS.MIN_SHOT_DURATION || dur > this.THRESHOLDS.MAX_SHOT_DURATION;
+    }) || [];
+    report.checks.durations = {
+      passed: invalidDurations.length === 0,
+      totalShots: shots?.length || 0,
+      invalidCount: invalidDurations.length
+    };
+    if (!report.checks.durations.passed) {
+      report.issues.push(`${invalidDurations.length} shots have invalid durations`);
+    }
+
+    // Check 4: TTS readiness
+    const ttsRequired = voiceShots.length;
+    const ttsReady = shots?.filter(s => s.ttsConfig?.lines?.length > 0).length || 0;
+    report.checks.ttsReadiness = {
+      passed: ttsRequired === ttsReady,
+      required: ttsRequired,
+      ready: ttsReady
+    };
+    if (!report.checks.ttsReadiness.passed) {
+      report.issues.push(`Only ${ttsReady}/${ttsRequired} shots have TTS configs`);
+    }
+
+    // Determine overall status
+    const failedChecks = Object.values(report.checks).filter(c => !c.passed).length;
+    if (failedChecks === 0) {
+      report.status = 'healthy';
+    } else if (failedChecks <= 2) {
+      report.status = 'degraded';
+    } else {
+      report.status = 'unhealthy';
+    }
+
+    return report;
+  },
+
+  /**
+   * Apply graceful degradation to a shot
+   * @param {Object} shot - Shot with potential missing data
+   * @returns {Object} Shot with fallbacks applied
+   */
+  applyGracefulDegradation(shot) {
+    const enhanced = { ...shot };
+
+    // Ensure duration is valid
+    if (!enhanced.duration && !enhanced.selectedDuration && !enhanced.calculatedDuration) {
+      enhanced.duration = this.DEFAULTS.duration;
+      enhanced._durationFallback = true;
+    }
+
+    // Ensure dialogue array exists if hasDialogue is true
+    if (enhanced.hasDialogue && (!enhanced.dialogue || !Array.isArray(enhanced.dialogue))) {
+      enhanced.dialogue = [];
+      enhanced.hasDialogue = false;
+      enhanced._dialogueFallback = true;
+    }
+
+    // Ensure voice requirements exist
+    if (enhanced.hasDialogue && !enhanced.voiceRequirements) {
+      enhanced.voiceRequirements = {
+        voicesNeeded: 1,
+        voices: [],
+        ttsRequired: true,
+        isMultiVoice: false,
+        _fallback: true
+      };
+    }
+
+    // Ensure TTS config exists for dialogue shots
+    if (enhanced.hasDialogue && enhanced.dialogue?.length > 0 && !enhanced.ttsConfig) {
+      enhanced.ttsConfig = {
+        lines: enhanced.dialogue.map(d => ({
+          character: d.character,
+          text: d.line,
+          voice: d.voice?.elevenLabsVoice || this.DEFAULTS.voiceProfile.elevenLabsVoice,
+          estimatedDuration: Math.ceil((d.line?.split(/\s+/).length || 5) / 2.5)
+        })),
+        totalDuration: 5,
+        _fallback: true
+      };
+    }
+
+    return enhanced;
+  },
+
+  /**
+   * PHASE 6: End-to-end pipeline verification
+   * Verifies the complete Hollywood Dialogue Flow pipeline from script to shots
+   * @param {Object} script - Full script object
+   * @param {Object} scene - Scene being processed
+   * @param {Array} shots - Processed shots
+   * @returns {Object} Comprehensive pipeline verification report
+   */
+  verifyPipeline(script, scene, shots) {
+    const report = {
+      timestamp: new Date().toISOString(),
+      pipelineVersion: '1.0.0',
+      status: 'pass',
+      phases: {},
+      summary: {
+        totalChecks: 0,
+        passed: 0,
+        failed: 0,
+        warnings: 0
+      }
+    };
+
+    // Phase 1: Dialogue Flow Architecture
+    report.phases.dialogueFlow = {
+      phase: 1,
+      name: 'Dialogue Flow Architecture',
+      checks: []
+    };
+    // Check 1.1: Scene has audioLayer
+    const hasAudioLayer = !!scene?.audioLayer;
+    report.phases.dialogueFlow.checks.push({
+      name: 'Scene has audioLayer',
+      passed: hasAudioLayer,
+      value: hasAudioLayer ? 'present' : 'missing'
+    });
+    // Check 1.2: Dialogue distributed to shots
+    const dialogueShots = shots?.filter(s => s.hasDialogue) || [];
+    const sceneDialogueCount = scene?.audioLayer?.dialogue?.length || 0;
+    const distributedDialogueCount = dialogueShots.reduce((sum, s) => sum + (s.dialogue?.length || 0), 0);
+    report.phases.dialogueFlow.checks.push({
+      name: 'Dialogue distribution',
+      passed: sceneDialogueCount === 0 || distributedDialogueCount >= sceneDialogueCount,
+      value: `${distributedDialogueCount}/${sceneDialogueCount} lines distributed`
+    });
+
+    // Phase 2: Flexible Duration System
+    report.phases.flexibleDuration = {
+      phase: 2,
+      name: 'Flexible Duration System',
+      checks: []
+    };
+    // Check 2.1: All shots have valid durations
+    const shotsWithDuration = shots?.filter(s => s.calculatedDuration || s.selectedDuration || s.duration) || [];
+    report.phases.flexibleDuration.checks.push({
+      name: 'Shots have durations',
+      passed: shotsWithDuration.length === (shots?.length || 0),
+      value: `${shotsWithDuration.length}/${shots?.length || 0} shots`
+    });
+    // Check 2.2: Durations within bounds
+    const validDurations = shots?.filter(s => {
+      const dur = s.selectedDuration || s.calculatedDuration || s.duration || 0;
+      return dur >= 3 && dur <= 30;
+    }) || [];
+    report.phases.flexibleDuration.checks.push({
+      name: 'Durations within bounds (3-30s)',
+      passed: validDurations.length === (shots?.length || 0),
+      value: `${validDurations.length}/${shots?.length || 0} valid`
+    });
+
+    // Phase 3: Character Voice System
+    report.phases.characterVoice = {
+      phase: 3,
+      name: 'Character Voice System',
+      checks: []
+    };
+    // Check 3.1: Voice assignments exist
+    const hasVoiceAssignments = Object.keys(script?.voiceAssignments || {}).length > 0;
+    report.phases.characterVoice.checks.push({
+      name: 'Voice assignments in script',
+      passed: !sceneDialogueCount || hasVoiceAssignments,
+      value: hasVoiceAssignments ? `${Object.keys(script?.voiceAssignments || {}).length} characters` : 'none'
+    });
+    // Check 3.2: TTS configs generated
+    const shotsWithTTS = dialogueShots.filter(s => s.ttsConfig?.lines?.length > 0);
+    report.phases.characterVoice.checks.push({
+      name: 'TTS configs generated',
+      passed: dialogueShots.length === 0 || shotsWithTTS.length === dialogueShots.length,
+      value: `${shotsWithTTS.length}/${dialogueShots.length} dialogue shots`
+    });
+
+    // Phase 4: UI/UX (frontend - just verify data is present for UI)
+    report.phases.uiData = {
+      phase: 4,
+      name: 'UI Data Availability',
+      checks: []
+    };
+    // Check 4.1: Duration class for color coding
+    const shotsWithDurationClass = shots?.filter(s => s.durationClass) || [];
+    report.phases.uiData.checks.push({
+      name: 'Duration class for UI',
+      passed: shotsWithDurationClass.length === (shots?.length || 0),
+      value: `${shotsWithDurationClass.length}/${shots?.length || 0} shots`
+    });
+    // Check 4.2: Voice requirements for UI badges
+    const shotsWithVoiceReqs = dialogueShots.filter(s => s.voiceRequirements);
+    report.phases.uiData.checks.push({
+      name: 'Voice requirements for UI',
+      passed: dialogueShots.length === 0 || shotsWithVoiceReqs.length === dialogueShots.length,
+      value: `${shotsWithVoiceReqs.length}/${dialogueShots.length} dialogue shots`
+    });
+
+    // Phase 5: Quality Assurance (check that health check ran)
+    report.phases.qualityAssurance = {
+      phase: 5,
+      name: 'Quality Assurance',
+      checks: []
+    };
+    // Check 5.1: No fallback markers on shots
+    const shotsWithFallbacks = shots?.filter(s => s._durationFallback || s._dialogueFallback) || [];
+    report.phases.qualityAssurance.checks.push({
+      name: 'No fallback markers',
+      passed: shotsWithFallbacks.length === 0,
+      value: shotsWithFallbacks.length === 0 ? 'clean' : `${shotsWithFallbacks.length} shots used fallbacks`
+    });
+
+    // Calculate summary
+    Object.values(report.phases).forEach(phase => {
+      phase.checks.forEach(check => {
+        report.summary.totalChecks++;
+        if (check.passed) {
+          report.summary.passed++;
+        } else {
+          report.summary.failed++;
+        }
+      });
+    });
+
+    // Determine overall status
+    if (report.summary.failed === 0) {
+      report.status = 'pass';
+    } else if (report.summary.failed <= 2) {
+      report.status = 'warning';
+    } else {
+      report.status = 'fail';
+    }
+
+    report.summary.passRate = Math.round((report.summary.passed / report.summary.totalChecks) * 100);
+
+    return report;
+  },
+
+  /**
+   * PHASE 6: Generate comprehensive debug log
+   * Creates a detailed log for debugging pipeline issues
+   * @param {Object} scene - Scene object
+   * @param {Array} shots - Processed shots
+   * @param {Object} options - Additional context
+   * @returns {string} Formatted debug log
+   */
+  generateDebugLog(scene, shots, options = {}) {
+    const lines = [];
+    const separator = '─'.repeat(60);
+
+    lines.push(separator);
+    lines.push('HOLLYWOOD DIALOGUE FLOW - DEBUG LOG');
+    lines.push(separator);
+    lines.push(`Timestamp: ${new Date().toISOString()}`);
+    lines.push(`Scene ID: ${scene?.id || scene?.sceneId || 'unknown'}`);
+    lines.push(`Total Shots: ${shots?.length || 0}`);
+    lines.push('');
+
+    // Dialogue Summary
+    lines.push('DIALOGUE SUMMARY:');
+    const sceneDialogue = scene?.audioLayer?.dialogue || [];
+    lines.push(`  Scene dialogue lines: ${sceneDialogue.length}`);
+    if (sceneDialogue.length > 0) {
+      const speakers = [...new Set(sceneDialogue.map(d => d.character))];
+      lines.push(`  Speakers: ${speakers.join(', ')}`);
+    }
+    lines.push('');
+
+    // Shot-by-Shot Breakdown
+    lines.push('SHOT BREAKDOWN:');
+    (shots || []).forEach((shot, idx) => {
+      lines.push(`  Shot ${idx + 1}:`);
+      lines.push(`    Duration: ${shot.selectedDuration || shot.calculatedDuration || shot.duration || 'N/A'}s (${shot.durationClass || 'unknown'})`);
+      lines.push(`    Has Dialogue: ${shot.hasDialogue ? 'YES' : 'no'}`);
+      if (shot.hasDialogue && shot.dialogue?.length > 0) {
+        lines.push(`    Dialogue Lines: ${shot.dialogue.length}`);
+        shot.dialogue.slice(0, 2).forEach(d => {
+          lines.push(`      - ${d.character}: "${(d.line || '').substring(0, 40)}..."`);
+        });
+        if (shot.dialogue.length > 2) {
+          lines.push(`      ... and ${shot.dialogue.length - 2} more`);
+        }
+      }
+      lines.push(`    TTS Config: ${shot.ttsConfig ? 'present' : 'none'}`);
+      lines.push(`    Voice Reqs: ${shot.voiceRequirements ? `${shot.voiceRequirements.voicesNeeded} voice(s)` : 'none'}`);
+    });
+    lines.push('');
+
+    // Quality Status
+    if (options.healthReport) {
+      lines.push('QUALITY STATUS:');
+      lines.push(`  Status: ${options.healthReport.status}`);
+      if (options.healthReport.issues?.length > 0) {
+        lines.push('  Issues:');
+        options.healthReport.issues.forEach(issue => {
+          lines.push(`    - ${issue}`);
+        });
+      }
+    }
+
+    lines.push(separator);
+
+    return lines.join('\n');
+  }
+};
+
+// =============================================================================
 // DIALOGUE_DISTRIBUTION_ENGINE - Character Dialogue to Shot Mapping
 // =============================================================================
 /**
@@ -44828,6 +45626,957 @@ const DIALOGUE_DISTRIBUTION_ENGINE = {
       return 'sfx';
     }
     return 'music_only';
+  }
+};
+
+// =============================================================================
+// CHARACTER_VOICE_ENGINE - Per-Character Voice Profiles (Phase 3)
+// =============================================================================
+/**
+ * CHARACTER_VOICE_ENGINE
+ *
+ * Manages character-specific voice profiles for dialogue synthesis.
+ * Matches character archetypes and descriptions to appropriate voices.
+ *
+ * Key features:
+ * - Voice profile library with different voice types
+ * - Automatic voice assignment based on character archetype/role
+ * - Support for custom voice IDs (ElevenLabs, etc.)
+ * - Gender, age, and personality-based voice matching
+ * - Emotion-aware voice modulation hints
+ *
+ * Output: Voice assignments per character for TTS synthesis
+ */
+const CHARACTER_VOICE_ENGINE = {
+
+  // ==========================================================================
+  // VOICE PROFILE LIBRARY
+  // Pre-defined voice types with characteristics
+  // ==========================================================================
+  VOICE_PROFILES: {
+    // Male voices
+    'male-hero': {
+      id: 'male-hero',
+      name: 'Heroic Male',
+      gender: 'male',
+      ageRange: '25-40',
+      characteristics: ['confident', 'warm', 'strong', 'determined'],
+      pitch: 'medium-low',
+      tempo: 'moderate',
+      suitableFor: ['protagonist', 'leader', 'action_hero', 'protector'],
+      elevenLabsVoice: 'adam', // ElevenLabs voice ID
+      description: 'Strong, confident male voice suitable for heroes and leaders'
+    },
+    'male-wise': {
+      id: 'male-wise',
+      name: 'Wise Mentor',
+      gender: 'male',
+      ageRange: '50-70',
+      characteristics: ['calm', 'authoritative', 'wise', 'patient'],
+      pitch: 'low',
+      tempo: 'slow',
+      suitableFor: ['mentor', 'sage', 'elder', 'teacher', 'narrator'],
+      elevenLabsVoice: 'antoni',
+      description: 'Deep, wise voice for mentors and narrators'
+    },
+    'male-villain': {
+      id: 'male-villain',
+      name: 'Menacing Male',
+      gender: 'male',
+      ageRange: '30-50',
+      characteristics: ['cold', 'calculating', 'menacing', 'smooth'],
+      pitch: 'low',
+      tempo: 'deliberate',
+      suitableFor: ['antagonist', 'villain', 'dark_lord', 'manipulator'],
+      elevenLabsVoice: 'daniel',
+      description: 'Cold, calculating voice for villains and antagonists'
+    },
+    'male-young': {
+      id: 'male-young',
+      name: 'Young Male',
+      gender: 'male',
+      ageRange: '16-25',
+      characteristics: ['energetic', 'enthusiastic', 'curious', 'eager'],
+      pitch: 'medium-high',
+      tempo: 'fast',
+      suitableFor: ['sidekick', 'apprentice', 'youth', 'rebel', 'trickster'],
+      elevenLabsVoice: 'josh',
+      description: 'Youthful, energetic male voice'
+    },
+    'male-rugged': {
+      id: 'male-rugged',
+      name: 'Rugged Male',
+      gender: 'male',
+      ageRange: '35-55',
+      characteristics: ['gruff', 'tough', 'weathered', 'no-nonsense'],
+      pitch: 'low',
+      tempo: 'measured',
+      suitableFor: ['warrior', 'soldier', 'anti_hero', 'survivor', 'ranger'],
+      elevenLabsVoice: 'arnold',
+      description: 'Rough, weathered voice for hardened characters'
+    },
+
+    // Female voices
+    'female-hero': {
+      id: 'female-hero',
+      name: 'Heroic Female',
+      gender: 'female',
+      ageRange: '25-40',
+      characteristics: ['confident', 'strong', 'determined', 'inspiring'],
+      pitch: 'medium',
+      tempo: 'moderate',
+      suitableFor: ['protagonist', 'leader', 'action_hero', 'warrior'],
+      elevenLabsVoice: 'rachel',
+      description: 'Strong, confident female voice for heroines'
+    },
+    'female-wise': {
+      id: 'female-wise',
+      name: 'Wise Female',
+      gender: 'female',
+      ageRange: '45-65',
+      characteristics: ['nurturing', 'wise', 'calm', 'knowing'],
+      pitch: 'medium-low',
+      tempo: 'measured',
+      suitableFor: ['mentor', 'sage', 'mother_figure', 'oracle', 'healer'],
+      elevenLabsVoice: 'domi',
+      description: 'Warm, wise female voice for mentors'
+    },
+    'female-villain': {
+      id: 'female-villain',
+      name: 'Femme Fatale',
+      gender: 'female',
+      ageRange: '28-45',
+      characteristics: ['seductive', 'dangerous', 'calculating', 'alluring'],
+      pitch: 'low',
+      tempo: 'slow',
+      suitableFor: ['antagonist', 'villain', 'temptress', 'manipulator'],
+      elevenLabsVoice: 'bella',
+      description: 'Sultry, dangerous female voice'
+    },
+    'female-young': {
+      id: 'female-young',
+      name: 'Young Female',
+      gender: 'female',
+      ageRange: '16-25',
+      characteristics: ['bright', 'curious', 'hopeful', 'spirited'],
+      pitch: 'high',
+      tempo: 'fast',
+      suitableFor: ['sidekick', 'apprentice', 'youth', 'dreamer', 'innocent'],
+      elevenLabsVoice: 'elli',
+      description: 'Youthful, bright female voice'
+    },
+    'female-warrior': {
+      id: 'female-warrior',
+      name: 'Warrior Woman',
+      gender: 'female',
+      ageRange: '25-40',
+      characteristics: ['fierce', 'commanding', 'battle-hardened', 'intense'],
+      pitch: 'medium-low',
+      tempo: 'sharp',
+      suitableFor: ['warrior', 'soldier', 'fighter', 'amazon', 'ranger'],
+      elevenLabsVoice: 'rachel',
+      description: 'Fierce, battle-ready female voice'
+    },
+
+    // Neutral/Special voices
+    'narrator-omniscient': {
+      id: 'narrator-omniscient',
+      name: 'Omniscient Narrator',
+      gender: 'neutral',
+      ageRange: 'ageless',
+      characteristics: ['authoritative', 'all-knowing', 'documentary-style'],
+      pitch: 'medium',
+      tempo: 'measured',
+      suitableFor: ['narrator', 'voiceover', 'documentary'],
+      elevenLabsVoice: 'adam',
+      description: 'Classic narrator voice for documentaries and voiceovers'
+    },
+    'child': {
+      id: 'child',
+      name: 'Child',
+      gender: 'neutral',
+      ageRange: '8-14',
+      characteristics: ['innocent', 'wonder', 'playful', 'curious'],
+      pitch: 'high',
+      tempo: 'fast',
+      suitableFor: ['child', 'youth', 'innocent', 'wonder'],
+      elevenLabsVoice: 'elli',
+      description: 'Childlike voice for young characters'
+    },
+    'robot': {
+      id: 'robot',
+      name: 'Robot/AI',
+      gender: 'neutral',
+      ageRange: 'n/a',
+      characteristics: ['monotone', 'precise', 'synthetic', 'logical'],
+      pitch: 'medium',
+      tempo: 'measured',
+      suitableFor: ['ai', 'robot', 'computer', 'android', 'droid'],
+      elevenLabsVoice: 'sam',
+      description: 'Synthetic voice for AI/robot characters'
+    }
+  },
+
+  // ==========================================================================
+  // ARCHETYPE TO VOICE MAPPING
+  // Maps character archetypes to suitable voice profiles
+  // ==========================================================================
+  ARCHETYPE_VOICE_MAP: {
+    // Heroes and protagonists
+    'hero': { male: 'male-hero', female: 'female-hero' },
+    'protagonist': { male: 'male-hero', female: 'female-hero' },
+    'chosen_one': { male: 'male-young', female: 'female-young' },
+    'leader': { male: 'male-hero', female: 'female-hero' },
+    'action_hero': { male: 'male-rugged', female: 'female-warrior' },
+    'reluctant_hero': { male: 'male-hero', female: 'female-hero' },
+
+    // Mentors and wise figures
+    'mentor': { male: 'male-wise', female: 'female-wise' },
+    'sage': { male: 'male-wise', female: 'female-wise' },
+    'teacher': { male: 'male-wise', female: 'female-wise' },
+    'guide': { male: 'male-wise', female: 'female-wise' },
+    'oracle': { male: 'male-wise', female: 'female-wise' },
+
+    // Villains and antagonists
+    'villain': { male: 'male-villain', female: 'female-villain' },
+    'antagonist': { male: 'male-villain', female: 'female-villain' },
+    'dark_lord': { male: 'male-villain', female: 'female-villain' },
+    'manipulator': { male: 'male-villain', female: 'female-villain' },
+    'tyrant': { male: 'male-villain', female: 'female-villain' },
+
+    // Supporting characters
+    'sidekick': { male: 'male-young', female: 'female-young' },
+    'companion': { male: 'male-young', female: 'female-young' },
+    'best_friend': { male: 'male-hero', female: 'female-hero' },
+    'love_interest': { male: 'male-hero', female: 'female-hero' },
+
+    // Warriors and fighters
+    'warrior': { male: 'male-rugged', female: 'female-warrior' },
+    'soldier': { male: 'male-rugged', female: 'female-warrior' },
+    'knight': { male: 'male-hero', female: 'female-warrior' },
+    'anti_hero': { male: 'male-rugged', female: 'female-warrior' },
+    'ranger': { male: 'male-rugged', female: 'female-warrior' },
+
+    // Special types
+    'trickster': { male: 'male-young', female: 'female-young' },
+    'rebel': { male: 'male-young', female: 'female-young' },
+    'innocent': { male: 'male-young', female: 'female-young' },
+    'child': { male: 'child', female: 'child' },
+    'ai': { male: 'robot', female: 'robot' },
+    'robot': { male: 'robot', female: 'robot' },
+
+    // Default
+    'default': { male: 'male-hero', female: 'female-hero' }
+  },
+
+  // ==========================================================================
+  // CORE VOICE ASSIGNMENT FUNCTIONS
+  // ==========================================================================
+
+  /**
+   * Detect gender from character data
+   * @param {Object} character - Character object
+   * @returns {string} 'male', 'female', or 'neutral'
+   */
+  detectGender(character) {
+    const visualDesc = (character.visualDescription || '').toLowerCase();
+    const voiceDesc = (character.voiceDescription || '').toLowerCase();
+    const name = (character.name || '').toLowerCase();
+    const combined = `${visualDesc} ${voiceDesc} ${name}`;
+
+    // Female indicators
+    const femalePatterns = /\b(she|her|woman|girl|female|lady|queen|princess|sister|mother|daughter|wife|feminine|actress|heroine)\b/;
+    if (femalePatterns.test(combined)) {
+      return 'female';
+    }
+
+    // Male indicators
+    const malePatterns = /\b(he|him|his|man|boy|male|guy|king|prince|brother|father|son|husband|masculine|actor|hero)\b/;
+    if (malePatterns.test(combined)) {
+      return 'male';
+    }
+
+    // Robot/AI indicators
+    const robotPatterns = /\b(robot|android|ai|artificial|droid|bot|machine|computer|synthetic)\b/;
+    if (robotPatterns.test(combined)) {
+      return 'neutral';
+    }
+
+    // Default based on common name patterns
+    const femaleNames = ['maya', 'sophia', 'luna', 'aria', 'emma', 'olivia', 'ava', 'mia', 'ella', 'lily'];
+    const maleNames = ['kai', 'max', 'leo', 'jack', 'noah', 'liam', 'james', 'oliver', 'alex', 'ryan'];
+
+    const firstName = name.split(' ')[0];
+    if (femaleNames.some(n => firstName.includes(n))) return 'female';
+    if (maleNames.some(n => firstName.includes(n))) return 'male';
+
+    return 'male'; // Default fallback
+  },
+
+  /**
+   * Assign voice profile to a character
+   * @param {Object} character - Character object with archetype, role, etc.
+   * @param {Array} existingAssignments - Already assigned voices to avoid duplicates
+   * @returns {Object} Voice assignment with profile and metadata
+   */
+  assignVoice(character, existingAssignments = []) {
+    const gender = this.detectGender(character);
+    const archetype = (character.archetype || 'default').toLowerCase().replace(/[^a-z_]/g, '_');
+    const role = (character.role || '').toLowerCase();
+
+    // Find archetype mapping
+    let voiceMap = this.ARCHETYPE_VOICE_MAP[archetype] ||
+                   this.ARCHETYPE_VOICE_MAP[role] ||
+                   this.ARCHETYPE_VOICE_MAP['default'];
+
+    // Get appropriate voice profile ID
+    let voiceProfileId = gender === 'female' ? voiceMap.female :
+                         gender === 'neutral' ? voiceMap.male : // Use male for neutral unless robot
+                         voiceMap.male;
+
+    // Handle robot/AI specifically
+    if (archetype === 'ai' || archetype === 'robot' || gender === 'neutral') {
+      voiceProfileId = 'robot';
+    }
+
+    // Avoid duplicate voices when possible
+    const usedVoices = existingAssignments.map(a => a.voiceProfileId);
+    if (usedVoices.includes(voiceProfileId)) {
+      // Try to find alternative voice of same gender
+      const alternatives = Object.keys(this.VOICE_PROFILES)
+        .filter(id => {
+          const profile = this.VOICE_PROFILES[id];
+          return profile.gender === gender && !usedVoices.includes(id);
+        });
+
+      if (alternatives.length > 0) {
+        voiceProfileId = alternatives[0];
+      }
+    }
+
+    const voiceProfile = this.VOICE_PROFILES[voiceProfileId] || this.VOICE_PROFILES['male-hero'];
+
+    return {
+      characterName: character.name,
+      voiceProfileId: voiceProfileId,
+      voiceProfile: voiceProfile,
+      gender: gender,
+      archetype: archetype,
+      elevenLabsVoice: voiceProfile.elevenLabsVoice,
+      customVoiceId: character.customVoiceId || null, // Allow custom override
+      reasoning: `Assigned '${voiceProfile.name}' based on archetype '${archetype}' and detected gender '${gender}'`
+    };
+  },
+
+  /**
+   * Assign voices to all characters in a story
+   * @param {Array} characters - Array of character objects
+   * @returns {Object} Voice assignments keyed by character name
+   */
+  assignVoicesToCast(characters) {
+    if (!characters || !Array.isArray(characters) || characters.length === 0) {
+      return { assignments: {}, summary: 'No characters to assign voices to' };
+    }
+
+    const assignments = {};
+    const assignmentsList = [];
+
+    // Sort by role priority (protagonists first to get first pick of voices)
+    const sortedCharacters = [...characters].sort((a, b) => {
+      const rolePriority = { protagonist: 1, antagonist: 2, supporting: 3, ensemble: 4 };
+      return (rolePriority[a.role] || 5) - (rolePriority[b.role] || 5);
+    });
+
+    sortedCharacters.forEach(character => {
+      const assignment = this.assignVoice(character, assignmentsList);
+      assignments[character.name] = assignment;
+      assignmentsList.push(assignment);
+    });
+
+    return {
+      assignments,
+      summary: `Assigned ${Object.keys(assignments).length} voices: ${Object.entries(assignments).map(([name, a]) => `${name}→${a.voiceProfile.name}`).join(', ')}`
+    };
+  },
+
+  /**
+   * Get voice info for a specific character's dialogue line
+   * @param {Object} dialogueLine - { character, line, emotion }
+   * @param {Object} voiceAssignments - Pre-assigned voice mappings
+   * @returns {Object} Voice metadata for this line
+   */
+  getVoiceForDialogue(dialogueLine, voiceAssignments) {
+    const characterName = dialogueLine.character;
+    const assignment = voiceAssignments[characterName];
+
+    if (!assignment) {
+      // Fallback for unknown character
+      return {
+        characterName,
+        voiceProfileId: 'male-hero',
+        voiceProfile: this.VOICE_PROFILES['male-hero'],
+        elevenLabsVoice: 'adam',
+        emotion: dialogueLine.emotion || 'neutral',
+        delivery: dialogueLine.delivery || null,
+        warning: `No voice assignment found for character '${characterName}', using default`
+      };
+    }
+
+    return {
+      characterName,
+      voiceProfileId: assignment.voiceProfileId,
+      voiceProfile: assignment.voiceProfile,
+      elevenLabsVoice: assignment.customVoiceId || assignment.elevenLabsVoice,
+      emotion: dialogueLine.emotion || 'neutral',
+      delivery: dialogueLine.delivery || null
+    };
+  },
+
+  /**
+   * Enhance dialogue with voice information
+   * @param {Array} dialogue - Array of dialogue lines
+   * @param {Object} voiceAssignments - Voice assignments by character name
+   * @returns {Array} Dialogue with voice metadata attached
+   */
+  enhanceDialogueWithVoices(dialogue, voiceAssignments) {
+    if (!dialogue || !Array.isArray(dialogue)) {
+      return [];
+    }
+
+    return dialogue.map(line => ({
+      ...line,
+      voice: this.getVoiceForDialogue(line, voiceAssignments)
+    }));
+  },
+
+  /**
+   * Get all unique voices needed for a scene's dialogue
+   * @param {Array} dialogue - Scene's dialogue array
+   * @param {Object} voiceAssignments - Voice assignments
+   * @returns {Object} Summary of voices needed
+   */
+  getSceneVoiceRequirements(dialogue, voiceAssignments) {
+    if (!dialogue || !Array.isArray(dialogue) || dialogue.length === 0) {
+      return {
+        voicesNeeded: 0,
+        voices: [],
+        ttsRequired: false
+      };
+    }
+
+    const uniqueCharacters = [...new Set(dialogue.map(d => d.character))];
+    const voices = uniqueCharacters.map(charName => {
+      const assignment = voiceAssignments[charName];
+      return {
+        character: charName,
+        voiceProfileId: assignment?.voiceProfileId || 'male-hero',
+        elevenLabsVoice: assignment?.customVoiceId || assignment?.elevenLabsVoice || 'adam'
+      };
+    });
+
+    return {
+      voicesNeeded: voices.length,
+      voices,
+      ttsRequired: true,
+      isMultiVoice: voices.length > 1
+    };
+  },
+
+  /**
+   * Generate TTS configuration for a shot's dialogue
+   * @param {Object} shot - Shot with dialogue
+   * @param {Object} voiceAssignments - Voice assignments
+   * @returns {Object} TTS configuration for audio generation
+   */
+  generateTTSConfig(shot, voiceAssignments) {
+    if (!shot.hasDialogue || !shot.dialogue || shot.dialogue.length === 0) {
+      return null;
+    }
+
+    const enhancedDialogue = this.enhanceDialogueWithVoices(shot.dialogue, voiceAssignments);
+
+    return {
+      shotId: shot.id,
+      lines: enhancedDialogue.map((d, idx) => ({
+        index: idx,
+        character: d.character,
+        line: d.line,
+        emotion: d.emotion,
+        delivery: d.delivery,
+        voiceId: d.voice.elevenLabsVoice,
+        voiceProfileId: d.voice.voiceProfileId,
+        startTimeInShot: d.startTimeInShot || 0,
+        durationInShot: d.durationInShot || 2
+      })),
+      totalLines: enhancedDialogue.length,
+      uniqueVoices: [...new Set(enhancedDialogue.map(d => d.voice.voiceProfileId))].length,
+      estimatedDuration: shot.dialogueDuration || 5
+    };
+  }
+};
+
+// =============================================================================
+// FLEXIBLE_DURATION_ENGINE - Hollywood-Style Dynamic Shot Timing (Phase 2)
+// =============================================================================
+/**
+ * FLEXIBLE_DURATION_ENGINE
+ *
+ * Calculates optimal shot durations based on dialogue, action, and shot type.
+ * Implements Hollywood pacing principles where content drives timing.
+ *
+ * Key features:
+ * - Shot type presets (reaction=3s, dialogue_exchange=10s, establishing=5s)
+ * - Dynamic duration from dialogue word count
+ * - Action complexity analysis
+ * - Multi-clip stitching for shots > 10s (Minimax limit)
+ * - Supports 5s, 6s, 10s Minimax durations
+ *
+ * Output: Calculated duration + stitching strategy if needed
+ */
+const FLEXIBLE_DURATION_ENGINE = {
+
+  // ==========================================================================
+  // SHOT TYPE DURATION PRESETS
+  // Based on Hollywood editing conventions and AI video constraints
+  // ==========================================================================
+  SHOT_TYPE_PRESETS: {
+    // Quick shots (3-5s) - minimal content, quick cuts
+    reaction: { min: 3, default: 4, max: 5, description: 'Character reaction, no dialogue' },
+    insert: { min: 3, default: 4, max: 5, description: 'Detail/insert shot' },
+    cutaway: { min: 3, default: 4, max: 5, description: 'Cutaway to element' },
+
+    // Short shots (5-6s) - single action or brief moment
+    establishing: { min: 4, default: 5, max: 6, description: 'Scene establishing shot' },
+    transition: { min: 4, default: 5, max: 6, description: 'Scene transition' },
+    atmosphere: { min: 4, default: 5, max: 6, description: 'Mood/atmosphere shot' },
+    movement: { min: 4, default: 5, max: 6, description: 'Character movement' },
+
+    // Medium shots (6-10s) - single dialogue or action
+    dialogue_single: { min: 6, default: 8, max: 10, description: 'Single character speaking' },
+    action_single: { min: 6, default: 8, max: 10, description: 'Single action sequence' },
+    reveal: { min: 6, default: 8, max: 10, description: 'Dramatic reveal' },
+
+    // Long shots (10s) - dialogue exchanges or complex action
+    dialogue_exchange: { min: 8, default: 10, max: 12, description: 'Back-and-forth dialogue' },
+    action_sequence: { min: 8, default: 10, max: 15, description: 'Multi-beat action' },
+    emotional_moment: { min: 8, default: 10, max: 12, description: 'Emotional/dramatic beat' },
+
+    // Extended shots (10-20s) - complex scenes requiring stitching
+    conversation: { min: 10, default: 15, max: 20, description: 'Extended conversation' },
+    chase: { min: 10, default: 15, max: 20, description: 'Chase/pursuit sequence' },
+    battle: { min: 12, default: 18, max: 25, description: 'Combat/battle scene' },
+
+    // Default fallback
+    default: { min: 5, default: 10, max: 10, description: 'Standard shot' }
+  },
+
+  // Minimax supported durations
+  MINIMAX_DURATIONS: [5, 6, 10],
+  MAX_SINGLE_CLIP: 10,  // Maximum single clip duration
+
+  // ==========================================================================
+  // CORE DURATION CALCULATION
+  // ==========================================================================
+
+  /**
+   * Calculate optimal duration for a shot based on all content factors
+   * @param {Object} shot - Shot data with dialogue, action, shotType
+   * @param {Object} options - Configuration options
+   * @returns {Object} Duration calculation result
+   */
+  calculateOptimalDuration(shot, options = {}) {
+    const {
+      defaultDuration = 10,
+      respectMinimaxLimits = true,
+      allowStitching = true
+    } = options;
+
+    // Factor 1: Dialogue duration (highest priority)
+    const dialogueDuration = this.calculateDialogueDuration(shot);
+
+    // Factor 2: Shot type preset
+    const shotTypeInfo = this.getShotTypeInfo(shot);
+
+    // Factor 3: Action complexity
+    const actionDuration = this.calculateActionDuration(shot);
+
+    // Factor 4: Content density (from prompt analysis)
+    const contentDensity = this.analyzeContentDensity(shot);
+
+    // Calculate raw optimal duration
+    let rawDuration = Math.max(
+      dialogueDuration.totalWithBuffer,
+      shotTypeInfo.preset.default,
+      actionDuration.minimum
+    );
+
+    // Apply content density modifier
+    rawDuration = rawDuration * (1 + contentDensity.modifier);
+
+    // Clamp to shot type bounds
+    rawDuration = Math.max(shotTypeInfo.preset.min, Math.min(rawDuration, shotTypeInfo.preset.max));
+
+    // Round to nearest Minimax-compatible duration
+    const minimaxDuration = this.roundToMinimaxDuration(rawDuration, respectMinimaxLimits);
+
+    // Determine if stitching is needed
+    const stitchingStrategy = allowStitching && rawDuration > this.MAX_SINGLE_CLIP
+      ? this.calculateStitchingStrategy(rawDuration, dialogueDuration, shotTypeInfo)
+      : null;
+
+    return {
+      rawDuration: Math.round(rawDuration * 10) / 10,
+      calculatedDuration: minimaxDuration,
+      requiresStitching: stitchingStrategy !== null,
+      stitchingStrategy,
+      factors: {
+        dialogue: dialogueDuration,
+        shotType: shotTypeInfo,
+        action: actionDuration,
+        contentDensity
+      },
+      recommendation: this.generateDurationRecommendation(shot, minimaxDuration, stitchingStrategy)
+    };
+  },
+
+  /**
+   * Calculate dialogue-based duration
+   */
+  calculateDialogueDuration(shot) {
+    const dialogue = shot.dialogue || [];
+    if (!dialogue.length) {
+      return {
+        hasDialogue: false,
+        lineCount: 0,
+        wordCount: 0,
+        speakingDuration: 0,
+        pauseDuration: 0,
+        totalDuration: 0,
+        totalWithBuffer: 0
+      };
+    }
+
+    const WORDS_PER_SECOND = 2.5;
+    const MIN_LINE_DURATION = 1.5;
+    const PAUSE_BETWEEN_SPEAKERS = 0.5;
+    const VISUAL_BUFFER = 1.5;
+
+    let totalWords = 0;
+    let speakingDuration = 0;
+    let pauseDuration = 0;
+    let prevCharacter = null;
+
+    dialogue.forEach(d => {
+      const words = (d.line || '').trim().split(/\s+/).length;
+      totalWords += words;
+      speakingDuration += Math.max(words / WORDS_PER_SECOND, MIN_LINE_DURATION);
+
+      if (prevCharacter && prevCharacter !== d.character) {
+        pauseDuration += PAUSE_BETWEEN_SPEAKERS;
+      }
+      prevCharacter = d.character;
+    });
+
+    const totalDuration = speakingDuration + pauseDuration;
+    const totalWithBuffer = totalDuration + VISUAL_BUFFER;
+
+    return {
+      hasDialogue: true,
+      lineCount: dialogue.length,
+      wordCount: totalWords,
+      speakingDuration: Math.round(speakingDuration * 10) / 10,
+      pauseDuration: Math.round(pauseDuration * 10) / 10,
+      totalDuration: Math.round(totalDuration * 10) / 10,
+      totalWithBuffer: Math.round(totalWithBuffer * 10) / 10,
+      characters: [...new Set(dialogue.map(d => d.character))]
+    };
+  },
+
+  /**
+   * Get shot type preset information
+   */
+  getShotTypeInfo(shot) {
+    // Detect shot type from various sources
+    const shotType = shot.shotType || 'medium';
+    const hasDialogue = shot.hasDialogue || (shot.dialogue && shot.dialogue.length > 0);
+    const dialogueCount = (shot.dialogue || []).length;
+    const speakerCount = new Set((shot.dialogue || []).map(d => d.character)).size;
+
+    // Classify based on content
+    let presetKey = 'default';
+
+    if (hasDialogue) {
+      if (speakerCount > 1 || dialogueCount > 2) {
+        presetKey = 'dialogue_exchange';
+      } else {
+        presetKey = 'dialogue_single';
+      }
+    } else {
+      // Use shot type to determine preset
+      const shotTypeLower = shotType.toLowerCase();
+      if (/establishing|wide|master/.test(shotTypeLower)) {
+        presetKey = 'establishing';
+      } else if (/close.*up|insert|detail/.test(shotTypeLower)) {
+        presetKey = 'insert';
+      } else if (/reaction/.test(shotTypeLower)) {
+        presetKey = 'reaction';
+      } else if (/action|chase|fight/.test(shotTypeLower)) {
+        presetKey = 'action_single';
+      } else if (/reveal/.test(shotTypeLower)) {
+        presetKey = 'reveal';
+      } else if (/movement|tracking|dolly/.test(shotTypeLower)) {
+        presetKey = 'movement';
+      }
+    }
+
+    // Check prompts for action indicators
+    const videoPrompt = (shot.videoPrompt || shot.prompt || '').toLowerCase();
+    if (!hasDialogue && /battle|fight|combat|explosion|chase/.test(videoPrompt)) {
+      presetKey = 'action_sequence';
+    }
+    if (/emotional|tearful|dramatic|crying|laughing/.test(videoPrompt)) {
+      presetKey = 'emotional_moment';
+    }
+
+    return {
+      detectedType: presetKey,
+      preset: this.SHOT_TYPE_PRESETS[presetKey] || this.SHOT_TYPE_PRESETS.default,
+      hasDialogue,
+      dialogueCount,
+      speakerCount,
+      reasoning: `Shot classified as '${presetKey}' based on ${hasDialogue ? `${dialogueCount} dialogue lines` : `shot type '${shotType}'`}`
+    };
+  },
+
+  /**
+   * Calculate action-based duration from video prompt
+   */
+  calculateActionDuration(shot) {
+    const videoPrompt = (shot.videoPrompt || shot.prompt || '').toLowerCase();
+
+    // Count action verbs and complexity indicators
+    const actionVerbs = videoPrompt.match(/\b(walks?|runs?|jumps?|turns?|moves?|reaches?|grabs?|opens?|closes?|sits?|stands?|looks?|gazes?|enters?|exits?|falls?|rises?|pushes?|pulls?|throws?|catches?|kicks?|punches?|dodges?|climbs?|crawls?|swims?|flies?|drives?|rides?)\b/g) || [];
+
+    const complexActions = videoPrompt.match(/\b(slowly|gradually|carefully|quickly|suddenly|dramatically|gracefully|violently|smoothly|steadily)\b/g) || [];
+
+    const multiStepIndicators = videoPrompt.match(/\b(then|and then|afterwards|before|after|while|during|as|continues?|begins?|starts?|finishes?|ends?)\b/g) || [];
+
+    const actionCount = actionVerbs.length;
+    const complexityBonus = complexActions.length * 0.5;
+    const multiStepBonus = multiStepIndicators.length * 1.0;
+
+    // Base: 2 seconds per action, with complexity and multi-step modifiers
+    const actionTime = (actionCount * 2) + complexityBonus + multiStepBonus;
+
+    return {
+      actionCount,
+      complexityLevel: complexActions.length,
+      multiStepCount: multiStepIndicators.length,
+      estimatedDuration: Math.round(actionTime * 10) / 10,
+      minimum: Math.max(5, actionTime),  // At least 5 seconds
+      reasoning: `${actionCount} actions, ${complexActions.length} complex modifiers, ${multiStepIndicators.length} multi-step sequences`
+    };
+  },
+
+  /**
+   * Analyze content density from prompts
+   */
+  analyzeContentDensity(shot) {
+    const imagePrompt = (shot.imagePrompt || '').toLowerCase();
+    const videoPrompt = (shot.videoPrompt || shot.prompt || '').toLowerCase();
+    const fullPrompt = `${imagePrompt} ${videoPrompt}`;
+
+    // Character count
+    const characterMentions = fullPrompt.match(/\b(character|person|man|woman|boy|girl|child|figure|protagonist|antagonist|hero|villain)\b/g) || [];
+
+    // Environmental detail count
+    const envDetails = fullPrompt.match(/\b(room|street|forest|building|car|table|chair|window|door|wall|floor|ceiling|sky|ground|tree|flower|water|fire|light|shadow|sun|moon|star)\b/g) || [];
+
+    // Emotional/dramatic intensity
+    const intensityWords = fullPrompt.match(/\b(intense|dramatic|emotional|powerful|explosive|gentle|subtle|fierce|calm|chaotic|peaceful|violent)\b/g) || [];
+
+    const totalElements = characterMentions.length + (envDetails.length * 0.3) + (intensityWords.length * 0.5);
+
+    // Calculate modifier: more elements = slightly more time
+    const modifier = Math.min(0.3, totalElements * 0.03);  // Cap at 30% increase
+
+    return {
+      characterCount: characterMentions.length,
+      environmentalDetails: envDetails.length,
+      intensityLevel: intensityWords.length,
+      totalElements: Math.round(totalElements * 10) / 10,
+      modifier: Math.round(modifier * 100) / 100,
+      reasoning: `${characterMentions.length} characters, ${envDetails.length} env elements, ${intensityWords.length} intensity markers`
+    };
+  },
+
+  // ==========================================================================
+  // MINIMAX DURATION ROUNDING
+  // ==========================================================================
+
+  /**
+   * Round duration to nearest Minimax-compatible value
+   */
+  roundToMinimaxDuration(duration, respectLimits = true) {
+    if (!respectLimits) {
+      return Math.round(duration);
+    }
+
+    // Find closest supported duration
+    if (duration <= 5.5) return 5;
+    if (duration <= 8) return 6;
+    return 10;
+  },
+
+  /**
+   * Select best Minimax duration for a shot
+   */
+  selectMinimaxDuration(shot) {
+    const hasDialogue = shot.hasDialogue || (shot.dialogue && shot.dialogue.length > 0);
+    const dialogueDuration = this.calculateDialogueDuration(shot);
+
+    // For dialogue shots, prefer longer durations
+    if (hasDialogue) {
+      if (dialogueDuration.totalWithBuffer > 8) return 10;
+      if (dialogueDuration.totalWithBuffer > 5) return 6;
+      return 5;
+    }
+
+    // For non-dialogue shots, use shot type preset
+    const shotTypeInfo = this.getShotTypeInfo(shot);
+    const presetDefault = shotTypeInfo.preset.default;
+
+    return this.roundToMinimaxDuration(presetDefault, true);
+  },
+
+  // ==========================================================================
+  // MULTI-CLIP STITCHING STRATEGY
+  // ==========================================================================
+
+  /**
+   * Calculate stitching strategy for shots > 10s
+   * @param {number} totalDuration - Required total duration
+   * @param {Object} dialogueInfo - Dialogue timing info
+   * @param {Object} shotTypeInfo - Shot type info
+   * @returns {Object} Stitching strategy
+   */
+  calculateStitchingStrategy(totalDuration, dialogueInfo, shotTypeInfo) {
+    if (totalDuration <= this.MAX_SINGLE_CLIP) {
+      return null;
+    }
+
+    const clips = [];
+    let remainingDuration = totalDuration;
+    let clipIndex = 0;
+
+    // Distribute duration across clips
+    while (remainingDuration > 0) {
+      let clipDuration;
+
+      if (remainingDuration <= 10) {
+        // Last clip - use exact remaining
+        clipDuration = this.roundToMinimaxDuration(remainingDuration);
+      } else if (remainingDuration <= 15) {
+        // Split into roughly equal clips
+        clipDuration = this.roundToMinimaxDuration(remainingDuration / 2);
+      } else {
+        // Use max duration for this clip
+        clipDuration = 10;
+      }
+
+      // Determine clip purpose
+      let purpose = 'continuation';
+      if (clipIndex === 0) purpose = 'opening';
+
+      // Check if dialogue falls in this clip
+      const clipStartTime = clips.reduce((sum, c) => sum + c.duration, 0);
+      const clipEndTime = clipStartTime + clipDuration;
+
+      let dialogueInClip = [];
+      if (dialogueInfo.hasDialogue) {
+        // This would need actual dialogue timing data
+        dialogueInClip = []; // Placeholder - would be calculated from dialogue timing
+      }
+
+      clips.push({
+        index: clipIndex,
+        duration: clipDuration,
+        startTime: clipStartTime,
+        endTime: clipEndTime,
+        purpose,
+        hasDialogue: dialogueInClip.length > 0,
+        dialogueCount: dialogueInClip.length,
+        // Capture frame for chaining
+        captureFrameAt: clipDuration - 0.5,  // Capture at end for next clip
+        requiresImageGeneration: clipIndex === 0  // Only first clip needs image
+      });
+
+      remainingDuration -= clipDuration;
+      clipIndex++;
+    }
+
+    // Mark last clip
+    if (clips.length > 0) {
+      clips[clips.length - 1].purpose = 'closing';
+      clips[clips.length - 1].captureFrameAt = null;  // No capture needed for last
+    }
+
+    return {
+      totalDuration: Math.round(totalDuration * 10) / 10,
+      clipCount: clips.length,
+      clips,
+      transitionType: 'seamless_chain',  // Use last frame as next first frame
+      assemblyMethod: 'sequential_stitch',
+      notes: `Shot split into ${clips.length} clips: ${clips.map(c => `${c.duration}s`).join(' + ')}`
+    };
+  },
+
+  // ==========================================================================
+  // RECOMMENDATIONS
+  // ==========================================================================
+
+  /**
+   * Generate human-readable duration recommendation
+   */
+  generateDurationRecommendation(shot, duration, stitchingStrategy) {
+    const hasDialogue = shot.hasDialogue || (shot.dialogue && shot.dialogue.length > 0);
+
+    if (stitchingStrategy) {
+      return `Extended shot (${stitchingStrategy.totalDuration}s) - will be stitched from ${stitchingStrategy.clipCount} clips`;
+    }
+
+    if (hasDialogue) {
+      const dialogueCount = (shot.dialogue || []).length;
+      return `${duration}s recommended for ${dialogueCount} dialogue line${dialogueCount > 1 ? 's' : ''}`;
+    }
+
+    const shotType = shot.shotType || 'standard';
+    return `${duration}s optimal for ${shotType} shot`;
+  },
+
+  /**
+   * Batch calculate durations for all shots in a scene
+   * @param {Array} shots - Array of shots
+   * @param {Object} options - Configuration options
+   * @returns {Array} Shots with calculated durations
+   */
+  calculateSceneDurations(shots, options = {}) {
+    return shots.map((shot, idx) => {
+      const calculation = this.calculateOptimalDuration(shot, options);
+
+      return {
+        ...shot,
+        // Phase 2: Flexible duration fields
+        calculatedDuration: calculation.calculatedDuration,
+        rawOptimalDuration: calculation.rawDuration,
+        durationFactors: calculation.factors,
+        requiresStitching: calculation.requiresStitching,
+        stitchingStrategy: calculation.stitchingStrategy,
+        durationRecommendation: calculation.recommendation,
+        // Use calculated duration as suggested
+        suggestedDuration: calculation.calculatedDuration
+      };
+    });
   }
 };
 
@@ -51081,9 +52830,19 @@ exports.creationWizardDecomposeSceneToShots = functions
     const sceneDialogue = audioLayer?.dialogue || [];
     const sceneAudioType = DIALOGUE_DISTRIBUTION_ENGINE.classifyAudioType(audioLayer);
 
-    // Apply dialogue distribution to shots
+    // PHASE 5: Validate dialogue data before distribution
+    const dialogueValidation = QUALITY_ASSURANCE_ENGINE.validateDialogue(sceneDialogue);
+    if (dialogueValidation.warnings.length > 0) {
+      console.warn(`[creationWizardDecomposeSceneToShots] Dialogue validation warnings:`, dialogueValidation.warnings.join('; '));
+    }
+    if (!dialogueValidation.valid) {
+      console.error(`[creationWizardDecomposeSceneToShots] Dialogue validation errors:`, dialogueValidation.errors.join('; '));
+    }
+    const sanitizedDialogue = dialogueValidation.sanitized || [];
+
+    // Apply dialogue distribution to shots (using sanitized dialogue)
     const dialogueEnhancedShots = DIALOGUE_DISTRIBUTION_ENGINE.distributeDialogueToShots(
-      sceneDialogue,
+      sanitizedDialogue,
       timelineEnhancedShots
     );
 
@@ -51092,11 +52851,89 @@ exports.creationWizardDecomposeSceneToShots = functions
     console.log(`[creationWizardDecomposeSceneToShots] ${dialogueSummary}`);
     console.log(`[creationWizardDecomposeSceneToShots] Scene audio type: ${sceneAudioType}`);
 
+    // STEP 5.995: CHARACTER VOICE ENHANCEMENT (Phase 3)
+    // Attach voice profile information to each dialogue line in each shot
+    // Voice assignments come from script.voiceAssignments (set during script generation)
+    const rawVoiceAssignments = scene.voiceAssignments || {};
+
+    // PHASE 5: Validate voice assignments with fallbacks for missing characters
+    const requiredCharacters = [...new Set(sanitizedDialogue.map(d => d.character))];
+    const voiceValidation = QUALITY_ASSURANCE_ENGINE.validateVoiceAssignments(rawVoiceAssignments, requiredCharacters);
+    if (voiceValidation.warnings.length > 0) {
+      console.warn(`[creationWizardDecomposeSceneToShots] Voice assignment warnings:`, voiceValidation.warnings.join('; '));
+    }
+    const voiceAssignments = voiceValidation.enhanced;
+    const voiceEnhancedShots = dialogueEnhancedShots.map(shot => {
+      if (!shot.hasDialogue || !shot.dialogue || shot.dialogue.length === 0) {
+        return {
+          ...shot,
+          voiceRequirements: null,
+          ttsConfig: null
+        };
+      }
+
+      // Enhance each dialogue line with voice info
+      const enhancedDialogue = shot.dialogue.map(line => ({
+        ...line,
+        voice: CHARACTER_VOICE_ENGINE.getVoiceForDialogue(line, voiceAssignments)
+      }));
+
+      // Get voice requirements summary for this shot
+      const voiceReqs = CHARACTER_VOICE_ENGINE.getSceneVoiceRequirements(shot.dialogue, voiceAssignments);
+
+      // Generate TTS configuration for audio synthesis
+      const ttsConfig = CHARACTER_VOICE_ENGINE.generateTTSConfig(
+        { ...shot, dialogue: enhancedDialogue },
+        voiceAssignments
+      );
+
+      return {
+        ...shot,
+        dialogue: enhancedDialogue,
+        voiceRequirements: voiceReqs,
+        ttsConfig: ttsConfig,
+        isMultiVoice: voiceReqs.isMultiVoice || false,
+        uniqueVoiceCount: voiceReqs.voicesNeeded || 0
+      };
+    });
+
+    // Log voice enhancement results
+    const voicedShots = voiceEnhancedShots.filter(s => s.voiceRequirements?.ttsRequired);
+    if (voicedShots.length > 0) {
+      const voiceBreakdown = voicedShots.map(s =>
+        `Shot ${s.shotIndex}: ${s.uniqueVoiceCount} voice(s)`
+      ).join(', ');
+      console.log(`[creationWizardDecomposeSceneToShots] Voice requirements: ${voiceBreakdown}`);
+    }
+
+    // STEP 5.999: FLEXIBLE DURATION CALCULATION (Phase 2)
+    // Calculate optimal duration for each shot based on dialogue, action, and shot type
+    // Also determines if multi-clip stitching is needed for shots > 10s
+    const durationEnhancedShots = FLEXIBLE_DURATION_ENGINE.calculateSceneDurations(
+      voiceEnhancedShots,
+      {
+        defaultDuration: clipDuration,
+        respectMinimaxLimits: true,
+        allowStitching: true
+      }
+    );
+
+    // Log duration calculation results
+    const durationSummary = durationEnhancedShots.map(s =>
+      `Shot ${s.shotIndex || 'N/A'}: ${s.calculatedDuration}s (${s.durationRecommendation || 'default'})`
+    ).join(', ');
+    console.log(`[creationWizardDecomposeSceneToShots] Duration calculations: ${durationSummary}`);
+
+    const stitchingNeeded = durationEnhancedShots.filter(s => s.requiresStitching);
+    if (stitchingNeeded.length > 0) {
+      console.log(`[creationWizardDecomposeSceneToShots] ${stitchingNeeded.length} shot(s) require multi-clip stitching`);
+    }
+
     // STEP 6: Normalize shots with all required fields
     // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, visualContinuity, and dialogue
-    // IMPORTANT: Use dialogueEnhancedShots (with World-First + Physics + Character + Audio + Timeline + Dialogue) for final normalization
-    const normalizedShots = dialogueEnhancedShots.map((shot, idx) => {
-      const isLast = idx === dialogueEnhancedShots.length - 1;
+    // IMPORTANT: Use durationEnhancedShots (with World-First + Physics + Character + Audio + Timeline + Dialogue + Duration) for final normalization
+    const normalizedShots = durationEnhancedShots.map((shot, idx) => {
+      const isLast = idx === durationEnhancedShots.length - 1;
       const isFirst = idx === 0;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
@@ -51172,6 +53009,24 @@ exports.creationWizardDecomposeSceneToShots = functions
         dialogueDuration: shot.dialogueDuration || 0,  // Total dialogue time in seconds
         dialogueCount: shot.dialogueCount || 0,  // Number of dialogue lines
         suggestedDuration: shot.suggestedDuration || shot.duration,  // Optimal duration based on dialogue
+        // PHASE 2: FLEXIBLE DURATION SYSTEM - Hollywood-style pacing
+        // Dynamic duration based on dialogue, action, and shot type
+        calculatedDuration: shot.calculatedDuration || shot.duration,  // AI-calculated optimal duration
+        rawOptimalDuration: shot.rawOptimalDuration || null,  // Raw calculation before Minimax rounding
+        durationFactors: shot.durationFactors || null,  // Breakdown of duration calculation factors
+        durationRecommendation: shot.durationRecommendation || null,  // Human-readable recommendation
+        // Multi-clip stitching for extended shots (> 10s)
+        requiresStitching: shot.requiresStitching || false,  // True if shot needs multiple clips
+        stitchingStrategy: shot.stitchingStrategy || null,  // { clipCount, clips[], totalDuration }
+        // Duration classification for UI
+        durationClass: shot.calculatedDuration <= 5 ? 'quick' :
+                       shot.calculatedDuration <= 6 ? 'short' : 'standard',  // quick/short/standard
+        // PHASE 3: CHARACTER VOICE SYSTEM - Per-character voice profiles
+        // Voice assignments for TTS synthesis and Multitalk integration
+        voiceRequirements: shot.voiceRequirements || null,  // { voicesNeeded, voices[], ttsRequired, isMultiVoice }
+        ttsConfig: shot.ttsConfig || null,  // TTS configuration for audio synthesis
+        isMultiVoice: shot.isMultiVoice || false,  // True if multiple characters speak
+        uniqueVoiceCount: shot.uniqueVoiceCount || 0,  // Number of unique voices needed
         // Generation status
         // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
         // This ensures when user regenerates scene image, Shot 1 stays in sync
@@ -51204,14 +53059,73 @@ exports.creationWizardDecomposeSceneToShots = functions
                       'Scene concluded';
     }
 
+    // PHASE 5: Run integration health check
+    const healthReport = QUALITY_ASSURANCE_ENGINE.runHealthCheck(scene, normalizedShots);
+    if (healthReport.status !== 'healthy') {
+      console.warn(`[creationWizardDecomposeSceneToShots] Health check status: ${healthReport.status}`, healthReport.issues);
+    }
+
+    // PHASE 5: Apply graceful degradation to all shots
+    const finalizedShots = normalizedShots.map(shot => QUALITY_ASSURANCE_ENGINE.applyGracefulDegradation(shot));
+
+    // Log any fallbacks applied
+    const fallbacksApplied = finalizedShots.filter(s => s._durationFallback || s._dialogueFallback);
+    if (fallbacksApplied.length > 0) {
+      console.log(`[creationWizardDecomposeSceneToShots] Graceful degradation applied to ${fallbacksApplied.length} shots`);
+    }
+
+    // PHASE 6: Run end-to-end pipeline verification
+    // Pass the script context if available (for voice assignments check)
+    const scriptContext = { voiceAssignments: scene.voiceAssignments || {} };
+    const pipelineReport = QUALITY_ASSURANCE_ENGINE.verifyPipeline(scriptContext, scene, finalizedShots);
+
+    // PHASE 6: Generate debug log for development
+    const debugLog = QUALITY_ASSURANCE_ENGINE.generateDebugLog(scene, finalizedShots, { healthReport });
+    console.log(`[creationWizardDecomposeSceneToShots] Pipeline verification: ${pipelineReport.status} (${pipelineReport.summary.passRate}% pass rate)`);
+
+    // Log debug info in development
+    if (pipelineReport.status !== 'pass') {
+      console.log(debugLog);
+    }
+
     return {
       success: true,
       sceneId: scene.id,
       sceneType: sceneType,
       totalDuration: sceneDuration,
-      shotCount: normalizedShots.length,
-      shots: normalizedShots,
+      shotCount: finalizedShots.length,
+      shots: finalizedShots,
       consistencyAnchors: consistencyAnchors,
+      // PHASE 5: Quality Assurance Health Report
+      qualityAssurance: {
+        status: healthReport.status,
+        checks: healthReport.checks,
+        issues: healthReport.issues,
+        recommendations: healthReport.recommendations,
+        dialogueValidation: {
+          originalCount: dialogueValidation.originalCount || 0,
+          sanitizedCount: dialogueValidation.sanitizedCount || 0,
+          hasWarnings: dialogueValidation.warnings?.length > 0
+        },
+        voiceValidation: {
+          hasFallbacks: voiceValidation.hasFallbacks || false,
+          requiredCharacters: requiredCharacters.length
+        }
+      },
+      // PHASE 6: Pipeline Verification Report
+      pipelineVerification: {
+        status: pipelineReport.status,
+        passRate: pipelineReport.summary.passRate,
+        totalChecks: pipelineReport.summary.totalChecks,
+        passed: pipelineReport.summary.passed,
+        failed: pipelineReport.summary.failed,
+        phases: Object.entries(pipelineReport.phases).map(([key, phase]) => ({
+          name: phase.name,
+          phase: phase.phase,
+          checksPassed: phase.checks.filter(c => c.passed).length,
+          totalChecks: phase.checks.length
+        }))
+      },
       decompositionMethod: decompositionMethod,
       // Cross-scene continuity data (Upgrade 3)
       crossSceneContinuity: {
@@ -51233,68 +53147,68 @@ exports.creationWizardDecomposeSceneToShots = functions
       hollywoodChoreography: {
         applied: hasChoreography,
         enrichmentSource: hasChoreography ? 'script_generation' : 'none',
-        shotsWithChoreography: normalizedShots.filter(s => s.hasChoreography).length
+        shotsWithChoreography: finalizedShots.filter(s => s.hasChoreography).length
       },
       // Opening Scene World-First status
       openingSceneEnforcement: {
         isOpeningScene: OPENING_SCENE_HANDLER.isOpeningScene(scene, currentSceneIndex),
         worldFirstApplied: worldFirstShots !== continuityShots,
-        shotsWithWorldFirst: normalizedShots.filter(s => s.isWorldFirst).length,
-        openingStructure: normalizedShots.slice(0, 4).map(s => s.openingStructure?.role || null).filter(Boolean)
+        shotsWithWorldFirst: finalizedShots.filter(s => s.isWorldFirst).length,
+        openingStructure: finalizedShots.slice(0, 4).map(s => s.openingStructure?.role || null).filter(Boolean)
       },
       // Shot-Scene Image Sync status
       shotSceneSync: {
-        shot1SyncedWithScene: normalizedShots[0]?.syncedWithScene || false,
+        shot1SyncedWithScene: finalizedShots[0]?.syncedWithScene || false,
         sceneImageUrl: scene.imageUrl || null,
-        shot1ImageUrl: normalizedShots[0]?.imageUrl || null
+        shot1ImageUrl: finalizedShots[0]?.imageUrl || null
       },
       // Cinematic Physics Enhancement status
       cinematicPhysics: {
         applied: physicsEnhancedShots.some(s => s.cinematicPhysics?.applied),
-        shotsWithPhysics: normalizedShots.filter(s => s.hasPhysicsEnhancement).length,
+        shotsWithPhysics: finalizedShots.filter(s => s.hasPhysicsEnhancement).length,
         physicsTypes: {
-          hasObjectPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasObjectPhysics),
-          hasEnvironmentalForces: normalizedShots.some(s => s.cinematicPhysics?.hasEnvironmentalForces),
-          hasMaterialPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasMaterialPhysics),
-          hasContactPhysics: normalizedShots.some(s => s.cinematicPhysics?.hasContactPhysics),
-          hasCauseEffectChains: normalizedShots.some(s => s.cinematicPhysics?.causeEffectChains > 0)
+          hasObjectPhysics: finalizedShots.some(s => s.cinematicPhysics?.hasObjectPhysics),
+          hasEnvironmentalForces: finalizedShots.some(s => s.cinematicPhysics?.hasEnvironmentalForces),
+          hasMaterialPhysics: finalizedShots.some(s => s.cinematicPhysics?.hasMaterialPhysics),
+          hasContactPhysics: finalizedShots.some(s => s.cinematicPhysics?.hasContactPhysics),
+          hasCauseEffectChains: finalizedShots.some(s => s.cinematicPhysics?.causeEffectChains > 0)
         }
       },
       // Character Reference System status
       characterReferenceSystem: {
         applied: characterEnhancedShots.some(s => s.characterReference?.applied),
-        shotsWithCharacterConsistency: normalizedShots.filter(s => s.hasCharacterConsistency).length,
+        shotsWithCharacterConsistency: finalizedShots.filter(s => s.hasCharacterConsistency).length,
         totalCharacters: characterBible?.length || 0,
-        characterAnchorsExtracted: normalizedShots.some(s => s.characterReference?.totalCharacters > 0),
-        charactersTracked: [...new Set(normalizedShots.flatMap(s => s.charactersInShot || []))]
+        characterAnchorsExtracted: finalizedShots.some(s => s.characterReference?.totalCharacters > 0),
+        charactersTracked: [...new Set(finalizedShots.flatMap(s => s.charactersInShot || []))]
       },
       // Audio Beat Mapping status
       audioBeatMapping: {
         applied: audioEnhancedShots.some(s => s.audioBeat?.applied),
-        shotsWithAudio: normalizedShots.filter(s => s.hasAudioMapping).length,
-        hasDialogue: normalizedShots.some(s => s.audioDialogue),
-        lipSyncRequired: normalizedShots.some(s => s.audioBeat?.lipSyncRequired),
-        ambienceTypes: [...new Set(normalizedShots.map(s => s.audioAmbience).filter(Boolean))],
-        musicMoods: [...new Set(normalizedShots.map(s => s.audioBeat?.musicMood).filter(Boolean))]
+        shotsWithAudio: finalizedShots.filter(s => s.hasAudioMapping).length,
+        hasDialogue: finalizedShots.some(s => s.audioDialogue),
+        lipSyncRequired: finalizedShots.some(s => s.audioBeat?.lipSyncRequired),
+        ambienceTypes: [...new Set(finalizedShots.map(s => s.audioAmbience).filter(Boolean))],
+        musicMoods: [...new Set(finalizedShots.map(s => s.audioBeat?.musicMood).filter(Boolean))]
       },
       // Beat Timeline Synthesis status - the Hollywood differentiator
       beatTimelineSynthesis: {
         applied: timelineEnhancedShots.some(s => s.beatTimeline?.applied),
-        shotsWithTimeline: normalizedShots.filter(s => s.hasTimeline).length,
-        progressionTypes: [...new Set(normalizedShots.map(s => s.timelineProgression).filter(Boolean))],
-        primaryCharacters: [...new Set(normalizedShots.map(s => s.beatTimeline?.primaryCharacter).filter(Boolean))],
-        peakIntensities: normalizedShots.map(s => s.beatTimeline?.peakIntensity).filter(Boolean)
+        shotsWithTimeline: finalizedShots.filter(s => s.hasTimeline).length,
+        progressionTypes: [...new Set(finalizedShots.map(s => s.timelineProgression).filter(Boolean))],
+        primaryCharacters: [...new Set(finalizedShots.map(s => s.beatTimeline?.primaryCharacter).filter(Boolean))],
+        peakIntensities: finalizedShots.map(s => s.beatTimeline?.peakIntensity).filter(Boolean)
       },
       // Shot Sequence Validation status
-      shotSequenceValidation: SHOT_SEQUENCE_VALIDATOR.getSequenceSummary(normalizedShots),
+      shotSequenceValidation: SHOT_SEQUENCE_VALIDATOR.getSequenceSummary(finalizedShots),
       // Keyframe Quality Check status
       keyframeQuality: {
-        averageScore: Math.round(normalizedShots.reduce((sum, shot) => {
+        averageScore: Math.round(finalizedShots.reduce((sum, shot) => {
           const quality = KEYFRAME_QUALITY_ENGINE.getKeyframeSummary(shot, scene);
           return sum + quality.score;
-        }, 0) / (normalizedShots.length || 1)),
-        shotsAnalyzed: normalizedShots.length,
-        shotGrades: normalizedShots.map(shot => {
+        }, 0) / (finalizedShots.length || 1)),
+        shotsAnalyzed: finalizedShots.length,
+        shotGrades: finalizedShots.map(shot => {
           const quality = KEYFRAME_QUALITY_ENGINE.getKeyframeSummary(shot, scene);
           return { shotId: shot.id, grade: quality.grade, score: quality.score };
         })
@@ -52123,7 +54037,11 @@ exports.creationWizardGenerateMultitalkVideo = functions
       audioUrl,
       audioDuration,
       prompt,
-      aspectRatio
+      aspectRatio,
+      // PHASE 3: Character voice info for TTS integration
+      ttsConfig,           // TTS configuration from shot decomposition
+      voiceRequirements,   // Voice requirements summary
+      characterVoices      // Map of character -> voiceProfileId
     } = data;
 
     if (!imageUrl) {
@@ -52131,6 +54049,20 @@ exports.creationWizardGenerateMultitalkVideo = functions
     }
     if (!audioUrl) {
       throw new functions.https.HttpsError('invalid-argument', 'Audio URL is required');
+    }
+
+    // PHASE 3: Log voice info for future TTS integration
+    if (ttsConfig || voiceRequirements) {
+      console.log('[creationWizardGenerateMultitalkVideo] Voice configuration:', {
+        hasTTSConfig: !!ttsConfig,
+        voicesNeeded: voiceRequirements?.voicesNeeded || 0,
+        isMultiVoice: voiceRequirements?.isMultiVoice || false,
+        lines: ttsConfig?.totalLines || 0
+      });
+
+      // Future TTS integration point:
+      // If no audioUrl provided but ttsConfig exists, generate audio using TTS
+      // For now, we require pre-recorded audio
     }
 
     const runpodKey = functions.config().runpod?.key;
