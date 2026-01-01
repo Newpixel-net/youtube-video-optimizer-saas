@@ -27764,6 +27764,26 @@ LOCATION CONSISTENCY RULES:
       throw new functions.https.HttpsError('internal', 'Invalid script structure - no scenes generated');
     }
 
+    // PHASE 3: CHARACTER VOICE ASSIGNMENT
+    // Automatically assign voice profiles to characters based on archetypes and descriptions
+    if (script.characters && Array.isArray(script.characters) && script.characters.length > 0) {
+      const voiceResult = CHARACTER_VOICE_ENGINE.assignVoicesToCast(script.characters);
+      script.voiceAssignments = voiceResult.assignments;
+
+      // Enhance each character with their voice assignment
+      script.characters = script.characters.map(char => ({
+        ...char,
+        voice: voiceResult.assignments[char.name] || null,
+        voiceProfileId: voiceResult.assignments[char.name]?.voiceProfileId || null,
+        elevenLabsVoice: voiceResult.assignments[char.name]?.elevenLabsVoice || null
+      }));
+
+      console.log(`[creationWizardGenerateScript] ${voiceResult.summary}`);
+    } else {
+      script.voiceAssignments = {};
+      console.log('[creationWizardGenerateScript] No characters to assign voices to');
+    }
+
     // Calculate default durations if not provided
     const defaultVisualDuration = Math.round(targetDuration / script.scenes.length);
     const defaultNarrationDuration = Math.round(defaultVisualDuration * 0.7);
@@ -44840,6 +44860,492 @@ const DIALOGUE_DISTRIBUTION_ENGINE = {
 };
 
 // =============================================================================
+// CHARACTER_VOICE_ENGINE - Per-Character Voice Profiles (Phase 3)
+// =============================================================================
+/**
+ * CHARACTER_VOICE_ENGINE
+ *
+ * Manages character-specific voice profiles for dialogue synthesis.
+ * Matches character archetypes and descriptions to appropriate voices.
+ *
+ * Key features:
+ * - Voice profile library with different voice types
+ * - Automatic voice assignment based on character archetype/role
+ * - Support for custom voice IDs (ElevenLabs, etc.)
+ * - Gender, age, and personality-based voice matching
+ * - Emotion-aware voice modulation hints
+ *
+ * Output: Voice assignments per character for TTS synthesis
+ */
+const CHARACTER_VOICE_ENGINE = {
+
+  // ==========================================================================
+  // VOICE PROFILE LIBRARY
+  // Pre-defined voice types with characteristics
+  // ==========================================================================
+  VOICE_PROFILES: {
+    // Male voices
+    'male-hero': {
+      id: 'male-hero',
+      name: 'Heroic Male',
+      gender: 'male',
+      ageRange: '25-40',
+      characteristics: ['confident', 'warm', 'strong', 'determined'],
+      pitch: 'medium-low',
+      tempo: 'moderate',
+      suitableFor: ['protagonist', 'leader', 'action_hero', 'protector'],
+      elevenLabsVoice: 'adam', // ElevenLabs voice ID
+      description: 'Strong, confident male voice suitable for heroes and leaders'
+    },
+    'male-wise': {
+      id: 'male-wise',
+      name: 'Wise Mentor',
+      gender: 'male',
+      ageRange: '50-70',
+      characteristics: ['calm', 'authoritative', 'wise', 'patient'],
+      pitch: 'low',
+      tempo: 'slow',
+      suitableFor: ['mentor', 'sage', 'elder', 'teacher', 'narrator'],
+      elevenLabsVoice: 'antoni',
+      description: 'Deep, wise voice for mentors and narrators'
+    },
+    'male-villain': {
+      id: 'male-villain',
+      name: 'Menacing Male',
+      gender: 'male',
+      ageRange: '30-50',
+      characteristics: ['cold', 'calculating', 'menacing', 'smooth'],
+      pitch: 'low',
+      tempo: 'deliberate',
+      suitableFor: ['antagonist', 'villain', 'dark_lord', 'manipulator'],
+      elevenLabsVoice: 'daniel',
+      description: 'Cold, calculating voice for villains and antagonists'
+    },
+    'male-young': {
+      id: 'male-young',
+      name: 'Young Male',
+      gender: 'male',
+      ageRange: '16-25',
+      characteristics: ['energetic', 'enthusiastic', 'curious', 'eager'],
+      pitch: 'medium-high',
+      tempo: 'fast',
+      suitableFor: ['sidekick', 'apprentice', 'youth', 'rebel', 'trickster'],
+      elevenLabsVoice: 'josh',
+      description: 'Youthful, energetic male voice'
+    },
+    'male-rugged': {
+      id: 'male-rugged',
+      name: 'Rugged Male',
+      gender: 'male',
+      ageRange: '35-55',
+      characteristics: ['gruff', 'tough', 'weathered', 'no-nonsense'],
+      pitch: 'low',
+      tempo: 'measured',
+      suitableFor: ['warrior', 'soldier', 'anti_hero', 'survivor', 'ranger'],
+      elevenLabsVoice: 'arnold',
+      description: 'Rough, weathered voice for hardened characters'
+    },
+
+    // Female voices
+    'female-hero': {
+      id: 'female-hero',
+      name: 'Heroic Female',
+      gender: 'female',
+      ageRange: '25-40',
+      characteristics: ['confident', 'strong', 'determined', 'inspiring'],
+      pitch: 'medium',
+      tempo: 'moderate',
+      suitableFor: ['protagonist', 'leader', 'action_hero', 'warrior'],
+      elevenLabsVoice: 'rachel',
+      description: 'Strong, confident female voice for heroines'
+    },
+    'female-wise': {
+      id: 'female-wise',
+      name: 'Wise Female',
+      gender: 'female',
+      ageRange: '45-65',
+      characteristics: ['nurturing', 'wise', 'calm', 'knowing'],
+      pitch: 'medium-low',
+      tempo: 'measured',
+      suitableFor: ['mentor', 'sage', 'mother_figure', 'oracle', 'healer'],
+      elevenLabsVoice: 'domi',
+      description: 'Warm, wise female voice for mentors'
+    },
+    'female-villain': {
+      id: 'female-villain',
+      name: 'Femme Fatale',
+      gender: 'female',
+      ageRange: '28-45',
+      characteristics: ['seductive', 'dangerous', 'calculating', 'alluring'],
+      pitch: 'low',
+      tempo: 'slow',
+      suitableFor: ['antagonist', 'villain', 'temptress', 'manipulator'],
+      elevenLabsVoice: 'bella',
+      description: 'Sultry, dangerous female voice'
+    },
+    'female-young': {
+      id: 'female-young',
+      name: 'Young Female',
+      gender: 'female',
+      ageRange: '16-25',
+      characteristics: ['bright', 'curious', 'hopeful', 'spirited'],
+      pitch: 'high',
+      tempo: 'fast',
+      suitableFor: ['sidekick', 'apprentice', 'youth', 'dreamer', 'innocent'],
+      elevenLabsVoice: 'elli',
+      description: 'Youthful, bright female voice'
+    },
+    'female-warrior': {
+      id: 'female-warrior',
+      name: 'Warrior Woman',
+      gender: 'female',
+      ageRange: '25-40',
+      characteristics: ['fierce', 'commanding', 'battle-hardened', 'intense'],
+      pitch: 'medium-low',
+      tempo: 'sharp',
+      suitableFor: ['warrior', 'soldier', 'fighter', 'amazon', 'ranger'],
+      elevenLabsVoice: 'rachel',
+      description: 'Fierce, battle-ready female voice'
+    },
+
+    // Neutral/Special voices
+    'narrator-omniscient': {
+      id: 'narrator-omniscient',
+      name: 'Omniscient Narrator',
+      gender: 'neutral',
+      ageRange: 'ageless',
+      characteristics: ['authoritative', 'all-knowing', 'documentary-style'],
+      pitch: 'medium',
+      tempo: 'measured',
+      suitableFor: ['narrator', 'voiceover', 'documentary'],
+      elevenLabsVoice: 'adam',
+      description: 'Classic narrator voice for documentaries and voiceovers'
+    },
+    'child': {
+      id: 'child',
+      name: 'Child',
+      gender: 'neutral',
+      ageRange: '8-14',
+      characteristics: ['innocent', 'wonder', 'playful', 'curious'],
+      pitch: 'high',
+      tempo: 'fast',
+      suitableFor: ['child', 'youth', 'innocent', 'wonder'],
+      elevenLabsVoice: 'elli',
+      description: 'Childlike voice for young characters'
+    },
+    'robot': {
+      id: 'robot',
+      name: 'Robot/AI',
+      gender: 'neutral',
+      ageRange: 'n/a',
+      characteristics: ['monotone', 'precise', 'synthetic', 'logical'],
+      pitch: 'medium',
+      tempo: 'measured',
+      suitableFor: ['ai', 'robot', 'computer', 'android', 'droid'],
+      elevenLabsVoice: 'sam',
+      description: 'Synthetic voice for AI/robot characters'
+    }
+  },
+
+  // ==========================================================================
+  // ARCHETYPE TO VOICE MAPPING
+  // Maps character archetypes to suitable voice profiles
+  // ==========================================================================
+  ARCHETYPE_VOICE_MAP: {
+    // Heroes and protagonists
+    'hero': { male: 'male-hero', female: 'female-hero' },
+    'protagonist': { male: 'male-hero', female: 'female-hero' },
+    'chosen_one': { male: 'male-young', female: 'female-young' },
+    'leader': { male: 'male-hero', female: 'female-hero' },
+    'action_hero': { male: 'male-rugged', female: 'female-warrior' },
+    'reluctant_hero': { male: 'male-hero', female: 'female-hero' },
+
+    // Mentors and wise figures
+    'mentor': { male: 'male-wise', female: 'female-wise' },
+    'sage': { male: 'male-wise', female: 'female-wise' },
+    'teacher': { male: 'male-wise', female: 'female-wise' },
+    'guide': { male: 'male-wise', female: 'female-wise' },
+    'oracle': { male: 'male-wise', female: 'female-wise' },
+
+    // Villains and antagonists
+    'villain': { male: 'male-villain', female: 'female-villain' },
+    'antagonist': { male: 'male-villain', female: 'female-villain' },
+    'dark_lord': { male: 'male-villain', female: 'female-villain' },
+    'manipulator': { male: 'male-villain', female: 'female-villain' },
+    'tyrant': { male: 'male-villain', female: 'female-villain' },
+
+    // Supporting characters
+    'sidekick': { male: 'male-young', female: 'female-young' },
+    'companion': { male: 'male-young', female: 'female-young' },
+    'best_friend': { male: 'male-hero', female: 'female-hero' },
+    'love_interest': { male: 'male-hero', female: 'female-hero' },
+
+    // Warriors and fighters
+    'warrior': { male: 'male-rugged', female: 'female-warrior' },
+    'soldier': { male: 'male-rugged', female: 'female-warrior' },
+    'knight': { male: 'male-hero', female: 'female-warrior' },
+    'anti_hero': { male: 'male-rugged', female: 'female-warrior' },
+    'ranger': { male: 'male-rugged', female: 'female-warrior' },
+
+    // Special types
+    'trickster': { male: 'male-young', female: 'female-young' },
+    'rebel': { male: 'male-young', female: 'female-young' },
+    'innocent': { male: 'male-young', female: 'female-young' },
+    'child': { male: 'child', female: 'child' },
+    'ai': { male: 'robot', female: 'robot' },
+    'robot': { male: 'robot', female: 'robot' },
+
+    // Default
+    'default': { male: 'male-hero', female: 'female-hero' }
+  },
+
+  // ==========================================================================
+  // CORE VOICE ASSIGNMENT FUNCTIONS
+  // ==========================================================================
+
+  /**
+   * Detect gender from character data
+   * @param {Object} character - Character object
+   * @returns {string} 'male', 'female', or 'neutral'
+   */
+  detectGender(character) {
+    const visualDesc = (character.visualDescription || '').toLowerCase();
+    const voiceDesc = (character.voiceDescription || '').toLowerCase();
+    const name = (character.name || '').toLowerCase();
+    const combined = `${visualDesc} ${voiceDesc} ${name}`;
+
+    // Female indicators
+    const femalePatterns = /\b(she|her|woman|girl|female|lady|queen|princess|sister|mother|daughter|wife|feminine|actress|heroine)\b/;
+    if (femalePatterns.test(combined)) {
+      return 'female';
+    }
+
+    // Male indicators
+    const malePatterns = /\b(he|him|his|man|boy|male|guy|king|prince|brother|father|son|husband|masculine|actor|hero)\b/;
+    if (malePatterns.test(combined)) {
+      return 'male';
+    }
+
+    // Robot/AI indicators
+    const robotPatterns = /\b(robot|android|ai|artificial|droid|bot|machine|computer|synthetic)\b/;
+    if (robotPatterns.test(combined)) {
+      return 'neutral';
+    }
+
+    // Default based on common name patterns
+    const femaleNames = ['maya', 'sophia', 'luna', 'aria', 'emma', 'olivia', 'ava', 'mia', 'ella', 'lily'];
+    const maleNames = ['kai', 'max', 'leo', 'jack', 'noah', 'liam', 'james', 'oliver', 'alex', 'ryan'];
+
+    const firstName = name.split(' ')[0];
+    if (femaleNames.some(n => firstName.includes(n))) return 'female';
+    if (maleNames.some(n => firstName.includes(n))) return 'male';
+
+    return 'male'; // Default fallback
+  },
+
+  /**
+   * Assign voice profile to a character
+   * @param {Object} character - Character object with archetype, role, etc.
+   * @param {Array} existingAssignments - Already assigned voices to avoid duplicates
+   * @returns {Object} Voice assignment with profile and metadata
+   */
+  assignVoice(character, existingAssignments = []) {
+    const gender = this.detectGender(character);
+    const archetype = (character.archetype || 'default').toLowerCase().replace(/[^a-z_]/g, '_');
+    const role = (character.role || '').toLowerCase();
+
+    // Find archetype mapping
+    let voiceMap = this.ARCHETYPE_VOICE_MAP[archetype] ||
+                   this.ARCHETYPE_VOICE_MAP[role] ||
+                   this.ARCHETYPE_VOICE_MAP['default'];
+
+    // Get appropriate voice profile ID
+    let voiceProfileId = gender === 'female' ? voiceMap.female :
+                         gender === 'neutral' ? voiceMap.male : // Use male for neutral unless robot
+                         voiceMap.male;
+
+    // Handle robot/AI specifically
+    if (archetype === 'ai' || archetype === 'robot' || gender === 'neutral') {
+      voiceProfileId = 'robot';
+    }
+
+    // Avoid duplicate voices when possible
+    const usedVoices = existingAssignments.map(a => a.voiceProfileId);
+    if (usedVoices.includes(voiceProfileId)) {
+      // Try to find alternative voice of same gender
+      const alternatives = Object.keys(this.VOICE_PROFILES)
+        .filter(id => {
+          const profile = this.VOICE_PROFILES[id];
+          return profile.gender === gender && !usedVoices.includes(id);
+        });
+
+      if (alternatives.length > 0) {
+        voiceProfileId = alternatives[0];
+      }
+    }
+
+    const voiceProfile = this.VOICE_PROFILES[voiceProfileId] || this.VOICE_PROFILES['male-hero'];
+
+    return {
+      characterName: character.name,
+      voiceProfileId: voiceProfileId,
+      voiceProfile: voiceProfile,
+      gender: gender,
+      archetype: archetype,
+      elevenLabsVoice: voiceProfile.elevenLabsVoice,
+      customVoiceId: character.customVoiceId || null, // Allow custom override
+      reasoning: `Assigned '${voiceProfile.name}' based on archetype '${archetype}' and detected gender '${gender}'`
+    };
+  },
+
+  /**
+   * Assign voices to all characters in a story
+   * @param {Array} characters - Array of character objects
+   * @returns {Object} Voice assignments keyed by character name
+   */
+  assignVoicesToCast(characters) {
+    if (!characters || !Array.isArray(characters) || characters.length === 0) {
+      return { assignments: {}, summary: 'No characters to assign voices to' };
+    }
+
+    const assignments = {};
+    const assignmentsList = [];
+
+    // Sort by role priority (protagonists first to get first pick of voices)
+    const sortedCharacters = [...characters].sort((a, b) => {
+      const rolePriority = { protagonist: 1, antagonist: 2, supporting: 3, ensemble: 4 };
+      return (rolePriority[a.role] || 5) - (rolePriority[b.role] || 5);
+    });
+
+    sortedCharacters.forEach(character => {
+      const assignment = this.assignVoice(character, assignmentsList);
+      assignments[character.name] = assignment;
+      assignmentsList.push(assignment);
+    });
+
+    return {
+      assignments,
+      summary: `Assigned ${Object.keys(assignments).length} voices: ${Object.entries(assignments).map(([name, a]) => `${name}→${a.voiceProfile.name}`).join(', ')}`
+    };
+  },
+
+  /**
+   * Get voice info for a specific character's dialogue line
+   * @param {Object} dialogueLine - { character, line, emotion }
+   * @param {Object} voiceAssignments - Pre-assigned voice mappings
+   * @returns {Object} Voice metadata for this line
+   */
+  getVoiceForDialogue(dialogueLine, voiceAssignments) {
+    const characterName = dialogueLine.character;
+    const assignment = voiceAssignments[characterName];
+
+    if (!assignment) {
+      // Fallback for unknown character
+      return {
+        characterName,
+        voiceProfileId: 'male-hero',
+        voiceProfile: this.VOICE_PROFILES['male-hero'],
+        elevenLabsVoice: 'adam',
+        emotion: dialogueLine.emotion || 'neutral',
+        delivery: dialogueLine.delivery || null,
+        warning: `No voice assignment found for character '${characterName}', using default`
+      };
+    }
+
+    return {
+      characterName,
+      voiceProfileId: assignment.voiceProfileId,
+      voiceProfile: assignment.voiceProfile,
+      elevenLabsVoice: assignment.customVoiceId || assignment.elevenLabsVoice,
+      emotion: dialogueLine.emotion || 'neutral',
+      delivery: dialogueLine.delivery || null
+    };
+  },
+
+  /**
+   * Enhance dialogue with voice information
+   * @param {Array} dialogue - Array of dialogue lines
+   * @param {Object} voiceAssignments - Voice assignments by character name
+   * @returns {Array} Dialogue with voice metadata attached
+   */
+  enhanceDialogueWithVoices(dialogue, voiceAssignments) {
+    if (!dialogue || !Array.isArray(dialogue)) {
+      return [];
+    }
+
+    return dialogue.map(line => ({
+      ...line,
+      voice: this.getVoiceForDialogue(line, voiceAssignments)
+    }));
+  },
+
+  /**
+   * Get all unique voices needed for a scene's dialogue
+   * @param {Array} dialogue - Scene's dialogue array
+   * @param {Object} voiceAssignments - Voice assignments
+   * @returns {Object} Summary of voices needed
+   */
+  getSceneVoiceRequirements(dialogue, voiceAssignments) {
+    if (!dialogue || !Array.isArray(dialogue) || dialogue.length === 0) {
+      return {
+        voicesNeeded: 0,
+        voices: [],
+        ttsRequired: false
+      };
+    }
+
+    const uniqueCharacters = [...new Set(dialogue.map(d => d.character))];
+    const voices = uniqueCharacters.map(charName => {
+      const assignment = voiceAssignments[charName];
+      return {
+        character: charName,
+        voiceProfileId: assignment?.voiceProfileId || 'male-hero',
+        elevenLabsVoice: assignment?.customVoiceId || assignment?.elevenLabsVoice || 'adam'
+      };
+    });
+
+    return {
+      voicesNeeded: voices.length,
+      voices,
+      ttsRequired: true,
+      isMultiVoice: voices.length > 1
+    };
+  },
+
+  /**
+   * Generate TTS configuration for a shot's dialogue
+   * @param {Object} shot - Shot with dialogue
+   * @param {Object} voiceAssignments - Voice assignments
+   * @returns {Object} TTS configuration for audio generation
+   */
+  generateTTSConfig(shot, voiceAssignments) {
+    if (!shot.hasDialogue || !shot.dialogue || shot.dialogue.length === 0) {
+      return null;
+    }
+
+    const enhancedDialogue = this.enhanceDialogueWithVoices(shot.dialogue, voiceAssignments);
+
+    return {
+      shotId: shot.id,
+      lines: enhancedDialogue.map((d, idx) => ({
+        index: idx,
+        character: d.character,
+        line: d.line,
+        emotion: d.emotion,
+        delivery: d.delivery,
+        voiceId: d.voice.elevenLabsVoice,
+        voiceProfileId: d.voice.voiceProfileId,
+        startTimeInShot: d.startTimeInShot || 0,
+        durationInShot: d.durationInShot || 2
+      })),
+      totalLines: enhancedDialogue.length,
+      uniqueVoices: [...new Set(enhancedDialogue.map(d => d.voice.voiceProfileId))].length,
+      estimatedDuration: shot.dialogueDuration || 5
+    };
+  }
+};
+
+// =============================================================================
 // FLEXIBLE_DURATION_ENGINE - Hollywood-Style Dynamic Shot Timing (Phase 2)
 // =============================================================================
 /**
@@ -51565,11 +52071,58 @@ exports.creationWizardDecomposeSceneToShots = functions
     console.log(`[creationWizardDecomposeSceneToShots] ${dialogueSummary}`);
     console.log(`[creationWizardDecomposeSceneToShots] Scene audio type: ${sceneAudioType}`);
 
+    // STEP 5.995: CHARACTER VOICE ENHANCEMENT (Phase 3)
+    // Attach voice profile information to each dialogue line in each shot
+    // Voice assignments come from script.voiceAssignments (set during script generation)
+    const voiceAssignments = scene.voiceAssignments || {};
+    const voiceEnhancedShots = dialogueEnhancedShots.map(shot => {
+      if (!shot.hasDialogue || !shot.dialogue || shot.dialogue.length === 0) {
+        return {
+          ...shot,
+          voiceRequirements: null,
+          ttsConfig: null
+        };
+      }
+
+      // Enhance each dialogue line with voice info
+      const enhancedDialogue = shot.dialogue.map(line => ({
+        ...line,
+        voice: CHARACTER_VOICE_ENGINE.getVoiceForDialogue(line, voiceAssignments)
+      }));
+
+      // Get voice requirements summary for this shot
+      const voiceReqs = CHARACTER_VOICE_ENGINE.getSceneVoiceRequirements(shot.dialogue, voiceAssignments);
+
+      // Generate TTS configuration for audio synthesis
+      const ttsConfig = CHARACTER_VOICE_ENGINE.generateTTSConfig(
+        { ...shot, dialogue: enhancedDialogue },
+        voiceAssignments
+      );
+
+      return {
+        ...shot,
+        dialogue: enhancedDialogue,
+        voiceRequirements: voiceReqs,
+        ttsConfig: ttsConfig,
+        isMultiVoice: voiceReqs.isMultiVoice || false,
+        uniqueVoiceCount: voiceReqs.voicesNeeded || 0
+      };
+    });
+
+    // Log voice enhancement results
+    const voicedShots = voiceEnhancedShots.filter(s => s.voiceRequirements?.ttsRequired);
+    if (voicedShots.length > 0) {
+      const voiceBreakdown = voicedShots.map(s =>
+        `Shot ${s.shotIndex}: ${s.uniqueVoiceCount} voice(s)`
+      ).join(', ');
+      console.log(`[creationWizardDecomposeSceneToShots] Voice requirements: ${voiceBreakdown}`);
+    }
+
     // STEP 5.999: FLEXIBLE DURATION CALCULATION (Phase 2)
     // Calculate optimal duration for each shot based on dialogue, action, and shot type
     // Also determines if multi-clip stitching is needed for shots > 10s
     const durationEnhancedShots = FLEXIBLE_DURATION_ENGINE.calculateSceneDurations(
-      dialogueEnhancedShots,
+      voiceEnhancedShots,
       {
         defaultDuration: clipDuration,
         respectMinimaxLimits: true,
@@ -51680,6 +52233,12 @@ exports.creationWizardDecomposeSceneToShots = functions
         // Duration classification for UI
         durationClass: shot.calculatedDuration <= 5 ? 'quick' :
                        shot.calculatedDuration <= 6 ? 'short' : 'standard',  // quick/short/standard
+        // PHASE 3: CHARACTER VOICE SYSTEM - Per-character voice profiles
+        // Voice assignments for TTS synthesis and Multitalk integration
+        voiceRequirements: shot.voiceRequirements || null,  // { voicesNeeded, voices[], ttsRequired, isMultiVoice }
+        ttsConfig: shot.ttsConfig || null,  // TTS configuration for audio synthesis
+        isMultiVoice: shot.isMultiVoice || false,  // True if multiple characters speak
+        uniqueVoiceCount: shot.uniqueVoiceCount || 0,  // Number of unique voices needed
         // Generation status
         // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
         // This ensures when user regenerates scene image, Shot 1 stays in sync
@@ -52631,7 +53190,11 @@ exports.creationWizardGenerateMultitalkVideo = functions
       audioUrl,
       audioDuration,
       prompt,
-      aspectRatio
+      aspectRatio,
+      // PHASE 3: Character voice info for TTS integration
+      ttsConfig,           // TTS configuration from shot decomposition
+      voiceRequirements,   // Voice requirements summary
+      characterVoices      // Map of character -> voiceProfileId
     } = data;
 
     if (!imageUrl) {
@@ -52639,6 +53202,20 @@ exports.creationWizardGenerateMultitalkVideo = functions
     }
     if (!audioUrl) {
       throw new functions.https.HttpsError('invalid-argument', 'Audio URL is required');
+    }
+
+    // PHASE 3: Log voice info for future TTS integration
+    if (ttsConfig || voiceRequirements) {
+      console.log('[creationWizardGenerateMultitalkVideo] Voice configuration:', {
+        hasTTSConfig: !!ttsConfig,
+        voicesNeeded: voiceRequirements?.voicesNeeded || 0,
+        isMultiVoice: voiceRequirements?.isMultiVoice || false,
+        lines: ttsConfig?.totalLines || 0
+      });
+
+      // Future TTS integration point:
+      // If no audioUrl provided but ttsConfig exists, generate audio using TTS
+      // For now, we require pre-recorded audio
     }
 
     const runpodKey = functions.config().runpod?.key;
