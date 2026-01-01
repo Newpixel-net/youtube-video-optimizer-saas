@@ -10318,6 +10318,19 @@
                 // Use videoPrompt for the animation
                 const videoPromptToUse = shot.videoPrompt || shot.prompt || '';
 
+                // Build dialogue info for prompt generation
+                // The backend uses this to create the positive_prompt with character dialogue
+                let dialogueLines = [];
+                if (validatedTTSConfig && validatedTTSConfig.lines) {
+                    dialogueLines = validatedTTSConfig.lines;
+                } else if (shot.dialogue && Array.isArray(shot.dialogue)) {
+                    // Fallback to shot's dialogue array
+                    dialogueLines = shot.dialogue.map(d => ({
+                        character: d.character || 'Character',
+                        text: d.line || d.text || ''
+                    }));
+                }
+
                 const result = await generateVideoFn({
                     projectId: state.project.id,
                     sceneId,
@@ -10328,10 +10341,12 @@
                     audioDuration: audioDuration || 10,
                     prompt: videoPromptToUse,
                     aspectRatio: state.platform.aspectRatio || '16:9',
-                    // PHASE 3 + 5: Pass validated voice info for TTS integration
-                    ttsConfig: validatedTTSConfig,
+                    // Pass validated TTS config or build dialogue lines for prompt
+                    ttsConfig: dialogueLines.length > 0 ? { lines: dialogueLines } : validatedTTSConfig,
                     voiceRequirements: shot.voiceRequirements || null,
-                    characterVoices: state.animation?.characterVoices || {}
+                    characterVoices: state.animation?.characterVoices || {},
+                    // Also pass raw dialogue for fallback
+                    dialogue: shot.dialogue || []
                 });
 
                 if (result.data.success) {
@@ -10373,7 +10388,7 @@
             shot.videoPollCount = 0;
 
             let pollCount = 0;
-            const maxPolls = 150; // 5 minutes (150 × 2s)
+            const maxPolls = 300; // 10 minutes (300 × 2s) - Multitalk can take up to 10 minutes
 
             const pollInterval = setInterval(async () => {
                 pollCount++;
@@ -10382,7 +10397,7 @@
                 if (pollCount > maxPolls) {
                     clearInterval(pollInterval);
                     shot.videoStatus = 'error';
-                    shot.videoError = 'Timed out after 5 minutes';
+                    shot.videoError = 'Timed out after 10 minutes';
                     showToast('⏱️ Multitalk video timed out', 'error');
                     render();
                     renderShotDecompositionModal();
