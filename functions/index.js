@@ -44577,6 +44577,261 @@ const SHOT_SEQUENCE_VALIDATOR = {
 };
 
 // =============================================================================
+// DIALOGUE_DISTRIBUTION_ENGINE - Character Dialogue to Shot Mapping
+// =============================================================================
+/**
+ * DIALOGUE_DISTRIBUTION_ENGINE
+ *
+ * Distributes scene-level character dialogue to individual shots.
+ * Based on Hollywood pacing: dialogue timing determines shot duration.
+ *
+ * Key features:
+ * - Calculates reading time per dialogue line (~2.5 words/second)
+ * - Assigns dialogue to shots based on narrative beat timing
+ * - Supports multi-character dialogue exchanges
+ * - Generates combined dialogue text for display
+ * - Calculates optimal shot duration based on dialogue content
+ *
+ * Input: scene.audioLayer.dialogue array
+ * Output: shot.dialogue array with timing info
+ */
+const DIALOGUE_DISTRIBUTION_ENGINE = {
+
+  // Speaking rate constants (industry standard)
+  WORDS_PER_SECOND: 2.5,  // Average speaking rate
+  MIN_LINE_DURATION: 1.5,  // Minimum time for any line (breathing room)
+  PAUSE_BETWEEN_SPEAKERS: 0.5,  // Pause when speaker changes
+  VISUAL_BUFFER: 1.5,  // Extra time for visual reaction/setup
+
+  /**
+   * Calculate speaking duration for a dialogue line
+   * @param {string} line - The dialogue text
+   * @returns {number} Duration in seconds
+   */
+  calculateLineDuration(line) {
+    if (!line || typeof line !== 'string') return this.MIN_LINE_DURATION;
+    const wordCount = line.trim().split(/\s+/).length;
+    const baseDuration = wordCount / this.WORDS_PER_SECOND;
+    return Math.max(baseDuration, this.MIN_LINE_DURATION);
+  },
+
+  /**
+   * Analyze dialogue array and calculate total timing
+   * @param {Array} dialogue - Array of { character, line, emotion }
+   * @returns {Object} Timing analysis
+   */
+  analyzeDialogueTiming(dialogue) {
+    if (!dialogue || !Array.isArray(dialogue) || dialogue.length === 0) {
+      return { totalDuration: 0, lines: [], hasDialogue: false };
+    }
+
+    let currentTime = 0;
+    const timedLines = dialogue.map((d, idx) => {
+      const duration = this.calculateLineDuration(d.line);
+      const prevSpeaker = idx > 0 ? dialogue[idx - 1].character : null;
+      const speakerChanged = prevSpeaker && prevSpeaker !== d.character;
+
+      // Add pause if speaker changes
+      if (speakerChanged) {
+        currentTime += this.PAUSE_BETWEEN_SPEAKERS;
+      }
+
+      const lineData = {
+        index: idx,
+        character: d.character,
+        line: d.line,
+        emotion: d.emotion || 'neutral',
+        delivery: d.delivery || null,
+        timing: d.timing || null,
+        action: d.action || null,
+        startTime: currentTime,
+        duration: duration,
+        endTime: currentTime + duration,
+        speakerChanged
+      };
+
+      currentTime += duration;
+      return lineData;
+    });
+
+    return {
+      totalDuration: currentTime,
+      totalWithBuffer: currentTime + this.VISUAL_BUFFER,
+      lines: timedLines,
+      hasDialogue: true,
+      lineCount: timedLines.length,
+      characters: [...new Set(dialogue.map(d => d.character))],
+      isMultiCharacter: new Set(dialogue.map(d => d.character)).size > 1
+    };
+  },
+
+  /**
+   * Distribute dialogue lines to shots based on timing
+   * @param {Array} dialogue - Scene's dialogue array
+   * @param {Array} shots - Array of shots with duration
+   * @returns {Array} Shots with dialogue assigned
+   */
+  distributeDialogueToShots(dialogue, shots) {
+    if (!dialogue || !Array.isArray(dialogue) || dialogue.length === 0) {
+      // No dialogue - mark shots as non-dialogue
+      return shots.map(shot => ({
+        ...shot,
+        audioType: 'music_only',
+        dialogue: [],
+        dialogueText: null,
+        speakingCharacters: [],
+        hasDialogue: false,
+        dialogueDuration: 0
+      }));
+    }
+
+    const timing = this.analyzeDialogueTiming(dialogue);
+    if (!timing.hasDialogue) {
+      return shots.map(shot => ({
+        ...shot,
+        audioType: 'music_only',
+        dialogue: [],
+        dialogueText: null,
+        speakingCharacters: [],
+        hasDialogue: false,
+        dialogueDuration: 0
+      }));
+    }
+
+    // Calculate cumulative shot timings
+    let cumulativeTime = 0;
+    const shotTimings = shots.map((shot, idx) => {
+      const startTime = cumulativeTime;
+      const duration = shot.duration || 10;
+      cumulativeTime += duration;
+      return {
+        shotIndex: idx,
+        startTime,
+        endTime: cumulativeTime,
+        duration
+      };
+    });
+
+    // Assign dialogue lines to shots based on timing overlap
+    return shots.map((shot, shotIdx) => {
+      const shotTiming = shotTimings[shotIdx];
+
+      // Find dialogue lines that fall within this shot's time window
+      const shotDialogue = timing.lines.filter(line => {
+        // Line overlaps with shot if line starts before shot ends AND line ends after shot starts
+        return line.startTime < shotTiming.endTime && line.endTime > shotTiming.startTime;
+      }).map(line => ({
+        character: line.character,
+        line: line.line,
+        emotion: line.emotion,
+        delivery: line.delivery,
+        action: line.action,
+        // Adjust timing relative to shot start
+        startTimeInShot: Math.max(0, line.startTime - shotTiming.startTime),
+        endTimeInShot: Math.min(shotTiming.duration, line.endTime - shotTiming.startTime),
+        durationInShot: Math.min(line.duration, shotTiming.duration),
+        speakerChanged: line.speakerChanged
+      }));
+
+      // Generate combined dialogue text for display
+      const dialogueText = shotDialogue.length > 0
+        ? shotDialogue.map(d => `${d.character}: "${d.line}"`).join('\n')
+        : null;
+
+      // Get unique speaking characters in this shot
+      const speakingCharacters = [...new Set(shotDialogue.map(d => d.character))];
+
+      // Calculate dialogue duration in this shot
+      const dialogueDuration = shotDialogue.reduce((sum, d) => sum + d.durationInShot, 0);
+
+      return {
+        ...shot,
+        audioType: shotDialogue.length > 0 ? 'dialogue' : 'music_only',
+        dialogue: shotDialogue,
+        dialogueText,
+        speakingCharacters,
+        hasDialogue: shotDialogue.length > 0,
+        dialogueDuration,
+        dialogueCount: shotDialogue.length,
+        // Suggested optimal duration based on dialogue
+        suggestedDuration: shotDialogue.length > 0
+          ? Math.ceil(dialogueDuration + this.VISUAL_BUFFER)
+          : shot.duration
+      };
+    });
+  },
+
+  /**
+   * Calculate optimal shot duration based on dialogue content
+   * @param {Array} shotDialogue - Dialogue lines for this shot
+   * @param {number} defaultDuration - Default duration if no dialogue
+   * @returns {number} Optimal duration in seconds
+   */
+  calculateOptimalShotDuration(shotDialogue, defaultDuration = 10) {
+    if (!shotDialogue || shotDialogue.length === 0) {
+      return defaultDuration;
+    }
+
+    const dialogueTime = shotDialogue.reduce((sum, d) => {
+      return sum + this.calculateLineDuration(d.line);
+    }, 0);
+
+    // Add pauses for speaker changes
+    let pauseTime = 0;
+    for (let i = 1; i < shotDialogue.length; i++) {
+      if (shotDialogue[i].character !== shotDialogue[i-1].character) {
+        pauseTime += this.PAUSE_BETWEEN_SPEAKERS;
+      }
+    }
+
+    // Total = dialogue + pauses + visual buffer
+    const optimalDuration = dialogueTime + pauseTime + this.VISUAL_BUFFER;
+
+    // Clamp to reasonable bounds (5s - 20s)
+    return Math.max(5, Math.min(20, Math.ceil(optimalDuration)));
+  },
+
+  /**
+   * Get dialogue summary for logging/debugging
+   * @param {Array} shots - Shots with dialogue assigned
+   * @returns {string} Summary string
+   */
+  getDialogueSummary(shots) {
+    const dialogueShots = shots.filter(s => s.hasDialogue);
+    const totalLines = shots.reduce((sum, s) => sum + (s.dialogueCount || 0), 0);
+    const characters = [...new Set(shots.flatMap(s => s.speakingCharacters || []))];
+
+    return `Dialogue: ${totalLines} lines across ${dialogueShots.length}/${shots.length} shots, ` +
+           `Characters: ${characters.join(', ') || 'none'}`;
+  },
+
+  /**
+   * Determine audio type for a scene based on audioLayer
+   * @param {Object} audioLayer - Scene's audioLayer object
+   * @returns {string} Audio type classification
+   */
+  classifyAudioType(audioLayer) {
+    if (!audioLayer) return 'music_only';
+
+    const type = audioLayer.type?.toLowerCase() || '';
+
+    if (type === 'dialogue' || (audioLayer.dialogue && audioLayer.dialogue.length > 0)) {
+      return 'dialogue';
+    }
+    if (type === 'voiceover' || audioLayer.voiceover) {
+      return 'voiceover';
+    }
+    if (type === 'internal_monologue' || audioLayer.internalMonologue) {
+      return 'internal_monologue';
+    }
+    if (type === 'action_sfx') {
+      return 'sfx';
+    }
+    return 'music_only';
+  }
+};
+
+// =============================================================================
 // KEYFRAME_QUALITY_ENGINE - Image Quality Validation for Video Generation
 // =============================================================================
 /**
@@ -50290,7 +50545,8 @@ exports.creationWizardDecomposeSceneToShots = functions
   const sceneDescription = scene.visualPrompt || scene.visual || '';
   const narration = scene.narration || '';
 
-  // Clip duration from Minimax (6s or 10s) - DEFAULT TO 10s for more complex actions
+  // Clip duration from Minimax (5s, 6s, or 10s) - DEFAULT TO 10s for more complex actions
+  // 5s is ideal for quick non-dialogue shots, 10s for dialogue-heavy or action scenes
   const clipDuration = inputClipDuration || 10;
 
   // NEW: Extract action data for video prompt generation
@@ -50818,11 +51074,29 @@ exports.creationWizardDecomposeSceneToShots = functions
 
     console.log(`[creationWizardDecomposeSceneToShots] Beat Timeline applied to ${timelineEnhancedShots.filter(s => s.beatTimeline?.applied).length}/${timelineEnhancedShots.length} shots`);
 
+    // STEP 5.99: DIALOGUE DISTRIBUTION
+    // Distribute scene dialogue (from audioLayer) to individual shots
+    // Based on Hollywood pacing: dialogue timing determines shot assignment
+    const audioLayer = scene.audioLayer || null;
+    const sceneDialogue = audioLayer?.dialogue || [];
+    const sceneAudioType = DIALOGUE_DISTRIBUTION_ENGINE.classifyAudioType(audioLayer);
+
+    // Apply dialogue distribution to shots
+    const dialogueEnhancedShots = DIALOGUE_DISTRIBUTION_ENGINE.distributeDialogueToShots(
+      sceneDialogue,
+      timelineEnhancedShots
+    );
+
+    // Log dialogue distribution results
+    const dialogueSummary = DIALOGUE_DISTRIBUTION_ENGINE.getDialogueSummary(dialogueEnhancedShots);
+    console.log(`[creationWizardDecomposeSceneToShots] ${dialogueSummary}`);
+    console.log(`[creationWizardDecomposeSceneToShots] Scene audio type: ${sceneAudioType}`);
+
     // STEP 6: Normalize shots with all required fields
-    // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, and visualContinuity
-    // IMPORTANT: Use timelineEnhancedShots (with World-First + Physics + Character + Audio + Timeline) for final normalization
-    const normalizedShots = timelineEnhancedShots.map((shot, idx) => {
-      const isLast = idx === timelineEnhancedShots.length - 1;
+    // Includes imagePrompt, videoPrompt, narrativeBeat, captureSuggestion, crossShotIntelligence, visualContinuity, and dialogue
+    // IMPORTANT: Use dialogueEnhancedShots (with World-First + Physics + Character + Audio + Timeline + Dialogue) for final normalization
+    const normalizedShots = dialogueEnhancedShots.map((shot, idx) => {
+      const isLast = idx === dialogueEnhancedShots.length - 1;
       const isFirst = idx === 0;
       const beatData = storyBeats ? storyBeats[idx] : null;
 
@@ -50888,6 +51162,16 @@ exports.creationWizardDecomposeSceneToShots = functions
         beatTimeline: shot.beatTimeline || null,
         hasTimeline: shot.beatTimeline?.applied || false,
         timelineProgression: shot.beatTimeline?.progressionType || null,
+        // PHASE 1: DIALOGUE DISTRIBUTION - Character dialogue per shot
+        // Flows from scene.audioLayer.dialogue to individual shots
+        audioType: shot.audioType || 'music_only',  // 'dialogue' | 'voiceover' | 'music_only' | 'sfx'
+        dialogue: shot.dialogue || [],  // Array of { character, line, emotion, startTimeInShot, endTimeInShot }
+        dialogueText: shot.dialogueText || null,  // Combined text for display: "Kai: \"line\"\nMaya: \"line\""
+        speakingCharacters: shot.speakingCharacters || [],  // Characters speaking in this shot
+        hasDialogue: shot.hasDialogue || false,  // Quick flag for UI
+        dialogueDuration: shot.dialogueDuration || 0,  // Total dialogue time in seconds
+        dialogueCount: shot.dialogueCount || 0,  // Number of dialogue lines
+        suggestedDuration: shot.suggestedDuration || shot.duration,  // Optimal duration based on dialogue
         // Generation status
         // SHOT-SCENE IMAGE SYNC: Shot 1 automatically inherits scene's main image
         // This ensures when user regenerates scene image, Shot 1 stays in sync
