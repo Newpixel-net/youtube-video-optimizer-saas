@@ -9180,21 +9180,49 @@
                                                         ${shot.shotType || 'shot'}
                                                     </div>
 
-                                                    <!-- PHASE 4: Audio Type Indicator Badge -->
+                                                    <!-- PHASE 4: Audio Type Indicator Badge (Enhanced) -->
+                                                    <!-- Uses backend shot.audioType: 'dialogue', 'voiceover', 'music_only', 'sfx', 'internal_monologue' -->
                                                     ${(() => {
+                                                        const backendAudioType = shot.audioType || 'music_only';
                                                         const hasDialogue = shot.hasDialogue && shot.dialogue?.length > 0;
                                                         const isMultiVoice = shot.isMultiVoice || (shot.uniqueVoiceCount && shot.uniqueVoiceCount > 1);
                                                         const hasTTS = shot.ttsConfig && shot.ttsConfig.lines?.length > 0;
-                                                        const audioType = hasDialogue ? (isMultiVoice ? 'multi-voice' : 'dialogue') : 'ambient';
+                                                        const needsLipSync = hasDialogue && backendAudioType === 'dialogue';
+
+                                                        // Determine display type based on backend audioType + dialogue info
+                                                        let displayType = 'music';
+                                                        if (backendAudioType === 'voiceover') {
+                                                            displayType = 'narrator';
+                                                        } else if (backendAudioType === 'internal_monologue') {
+                                                            displayType = 'internal';
+                                                        } else if (backendAudioType === 'sfx') {
+                                                            displayType = 'sfx';
+                                                        } else if (hasDialogue) {
+                                                            displayType = isMultiVoice ? 'multi-voice' : 'character';
+                                                        }
+
                                                         const audioConfig = {
-                                                            'multi-voice': { icon: '🎭', label: 'Multi', bg: 'rgba(167, 139, 250, 0.9)', title: 'Multiple character voices' },
-                                                            'dialogue': { icon: '💬', label: 'Voice', bg: 'rgba(251, 191, 36, 0.9)', title: 'Single character voice' },
-                                                            'ambient': { icon: '🎵', label: 'Music', bg: 'rgba(59, 130, 246, 0.7)', title: 'Background music/ambient' }
+                                                            'narrator': { icon: '🎙️', label: 'Narrator', bg: 'rgba(34, 197, 94, 0.9)', title: 'Narrator voiceover (no lip-sync)', border: 'rgba(34, 197, 94, 1)' },
+                                                            'character': { icon: '🗣️', label: 'Character', bg: 'rgba(251, 191, 36, 0.9)', title: 'Character dialogue (lip-sync)', border: 'rgba(251, 191, 36, 1)' },
+                                                            'multi-voice': { icon: '🎭', label: 'Multi', bg: 'rgba(167, 139, 250, 0.9)', title: 'Multiple characters (lip-sync)', border: 'rgba(167, 139, 250, 1)' },
+                                                            'internal': { icon: '💭', label: 'Thought', bg: 'rgba(96, 165, 250, 0.9)', title: 'Internal monologue (no lip-sync)', border: 'rgba(96, 165, 250, 1)' },
+                                                            'sfx': { icon: '🔊', label: 'SFX', bg: 'rgba(249, 115, 22, 0.9)', title: 'Sound effects', border: 'rgba(249, 115, 22, 1)' },
+                                                            'music': { icon: '🎵', label: 'Music', bg: 'rgba(59, 130, 246, 0.7)', title: 'Background music only', border: 'rgba(59, 130, 246, 1)' }
                                                         };
-                                                        const config = audioConfig[audioType];
+                                                        const config = audioConfig[displayType];
+
                                                         return `
-                                                            <div style="position: absolute; top: 1.5rem; right: 0.25rem; background: ${config.bg}; color: white; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.45rem; z-index: 2; display: flex; align-items: center; gap: 0.1rem;" title="${config.title}${hasTTS ? ' - TTS Ready' : ''}">
-                                                                ${config.icon} ${config.label}${hasTTS ? ' ✓' : ''}
+                                                            <div style="position: absolute; top: 1.5rem; right: 0.25rem; display: flex; flex-direction: column; gap: 0.15rem; z-index: 2;">
+                                                                <!-- Audio Type Badge -->
+                                                                <div style="background: ${config.bg}; color: white; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.45rem; display: flex; align-items: center; gap: 0.1rem; border: 1px solid ${config.border};" title="${config.title}${hasTTS ? ' - TTS Ready' : ''}">
+                                                                    ${config.icon} ${config.label}${hasTTS ? ' ✓' : ''}
+                                                                </div>
+                                                                <!-- Lip-Sync Indicator (only for character dialogue) -->
+                                                                ${needsLipSync ? `
+                                                                    <div style="background: rgba(236, 72, 153, 0.9); color: white; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.4rem; display: flex; align-items: center; gap: 0.1rem; border: 1px solid rgba(236, 72, 153, 1);" title="This shot requires Multitalk lip-sync video generation">
+                                                                        👄 Lip-Sync
+                                                                    </div>
+                                                                ` : ''}
                                                             </div>
                                                         `;
                                                     })()}
@@ -9304,15 +9332,47 @@
                                                             </div>
                                                         ` : ''}
 
-                                                        <!-- PHASE 2: Duration Control - flexible shot timing -->
+                                                        <!-- PHASE 2: Duration Control - flexible shot timing (Enhanced) -->
                                                         <div style="font-size: 0.5rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 0.25rem; padding: 0.25rem; margin-bottom: 0.3rem;">
                                                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.15rem;">
                                                                 <span style="color: #3b82f6; font-weight: 600;">⏱️ Duration</span>
-                                                                <span style="color: ${shot.durationClass === 'quick' ? '#22c55e' : shot.durationClass === 'short' ? '#eab308' : '#3b82f6'}; font-weight: 500;">
-                                                                    ${shot.selectedDuration || shot.calculatedDuration || shot.duration || 10}s
-                                                                    ${shot.requiresStitching ? ' (stitched)' : ''}
-                                                                </span>
+                                                                <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                                                    <!-- Raw calculated duration (before Minimax rounding) -->
+                                                                    ${shot.rawOptimalDuration && shot.rawOptimalDuration !== (shot.selectedDuration || shot.calculatedDuration || shot.duration) ? `
+                                                                        <span style="color: rgba(255,255,255,0.4); font-size: 0.4rem; text-decoration: line-through;" title="Raw calculation before Minimax rounding">
+                                                                            ${shot.rawOptimalDuration}s
+                                                                        </span>
+                                                                        <span style="color: rgba(255,255,255,0.4);">→</span>
+                                                                    ` : ''}
+                                                                    <!-- Final duration (Minimax-compatible) -->
+                                                                    <span style="color: ${shot.durationClass === 'quick' ? '#22c55e' : shot.durationClass === 'short' ? '#eab308' : '#3b82f6'}; font-weight: 500;">
+                                                                        ${shot.selectedDuration || shot.calculatedDuration || shot.duration || 10}s
+                                                                        ${shot.requiresStitching ? ' (stitched)' : ''}
+                                                                    </span>
+                                                                </div>
                                                             </div>
+
+                                                            <!-- Duration Factors Breakdown (when available) -->
+                                                            ${shot.durationFactors ? `
+                                                                <div style="display: flex; flex-wrap: wrap; gap: 0.2rem; margin-bottom: 0.15rem;">
+                                                                    ${shot.durationFactors.dialogue?.hasDialogue ? `
+                                                                        <span style="background: rgba(251, 191, 36, 0.2); border: 1px solid rgba(251, 191, 36, 0.4); padding: 0.1rem 0.2rem; border-radius: 0.15rem; color: #fbbf24; font-size: 0.4rem;" title="Duration based on ${shot.durationFactors.dialogue.wordCount} words at 2.5 words/sec + buffer">
+                                                                            💬 ${shot.durationFactors.dialogue.totalWithBuffer?.toFixed(1) || 0}s dialogue
+                                                                        </span>
+                                                                    ` : ''}
+                                                                    ${shot.durationFactors.shotType?.preset?.name ? `
+                                                                        <span style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); padding: 0.1rem 0.2rem; border-radius: 0.15rem; color: #a78bfa; font-size: 0.4rem;" title="${shot.durationFactors.shotType.preset.description || 'Shot type preset'}">
+                                                                            🎬 ${shot.durationFactors.shotType.name || 'default'}
+                                                                        </span>
+                                                                    ` : ''}
+                                                                    ${shot.durationFactors.action?.actionCount > 0 ? `
+                                                                        <span style="background: rgba(249, 115, 22, 0.2); border: 1px solid rgba(249, 115, 22, 0.4); padding: 0.1rem 0.2rem; border-radius: 0.15rem; color: #fb923c; font-size: 0.4rem;" title="${shot.durationFactors.action.actionCount} action verbs detected">
+                                                                            ⚡ ${shot.durationFactors.action.minimum?.toFixed(1) || 0}s action
+                                                                        </span>
+                                                                    ` : ''}
+                                                                </div>
+                                                            ` : ''}
+
                                                             <div style="display: flex; gap: 0.2rem; margin-bottom: 0.15rem;">
                                                                 <button onclick="setShotDuration(${sceneId}, ${idx}, 5); event.stopPropagation();"
                                                                         style="flex: 1; padding: 0.15rem 0.25rem; background: ${(shot.selectedDuration || shot.calculatedDuration || 10) === 5 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(255,255,255,0.1)'}; border: 1px solid ${(shot.selectedDuration || shot.calculatedDuration || 10) === 5 ? 'rgba(34, 197, 94, 0.5)' : 'rgba(255,255,255,0.2)'}; border-radius: 0.2rem; color: white; cursor: pointer; font-size: 0.5rem;">
@@ -9329,12 +9389,16 @@
                                                             </div>
                                                             ${shot.durationRecommendation ? `
                                                                 <div style="color: rgba(255,255,255,0.5); font-size: 0.45rem; line-height: 1.2;">
-                                                                    ${shot.durationRecommendation}
+                                                                    💡 ${shot.durationRecommendation}
                                                                 </div>
-                                                            ` : ''}
+                                                            ` : `
+                                                                <div style="color: rgba(255,255,255,0.4); font-size: 0.4rem; line-height: 1.2;">
+                                                                    ℹ️ Minimax video clips: 5s, 6s, or 10s
+                                                                </div>
+                                                            `}
                                                             ${shot.requiresStitching && shot.stitchingStrategy ? `
                                                                 <div style="color: rgba(251, 146, 60, 0.8); font-size: 0.45rem; margin-top: 0.1rem;">
-                                                                    ${shot.stitchingStrategy.clipCount} clips: ${shot.stitchingStrategy.clips?.map(c => c.duration + 's').join(' + ')}
+                                                                    🔗 ${shot.stitchingStrategy.clipCount} clips: ${shot.stitchingStrategy.clips?.map(c => c.duration + 's').join(' + ')}
                                                                 </div>
                                                             ` : ''}
                                                         </div>
