@@ -27811,6 +27811,39 @@ LOCATION CONSISTENCY RULES:
         }
       }
 
+      // Build audioLayer from scene data (either from GPT response or from narration)
+      // This is CRITICAL for dialogue distribution to shots
+      let audioLayer = scene.audioLayer || null;
+
+      // If no audioLayer but has dialogue array, construct it
+      if (!audioLayer && scene.dialogue && Array.isArray(scene.dialogue) && scene.dialogue.length > 0) {
+        audioLayer = {
+          type: 'dialogue',
+          dialogue: scene.dialogue,
+          sfx: scene.sfx || [],
+          musicMood: scene.mood || 'neutral'
+        };
+      }
+      // If no audioLayer but has narration, construct voiceover audioLayer
+      else if (!audioLayer && hasNarration) {
+        audioLayer = {
+          type: 'voiceover',
+          voiceover: narrationText,
+          dialogue: [],
+          sfx: scene.sfx || [],
+          musicMood: scene.mood || 'neutral'
+        };
+      }
+      // Default to music_only if no audio content
+      else if (!audioLayer) {
+        audioLayer = {
+          type: 'music_only',
+          dialogue: [],
+          sfx: scene.sfx || [],
+          musicMood: scene.mood || 'neutral'
+        };
+      }
+
       return {
         id: scene.id || index + 1,
         // NEW: Separate visual prompt for AI video generation (what we SEE)
@@ -27835,7 +27868,14 @@ LOCATION CONSISTENCY RULES:
         // Camera movements for Minimax AI video generation
         cameraMovement: cameraMovements,
         transition: scene.transition || 'cut',
-        status: 'pending' // For tracking storyboard/animation progress
+        status: 'pending', // For tracking storyboard/animation progress
+        // PHASE 1: Audio Layer for dialogue/voiceover distribution to shots
+        // Contains dialogue[], voiceover, sfx[], musicMood
+        audioLayer: audioLayer,
+        // Scene type for shot decomposition
+        sceneType: scene.sceneType || (scene.dialogue?.length > 0 ? 'dialogue' : hasNarration ? 'narration' : 'action'),
+        // Characters appearing in this scene
+        charactersInScene: scene.charactersInScene || scene.characters || []
       };
     });
 
@@ -52827,8 +52867,24 @@ exports.creationWizardDecomposeSceneToShots = functions
     // Distribute scene dialogue (from audioLayer) to individual shots
     // Based on Hollywood pacing: dialogue timing determines shot assignment
     const audioLayer = scene.audioLayer || null;
-    const sceneDialogue = audioLayer?.dialogue || [];
+    let sceneDialogue = audioLayer?.dialogue || [];
     const sceneAudioType = DIALOGUE_DISTRIBUTION_ENGINE.classifyAudioType(audioLayer);
+
+    // ENHANCEMENT: For voiceover scenes, convert narration to narrator dialogue entry
+    // This allows proper duration calculation based on narration word count
+    if (sceneAudioType === 'voiceover' && sceneDialogue.length === 0 && (audioLayer?.voiceover || scene.narration)) {
+      const narrationText = audioLayer?.voiceover || scene.narration;
+      if (narrationText && narrationText.trim()) {
+        sceneDialogue = [{
+          character: 'Narrator',
+          line: narrationText.trim(),
+          emotion: 'neutral',
+          delivery: 'measured',
+          isNarration: true  // Flag to indicate this is narration, not character dialogue
+        }];
+        console.log(`[creationWizardDecomposeSceneToShots] Converted voiceover to narrator dialogue: ${narrationText.substring(0, 50)}...`);
+      }
+    }
 
     // PHASE 5: Validate dialogue data before distribution
     const dialogueValidation = QUALITY_ASSURANCE_ENGINE.validateDialogue(sceneDialogue);
