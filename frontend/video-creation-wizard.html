@@ -3731,6 +3731,21 @@
                     status: 'idle',             // idle, decomposing, ready, error
                     error: null
                 },
+                // Video Model Selector Popup State
+                videoModelSelector: {
+                    open: false,
+                    sceneId: null,
+                    shotIndex: null,
+                    selectedModel: 'minimax',   // 'minimax' | 'multitalk'
+                    // Multitalk-specific settings
+                    multitalk: {
+                        audioFile: null,        // Uploaded audio File object
+                        audioUrl: null,         // Uploaded audio URL (Firebase Storage)
+                        audioFileName: null,    // Display name
+                        audioUploadStatus: 'idle', // idle, uploading, ready, error
+                        audioDuration: null     // Duration in seconds
+                    }
+                },
                 // Active polling intervals for cleanup on navigation
                 activePollingIntervals: [],
                 styleReference: null,
@@ -9136,10 +9151,13 @@
                                                                         ${(shot.videoError || 'Generation failed').substring(0, 50)}
                                                                     </div>
                                                                 </div>
-                                                                <button onclick="generateSingleShotVideo(${sceneId}, ${idx})"
-                                                                        style="width: 100%; padding: 0.3rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
-                                                                    🔄 Retry Animation
-                                                                </button>
+                                                                <div style="position: relative;">
+                                                                    ${state.storyboard.videoModelSelector?.open && state.storyboard.videoModelSelector?.sceneId === sceneId && state.storyboard.videoModelSelector?.shotIndex === idx ? renderVideoModelSelectorPopup() : ''}
+                                                                    <button onclick="openVideoModelSelector(${sceneId}, ${idx})"
+                                                                            style="width: 100%; padding: 0.3rem; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
+                                                                        🔄 Retry Animation
+                                                                    </button>
+                                                                </div>
                                                             ` : shot.status !== 'generating' && !isGeneratingVideo ? `
                                                                 <!-- FRAME CHAIN WORKFLOW: No standalone image generation -->
                                                                 <!-- Shot 1: Uses scene image (auto-synced) -->
@@ -9176,11 +9194,14 @@
                                                                         ▶️ Play Video
                                                                     </button>
                                                                 ` : hasImage ? `
-                                                                    <!-- Video Generation -->
-                                                                    <button onclick="generateSingleShotVideo(${sceneId}, ${idx})"
-                                                                            style="width: 100%; padding: 0.3rem; background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3)); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
-                                                                        🎬 Animate
-                                                                    </button>
+                                                                    <!-- Video Generation with Model Selector -->
+                                                                    <div style="position: relative;">
+                                                                        ${state.storyboard.videoModelSelector?.open && state.storyboard.videoModelSelector?.sceneId === sceneId && state.storyboard.videoModelSelector?.shotIndex === idx ? renderVideoModelSelectorPopup() : ''}
+                                                                        <button onclick="openVideoModelSelector(${sceneId}, ${idx})"
+                                                                                style="width: 100%; padding: 0.3rem; background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3)); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 0.3rem; color: white; cursor: pointer; font-size: 0.6rem; font-weight: 500;">
+                                                                            🎬 Animate
+                                                                        </button>
+                                                                    </div>
                                                                 ` : ''}
 
                                                                 ${hasVideo && !isLastShot ? `
@@ -9192,11 +9213,14 @@
                                                                 ` : ''}
 
                                                                 ${hasVideo ? `
-                                                                    <!-- Re-animate option -->
-                                                                    <button onclick="generateSingleShotVideo(${sceneId}, ${idx})"
-                                                                            style="width: 100%; padding: 0.25rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.3rem; color: rgba(255,255,255,0.6); cursor: pointer; font-size: 0.55rem;">
-                                                                        🔄 Re-Animate
-                                                                    </button>
+                                                                    <!-- Re-animate option with model selector -->
+                                                                    <div style="position: relative;">
+                                                                        ${state.storyboard.videoModelSelector?.open && state.storyboard.videoModelSelector?.sceneId === sceneId && state.storyboard.videoModelSelector?.shotIndex === idx ? renderVideoModelSelectorPopup() : ''}
+                                                                        <button onclick="openVideoModelSelector(${sceneId}, ${idx})"
+                                                                                style="width: 100%; padding: 0.25rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.3rem; color: rgba(255,255,255,0.6); cursor: pointer; font-size: 0.55rem;">
+                                                                            🔄 Re-Animate
+                                                                        </button>
+                                                                    </div>
                                                                 ` : ''}
                                                             ` : (() => {
                                                                 // Calculate elapsed time for video generation
@@ -9712,6 +9736,374 @@
                     hasCharacters: false
                 };
             }
+        }
+
+        // ==========================================
+        // VIDEO MODEL SELECTOR - Minimax vs Multitalk
+        // ==========================================
+
+        /**
+         * Open video model selector popup
+         */
+        function openVideoModelSelector(sceneId, shotIndex) {
+            state.storyboard.videoModelSelector = {
+                open: true,
+                sceneId: sceneId,
+                shotIndex: shotIndex,
+                selectedModel: 'minimax',
+                multitalk: {
+                    audioFile: null,
+                    audioUrl: null,
+                    audioFileName: null,
+                    audioUploadStatus: 'idle',
+                    audioDuration: null
+                }
+            };
+            render();
+            renderShotDecompositionModal();
+        }
+
+        /**
+         * Close video model selector popup
+         */
+        function closeVideoModelSelector() {
+            state.storyboard.videoModelSelector.open = false;
+            render();
+            renderShotDecompositionModal();
+        }
+
+        /**
+         * Select video model in popup
+         */
+        function selectVideoModel(model) {
+            state.storyboard.videoModelSelector.selectedModel = model;
+            render();
+            renderShotDecompositionModal();
+        }
+
+        /**
+         * Handle audio file selection for Multitalk
+         */
+        async function handleMultitalkAudioSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            if (!file.type.startsWith('audio/')) {
+                showToast('Please select an audio file (MP3, WAV, etc.)', 'error');
+                return;
+            }
+
+            // Validate file size (max 50MB)
+            if (file.size > 50 * 1024 * 1024) {
+                showToast('Audio file too large. Max 50MB.', 'error');
+                return;
+            }
+
+            state.storyboard.videoModelSelector.multitalk.audioFile = file;
+            state.storyboard.videoModelSelector.multitalk.audioFileName = file.name;
+            state.storyboard.videoModelSelector.multitalk.audioUploadStatus = 'uploading';
+            render();
+            renderShotDecompositionModal();
+
+            try {
+                // Get audio duration
+                const audioDuration = await getAudioDuration(file);
+                state.storyboard.videoModelSelector.multitalk.audioDuration = audioDuration;
+
+                // Upload to Firebase Storage
+                const { sceneId, shotIndex } = state.storyboard.videoModelSelector;
+                const fileName = `creation-projects/${state.project.id}/multitalk-audio/scene_${sceneId}_shot_${shotIndex}_${Date.now()}.${file.name.split('.').pop()}`;
+
+                const storageRef = firebase.storage().ref(fileName);
+                const uploadTask = await storageRef.put(file);
+                const audioUrl = await uploadTask.ref.getDownloadURL();
+
+                state.storyboard.videoModelSelector.multitalk.audioUrl = audioUrl;
+                state.storyboard.videoModelSelector.multitalk.audioUploadStatus = 'ready';
+
+                showToast(`Audio uploaded: ${audioDuration.toFixed(1)}s`, 'success');
+            } catch (error) {
+                console.error('Audio upload error:', error);
+                state.storyboard.videoModelSelector.multitalk.audioUploadStatus = 'error';
+                showToast('Failed to upload audio: ' + error.message, 'error');
+            }
+
+            render();
+            renderShotDecompositionModal();
+        }
+
+        /**
+         * Get audio duration from file
+         */
+        function getAudioDuration(file) {
+            return new Promise((resolve, reject) => {
+                const audio = new Audio();
+                audio.onloadedmetadata = () => {
+                    resolve(audio.duration);
+                };
+                audio.onerror = () => {
+                    reject(new Error('Failed to load audio'));
+                };
+                audio.src = URL.createObjectURL(file);
+            });
+        }
+
+        /**
+         * Generate video with selected model
+         */
+        async function generateVideoWithSelectedModel() {
+            const { sceneId, shotIndex, selectedModel, multitalk } = state.storyboard.videoModelSelector;
+
+            if (selectedModel === 'minimax') {
+                // Use existing Minimax generation
+                closeVideoModelSelector();
+                generateSingleShotVideo(sceneId, shotIndex);
+            } else if (selectedModel === 'multitalk') {
+                // Validate audio is uploaded
+                if (!multitalk.audioUrl) {
+                    showToast('Please upload a voiceover audio file first', 'error');
+                    return;
+                }
+
+                closeVideoModelSelector();
+                generateMultitalkVideo(sceneId, shotIndex, multitalk.audioUrl, multitalk.audioDuration);
+            }
+        }
+
+        /**
+         * Generate video with Multitalk (RunPod)
+         */
+        async function generateMultitalkVideo(sceneId, shotIndex, audioUrl, audioDuration) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || !decomposed.shots[shotIndex]) {
+                showToast('Shot not found', 'error');
+                return;
+            }
+
+            const shot = decomposed.shots[shotIndex];
+            if (!shot.imageUrl || shot.status !== 'ready') {
+                showToast('Generate image first before creating video', 'error');
+                return;
+            }
+
+            shot.videoStatus = 'generating';
+            shot.videoModel = 'multitalk';
+            shot.videoModelReason = 'Multitalk with voiceover';
+            render();
+            renderShotDecompositionModal();
+
+            showToast('🎤 Multitalk: Starting video with voiceover...', 'info');
+
+            try {
+                const generateVideoFn = functions.httpsCallable('creationWizardGenerateMultitalkVideo', { timeout: 300000 });
+
+                // Use videoPrompt for the animation
+                const videoPromptToUse = shot.videoPrompt || shot.prompt || '';
+
+                const result = await generateVideoFn({
+                    projectId: state.project.id,
+                    sceneId,
+                    shotId: shot.id,
+                    shotIndex,
+                    imageUrl: shot.imageUrl,
+                    audioUrl: audioUrl,
+                    audioDuration: audioDuration || 10,
+                    prompt: videoPromptToUse,
+                    aspectRatio: state.platform.aspectRatio || '16:9'
+                });
+
+                if (result.data.success) {
+                    shot.videoTaskId = result.data.jobId;
+                    shot.videoStatus = 'processing';
+                    shot.videoModelUsed = 'multitalk';
+                    // Store the expected video URL (worker will upload to this location)
+                    shot.pendingVideoUrl = result.data.videoUrl;
+
+                    showToast('🎤 Multitalk video started! Polling...', 'success');
+
+                    // Start polling for Multitalk - pass the expected video URL
+                    startMultitalkVideoPolling(sceneId, shotIndex, result.data.jobId, result.data.videoUrl);
+                } else {
+                    throw new Error(result.data.message || 'Failed to start Multitalk video');
+                }
+
+            } catch (error) {
+                console.error('Multitalk video error:', error);
+                shot.videoStatus = 'error';
+                shot.videoError = error.message;
+                showToast('Multitalk error: ' + error.message, 'error');
+            }
+
+            render();
+            renderShotDecompositionModal();
+            scheduleAutoSave();
+        }
+
+        /**
+         * Poll for Multitalk video completion
+         */
+        function startMultitalkVideoPolling(sceneId, shotIndex, jobId, expectedVideoUrl) {
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            if (!decomposed || !decomposed.shots[shotIndex]) return;
+
+            const shot = decomposed.shots[shotIndex];
+            shot.videoPollStartTime = Date.now();
+            shot.videoPollCount = 0;
+
+            let pollCount = 0;
+            const maxPolls = 150; // 5 minutes (150 × 2s)
+
+            const pollInterval = setInterval(async () => {
+                pollCount++;
+                shot.videoPollCount = pollCount;
+
+                if (pollCount > maxPolls) {
+                    clearInterval(pollInterval);
+                    shot.videoStatus = 'error';
+                    shot.videoError = 'Timed out after 5 minutes';
+                    showToast('⏱️ Multitalk video timed out', 'error');
+                    render();
+                    renderShotDecompositionModal();
+                    return;
+                }
+
+                try {
+                    const checkStatusFn = functions.httpsCallable('creationWizardCheckMultitalkStatus');
+                    const result = await checkStatusFn({ jobId });
+
+                    if (result.data.status === 'COMPLETED') {
+                        clearInterval(pollInterval);
+                        // Use the expected video URL (worker uploaded to our signed URL)
+                        // Add cache buster to ensure fresh video is loaded
+                        shot.videoUrl = expectedVideoUrl + (expectedVideoUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+                        shot.videoStatus = 'ready';
+                        shot.videoError = null;
+                        shot.pendingVideoUrl = null;
+
+                        showToast(`🎤 Shot ${shotIndex + 1} Multitalk video ready!`, 'success');
+
+                        // Trigger frame chain transfer for next shot
+                        await transferLastFrameToNextShot(sceneId, shotIndex);
+
+                        render();
+                        renderShotDecompositionModal();
+                        scheduleAutoSave();
+
+                    } else if (result.data.status === 'FAILED') {
+                        clearInterval(pollInterval);
+                        shot.videoStatus = 'error';
+                        shot.videoError = result.data.error || 'Multitalk generation failed';
+                        shot.pendingVideoUrl = null;
+                        showToast('❌ Multitalk video failed: ' + shot.videoError, 'error');
+                        render();
+                        renderShotDecompositionModal();
+                    }
+                    // If IN_PROGRESS or IN_QUEUE, keep polling
+
+                } catch (error) {
+                    console.error('Multitalk polling error:', error);
+                }
+
+                render();
+                renderShotDecompositionModal();
+            }, 2000);
+
+            // Store for cleanup
+            if (!state.storyboard.activePollingIntervals) {
+                state.storyboard.activePollingIntervals = [];
+            }
+            state.storyboard.activePollingIntervals.push(pollInterval);
+        }
+
+        /**
+         * Render video model selector popup HTML
+         */
+        function renderVideoModelSelectorPopup() {
+            const selector = state.storyboard.videoModelSelector;
+            if (!selector.open) return '';
+
+            const { sceneId, shotIndex, selectedModel, multitalk } = selector;
+            const isMinimaxSelected = selectedModel === 'minimax';
+            const isMultitalkSelected = selectedModel === 'multitalk';
+
+            return `
+                <div style="position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 0.5rem; background: rgba(20, 20, 35, 0.98); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.75rem; padding: 0.75rem; z-index: 100; box-shadow: 0 -4px 20px rgba(0,0,0,0.5);">
+                    <!-- Header -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: white;">🎬 Select Video Model</div>
+                        <button onclick="closeVideoModelSelector()" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 1rem;">×</button>
+                    </div>
+
+                    <!-- Model Options -->
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;">
+                        <!-- Minimax Option -->
+                        <div onclick="selectVideoModel('minimax')" style="padding: 0.6rem; border-radius: 0.5rem; background: ${isMinimaxSelected ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isMinimaxSelected ? 'rgba(6, 182, 212, 0.5)' : 'rgba(255,255,255,0.1)'}; cursor: pointer;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="width: 16px; height: 16px; border-radius: 50%; border: 2px solid ${isMinimaxSelected ? '#06b6d4' : 'rgba(255,255,255,0.3)'}; display: flex; align-items: center; justify-content: center;">
+                                    ${isMinimaxSelected ? '<div style="width: 8px; height: 8px; border-radius: 50%; background: #06b6d4;"></div>' : ''}
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.75rem; font-weight: 600; color: white;">🎬 Minimax Hailuo</div>
+                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Standard AI video animation</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Multitalk Option -->
+                        <div onclick="selectVideoModel('multitalk')" style="padding: 0.6rem; border-radius: 0.5rem; background: ${isMultitalkSelected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)'}; border: 1px solid ${isMultitalkSelected ? 'rgba(139, 92, 246, 0.5)' : 'rgba(255,255,255,0.1)'}; cursor: pointer;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="width: 16px; height: 16px; border-radius: 50%; border: 2px solid ${isMultitalkSelected ? '#8b5cf6' : 'rgba(255,255,255,0.3)'}; display: flex; align-items: center; justify-content: center;">
+                                    ${isMultitalkSelected ? '<div style="width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6;"></div>' : ''}
+                                </div>
+                                <div>
+                                    <div style="font-size: 0.75rem; font-weight: 600; color: white;">🎤 Multitalk</div>
+                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Video with voiceover sync</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Multitalk Audio Upload (shown when Multitalk selected) -->
+                    ${isMultitalkSelected ? `
+                        <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.5rem; padding: 0.6rem; margin-bottom: 0.75rem;">
+                            <div style="font-size: 0.65rem; color: #a78bfa; margin-bottom: 0.4rem;">🎤 Upload Voiceover Audio</div>
+
+                            ${multitalk.audioUploadStatus === 'ready' ? `
+                                <!-- Audio Uploaded -->
+                                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.35rem;">
+                                    <span style="font-size: 0.9rem;">✅</span>
+                                    <div style="flex: 1; overflow: hidden;">
+                                        <div style="font-size: 0.65rem; color: #10b981; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${multitalk.audioFileName}</div>
+                                        <div style="font-size: 0.55rem; color: rgba(255,255,255,0.5);">${multitalk.audioDuration ? multitalk.audioDuration.toFixed(1) + 's' : ''}</div>
+                                    </div>
+                                    <button onclick="document.getElementById('multitalk-audio-input').click()" style="padding: 0.2rem 0.4rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.25rem; color: white; cursor: pointer; font-size: 0.55rem;">Change</button>
+                                </div>
+                            ` : multitalk.audioUploadStatus === 'uploading' ? `
+                                <!-- Uploading -->
+                                <div style="text-align: center; padding: 0.5rem;">
+                                    <div class="animate-spin" style="display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%;"></div>
+                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.6); margin-top: 0.3rem;">Uploading audio...</div>
+                                </div>
+                            ` : `
+                                <!-- Upload Button -->
+                                <label style="display: flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.5rem; background: rgba(139, 92, 246, 0.2); border: 1px dashed rgba(139, 92, 246, 0.5); border-radius: 0.35rem; cursor: pointer;">
+                                    <span style="font-size: 0.9rem;">📁</span>
+                                    <span style="font-size: 0.65rem; color: #a78bfa;">Select MP3/WAV file</span>
+                                    <input type="file" id="multitalk-audio-input" accept="audio/*" onchange="handleMultitalkAudioSelect(event)" style="display: none;">
+                                </label>
+                            `}
+                        </div>
+                    ` : ''}
+
+                    <!-- Generate Button -->
+                    <button onclick="generateVideoWithSelectedModel()"
+                            ${isMultitalkSelected && !multitalk.audioUrl ? 'disabled' : ''}
+                            style="width: 100%; padding: 0.6rem; border-radius: 0.5rem; border: none; background: ${isMultitalkSelected && !multitalk.audioUrl ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #06b6d4)'}; color: ${isMultitalkSelected && !multitalk.audioUrl ? 'rgba(255,255,255,0.4)' : 'white'}; font-size: 0.75rem; font-weight: 600; cursor: ${isMultitalkSelected && !multitalk.audioUrl ? 'not-allowed' : 'pointer'};">
+                        ${isMinimaxSelected ? '🎬 Generate with Minimax' : '🎤 Generate with Multitalk'}
+                    </button>
+                </div>
+            `;
         }
 
         /**
