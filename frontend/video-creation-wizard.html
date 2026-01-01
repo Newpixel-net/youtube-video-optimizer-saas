@@ -9096,32 +9096,29 @@
                                     // Only show if we have status data
                                     if (!qa.status && !pipeline.status) return '';
 
-                                    return \`
-                                    <div style="margin: 0.75rem 0; padding: 0.5rem 0.75rem; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 0.5rem;">
-                                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
-                                            <!-- QA Status -->
-                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                                <span style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Quality:</span>
-                                                <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(\${qaConfig.color === '#22c55e' ? '34, 197, 94' : qaConfig.color === '#fbbf24' ? '251, 191, 36' : '239, 68, 68'}, 0.15); border: 1px solid \${qaConfig.color}40; border-radius: 0.25rem; color: \${qaConfig.color};">
-                                                    \${qaConfig.icon} \${qaConfig.label}
-                                                </span>
-                                            </div>
-                                            <!-- Pipeline Status -->
-                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                                <span style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Pipeline:</span>
-                                                <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(\${pipelineConfig.color === '#22c55e' ? '34, 197, 94' : pipelineConfig.color === '#fbbf24' ? '251, 191, 36' : '239, 68, 68'}, 0.15); border: 1px solid \${pipelineConfig.color}40; border-radius: 0.25rem; color: \${pipelineConfig.color};">
-                                                    \${pipelineConfig.icon} \${pipelineConfig.label} (\${passRate}%)
-                                                </span>
-                                            </div>
-                                            <!-- Issues Count -->
-                                            \${qa.issues && qa.issues.length > 0 ? \`
-                                                <div style="font-size: 0.55rem; color: #fbbf24;" title="\${qa.issues.join('\\n')}">
-                                                    ⚠ \${qa.issues.length} issue\${qa.issues.length > 1 ? 's' : ''}
-                                                </div>
-                                            \` : ''}
-                                        </div>
-                                    </div>
-                                    \`;
+                                    const qaBgRgb = qaConfig.color === '#22c55e' ? '34, 197, 94' : qaConfig.color === '#fbbf24' ? '251, 191, 36' : '239, 68, 68';
+                                    const pipeBgRgb = pipelineConfig.color === '#22c55e' ? '34, 197, 94' : pipelineConfig.color === '#fbbf24' ? '251, 191, 36' : '239, 68, 68';
+                                    const issuesHtml = qa.issues && qa.issues.length > 0
+                                        ? '<div style="font-size: 0.55rem; color: #fbbf24;" title="' + qa.issues.join(', ') + '">! ' + qa.issues.length + ' issue' + (qa.issues.length > 1 ? 's' : '') + '</div>'
+                                        : '';
+
+                                    return '<div style="margin: 0.75rem 0; padding: 0.5rem 0.75rem; background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 0.5rem;">' +
+                                        '<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">' +
+                                            '<div style="display: flex; align-items: center; gap: 0.5rem;">' +
+                                                '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Quality:</span>' +
+                                                '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(' + qaBgRgb + ', 0.15); border: 1px solid ' + qaConfig.color + '40; border-radius: 0.25rem; color: ' + qaConfig.color + ';">' +
+                                                    qaConfig.icon + ' ' + qaConfig.label +
+                                                '</span>' +
+                                            '</div>' +
+                                            '<div style="display: flex; align-items: center; gap: 0.5rem;">' +
+                                                '<span style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">Pipeline:</span>' +
+                                                '<span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(' + pipeBgRgb + ', 0.15); border: 1px solid ' + pipelineConfig.color + '40; border-radius: 0.25rem; color: ' + pipelineConfig.color + ';">' +
+                                                    pipelineConfig.icon + ' ' + pipelineConfig.label + ' (' + passRate + '%)' +
+                                                '</span>' +
+                                            '</div>' +
+                                            issuesHtml +
+                                        '</div>' +
+                                    '</div>';
                                 })()}
 
                                 <!-- Frame Chain Pipeline Header -->
@@ -15882,61 +15879,59 @@
 
                     const allAssigned = unassignedVoices.length === 0 && uniqueSpeakers.length > 0;
                     const statusColor = allAssigned ? '#22c55e' : '#fbbf24';
-                    const statusIcon = allAssigned ? '✓' : '⚠';
-                    const statusText = allAssigned ? 'All voices assigned' : \`\${unassignedVoices.length} voice\${unassignedVoices.length > 1 ? 's' : ''} pending\`;
+                    const statusIcon = allAssigned ? '[OK]' : '[!]';
+                    const statusText = allAssigned ? 'All voices assigned' : unassignedVoices.length + ' voice' + (unassignedVoices.length > 1 ? 's' : '') + ' pending';
+                    const statusBgRgb = allAssigned ? '34, 197, 94' : '251, 191, 36';
 
-                    return \`
-                    <div class="content-card" style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2);">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="font-size: 1.1rem;">🎤</span>
-                                <span style="font-size: 0.9rem; font-weight: 600; color: white;">Voice & Dialogue Status</span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.6rem; background: rgba(\${allAssigned ? '34, 197, 94' : '251, 191, 36'}, 0.15); border: 1px solid rgba(\${allAssigned ? '34, 197, 94' : '251, 191, 36'}, 0.3); border-radius: 0.4rem;">
-                                <span style="font-size: 0.75rem;">\${statusIcon}</span>
-                                <span style="font-size: 0.7rem; color: \${statusColor}; font-weight: 500;">\${statusText}</span>
-                            </div>
-                        </div>
+                    const speakersHtml = uniqueSpeakers.map(name => {
+                        const voice = voiceAssignments[name];
+                        const hasVoice = voice?.voiceProfileId;
+                        const bgRgb = hasVoice ? '34, 197, 94' : '251, 191, 36';
+                        const iconColor = hasVoice ? '#22c55e' : '#fbbf24';
+                        const voiceName = hasVoice ? (voice.voiceProfile?.name || voice.voiceProfileId) : '';
+                        return '<div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.6rem; background: rgba(' + bgRgb + ', 0.1); border: 1px solid rgba(' + bgRgb + ', 0.3); border-radius: 0.3rem;">' +
+                            '<span style="font-size: 0.7rem; color: ' + iconColor + ';">' + (hasVoice ? '[OK]' : 'o') + '</span>' +
+                            '<span style="font-size: 0.7rem; color: white; font-weight: 500;">' + name + '</span>' +
+                            (hasVoice ? '<span style="font-size: 0.6rem; color: rgba(255,255,255,0.5);"> - ' + voiceName + '</span>' : '') +
+                        '</div>';
+                    }).join('');
 
-                        <!-- Stats Grid -->
-                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 0.75rem;">
-                            <div style="background: rgba(251, 191, 36, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">
-                                <div style="font-size: 1.2rem; font-weight: 700; color: #fbbf24;">\${totalDialogueLines}</div>
-                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Dialogue Lines</div>
-                            </div>
-                            <div style="background: rgba(167, 139, 250, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">
-                                <div style="font-size: 1.2rem; font-weight: 700; color: #a78bfa;">\${uniqueSpeakers.length}</div>
-                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Speakers</div>
-                            </div>
-                            <div style="background: rgba(34, 197, 94, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">
-                                <div style="font-size: 1.2rem; font-weight: 700; color: #22c55e;">\${assignedVoices.length}</div>
-                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Voices Assigned</div>
-                            </div>
-                            <div style="background: rgba(59, 130, 246, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">
-                                <div style="font-size: 1.2rem; font-weight: 700; color: #3b82f6;">\${scenesWithDialogue.length}</div>
-                                <div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Scenes w/ Dialogue</div>
-                            </div>
-                        </div>
+                    const pendingHtml = !allAssigned && uniqueSpeakers.length > 0
+                        ? '<div style="margin-top: 0.6rem; padding: 0.5rem 0.75rem; background: rgba(251, 191, 36, 0.08); border-radius: 0.4rem; font-size: 0.65rem; color: rgba(255,255,255,0.6);">Voices will be auto-assigned during shot decomposition based on character archetypes</div>'
+                        : '';
 
-                        <!-- Voice Assignments List -->
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
-                            \${uniqueSpeakers.map(name => {
-                                const voice = voiceAssignments[name];
-                                const hasVoice = voice?.voiceProfileId;
-                                const bgRgb = hasVoice ? '34, 197, 94' : '251, 191, 36';
-                                const iconColor = hasVoice ? '#22c55e' : '#fbbf24';
-                                const voiceName = hasVoice ? (voice.voiceProfile?.name || voice.voiceProfileId) : '';
-                                return '<div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.6rem; background: rgba(' + bgRgb + ', 0.1); border: 1px solid rgba(' + bgRgb + ', 0.3); border-radius: 0.3rem;">' +
-                                    '<span style="font-size: 0.7rem; color: ' + iconColor + ';">' + (hasVoice ? '✓' : '○') + '</span>' +
-                                    '<span style="font-size: 0.7rem; color: white; font-weight: 500;">' + name + '</span>' +
-                                    (hasVoice ? '<span style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">→ ' + voiceName + '</span>' : '') +
-                                '</div>';
-                            }).join('')}
-                        </div>
-
-                        \${!allAssigned && uniqueSpeakers.length > 0 ? '<div style="margin-top: 0.6rem; padding: 0.5rem 0.75rem; background: rgba(251, 191, 36, 0.08); border-radius: 0.4rem; font-size: 0.65rem; color: rgba(255,255,255,0.6);">💡 Voices will be auto-assigned during shot decomposition based on character archetypes</div>' : ''}
-                    </div>
-                    \`;
+                    return '<div class="content-card" style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2);">' +
+                        '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">' +
+                            '<div style="display: flex; align-items: center; gap: 0.5rem;">' +
+                                '<span style="font-size: 1.1rem;">🎤</span>' +
+                                '<span style="font-size: 0.9rem; font-weight: 600; color: white;">Voice & Dialogue Status</span>' +
+                            '</div>' +
+                            '<div style="display: flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.6rem; background: rgba(' + statusBgRgb + ', 0.15); border: 1px solid rgba(' + statusBgRgb + ', 0.3); border-radius: 0.4rem;">' +
+                                '<span style="font-size: 0.75rem;">' + statusIcon + '</span>' +
+                                '<span style="font-size: 0.7rem; color: ' + statusColor + '; font-weight: 500;">' + statusText + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 0.75rem;">' +
+                            '<div style="background: rgba(251, 191, 36, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">' +
+                                '<div style="font-size: 1.2rem; font-weight: 700; color: #fbbf24;">' + totalDialogueLines + '</div>' +
+                                '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Dialogue Lines</div>' +
+                            '</div>' +
+                            '<div style="background: rgba(167, 139, 250, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">' +
+                                '<div style="font-size: 1.2rem; font-weight: 700; color: #a78bfa;">' + uniqueSpeakers.length + '</div>' +
+                                '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Speakers</div>' +
+                            '</div>' +
+                            '<div style="background: rgba(34, 197, 94, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">' +
+                                '<div style="font-size: 1.2rem; font-weight: 700; color: #22c55e;">' + assignedVoices.length + '</div>' +
+                                '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Voices Assigned</div>' +
+                            '</div>' +
+                            '<div style="background: rgba(59, 130, 246, 0.1); padding: 0.6rem; border-radius: 0.5rem; text-align: center;">' +
+                                '<div style="font-size: 1.2rem; font-weight: 700; color: #3b82f6;">' + scenesWithDialogue.length + '</div>' +
+                                '<div style="font-size: 0.6rem; color: rgba(255,255,255,0.5);">Scenes w/ Dialogue</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">' + speakersHtml + '</div>' +
+                        pendingHtml +
+                    '</div>';
                 })()}
 
                 <!-- Scenes -->
