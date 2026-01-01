@@ -28695,7 +28695,12 @@ function buildVisualPrompt(basePrompt, options = {}) {
  * Uses existing RunPod HiDream integration to generate storyboard images
  * Enhanced with Phase 3B Visual Intelligence and Phase 4 Scene Memory System
  */
-exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, context) => {
+exports.creationWizardGenerateSceneImage = functions
+  .runWith({
+    timeoutSeconds: 120, // 2 minutes for RunPod cold starts
+    memory: '512MB'
+  })
+  .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   const {
     projectId,
@@ -28800,7 +28805,7 @@ exports.creationWizardGenerateSceneImage = functions.https.onCall(async (data, c
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${runpodKey}`
       },
-      timeout: 30000
+      timeout: 60000 // 60s timeout for initial job submission
     });
 
     const jobId = runpodResponse.data.id;
