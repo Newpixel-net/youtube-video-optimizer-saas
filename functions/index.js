@@ -54097,7 +54097,8 @@ exports.creationWizardGenerateMultitalkVideo = functions
       // PHASE 3: Character voice info for TTS integration
       ttsConfig,           // TTS configuration from shot decomposition
       voiceRequirements,   // Voice requirements summary
-      characterVoices      // Map of character -> voiceProfileId
+      characterVoices,     // Map of character -> voiceProfileId
+      dialogue             // Raw dialogue array as fallback
     } = data;
 
     if (!imageUrl) {
@@ -54151,47 +54152,102 @@ exports.creationWizardGenerateMultitalkVideo = functions
         '4:3': '4:3'
       };
 
-      // Calculate num_frames based on audio duration (assuming ~24fps)
-      const fps = 24;
-      const numFrames = Math.ceil((audioDuration || 10) * fps);
+      // Calculate parameters based on audio duration
+      // Multitalk uses 16 fps as per working reference
+      const fps = 16;
+      const effectiveDuration = audioDuration || 10;
+      // num_frames = duration * fps (e.g., 18 seconds * 16 fps = 288 frames)
+      const numFrames = Math.ceil(effectiveDuration * fps);
+
+      // Format audio crop times as "M:SS" strings
+      const formatAudioTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      };
+
+      // Build positive prompt with dialogue details if available
+      // This is crucial for Multitalk to understand what's being said
+      let positivePrompt = prompt || '';
+      let dialogueDescription = '';
+
+      // Try ttsConfig.lines first, then fallback to raw dialogue array
+      if (ttsConfig && ttsConfig.lines && ttsConfig.lines.length > 0) {
+        dialogueDescription = ttsConfig.lines.map(line => {
+          const character = line.character || 'Character';
+          const text = line.text || line.line || '';
+          return `${character} says: "${text}"`;
+        }).join('\n');
+      } else if (dialogue && Array.isArray(dialogue) && dialogue.length > 0) {
+        // Fallback to raw dialogue array
+        dialogueDescription = dialogue.map(d => {
+          const character = d.character || 'Character';
+          const text = d.line || d.text || '';
+          return `${character} says: "${text}"`;
+        }).join('\n');
+      }
+
+      if (dialogueDescription) {
+        positivePrompt = `${prompt || 'natural talking motion, expressive, cinematic quality'}
+
+Speech/Dialogue:
+${dialogueDescription}
+
+Instructions:
+Style: 4K, photorealistic, cinematic quality.
+Facial movement: Natural blinking, expressive brows, lip-sync with speech.
+Camera: Stationary, steady shot.
+Tone: Natural, expressive.`;
+      } else {
+        positivePrompt = prompt || 'natural talking motion, expressive, cinematic quality, lip-sync with audio';
+      }
+
+      // Negative prompt to avoid common issues (from working reference)
+      const negativePrompt = 'simultaneous talking, both speakers talking at once, overlapping speech, synchronized mouth movements, identical gestures, mirrored actions, both people speaking together, multilingual mixing, language switching, foreign languages, non-English speech, robotic movements, unnatural lip sync, frozen expressions, identical facial expressions, puppet-like movements, mechanical gestures, both speakers moving identically, synchronized head nodding, artificial smiling, fake reactions, stiff postures, uncomfortable positioning, poor audio sync, mismatched lip movements, double speaking, echo effects, multiple voices at once, confusing dialogue, unclear speaker turns, simultaneous hand gestures, coordinated movements, unrealistic interactions, artificial conversation flow, robotic speech patterns, monotone delivery, expressionless faces, static poses, awkward positioning, poor eye contact, disconnected interaction, unnatural pauses, rushed speech, overlapping audio, audio bleeding, microphone feedback, background noise interference, poor lighting continuity, inconsistent shadows, warped faces, distorted features, blurry motion, choppy animation, frame stuttering, temporal artifacts, morphing between speakers, face swapping, identity confusion, gender confusion, clothing changes, background shifts, perspective warping, scale inconsistencies, bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards';
 
       // Build RunPod input for Multitalk
-      // IMPORTANT: Must match the handler.py expected parameter names
-      // The handler expects: image_url, audio_url, output_url, duration, and optional prompt
+      // IMPORTANT: Parameter names must match the Multitalk API exactly
       const runpodInput = {
-        // Core required parameters (matching handler.py)
+        // Core required parameters
         image_url: imageUrl,
         audio_url: audioUrl,
-        output_url: uploadUrl,  // Handler expects output_url, not video_upload_url
-        duration: audioDuration || 10,
+        video_upload_url: uploadUrl,  // Correct parameter name
 
-        // Animation type - defaults to talking_head for lip-sync
-        animation_type: 'talking_head',
-        lip_sync: true,
-        head_motion: true,
-        eye_blink: true,
+        // Audio timing (format: "M:SS")
+        audio_crop_start_time: '0:00',
+        audio_crop_end_time: formatAudioTime(effectiveDuration),
 
-        // Optional prompt for motion guidance
-        prompt: prompt || 'natural talking motion, expressive, cinematic quality',
-
-        // Audio settings
-        audio_start: 0,
-        audio_end: audioDuration || 10,
+        // Prompts
+        positive_prompt: positivePrompt,
+        negative_prompt: negativePrompt,
 
         // Video settings
         aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
+        scale_to_length: 1024,
+        scale_to_side: 'None',
         fps: fps,
+        num_frames: numFrames,
 
-        // Quality settings
-        seed: seed
+        // Audio embedding settings
+        embeds_audio_scale: 1.00,
+        embeds_cfg_audio_scale: 2.00,
+        embeds_multi_audio_type: 'para',
+        embeds_normalize_loudness: true,
+
+        // Generation settings
+        steps: 4,
+        seed: -1,  // Random seed
+        scheduler: 'lcm'
       };
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
         imageUrl: imageUrl.substring(0, 50) + '...',
         audioUrl: audioUrl.substring(0, 50) + '...',
-        duration: runpodInput.duration,
-        animation_type: runpodInput.animation_type,
-        aspectRatio: runpodInput.aspect_ratio
+        audioCropEnd: runpodInput.audio_crop_end_time,
+        numFrames: runpodInput.num_frames,
+        fps: runpodInput.fps,
+        aspectRatio: runpodInput.aspect_ratio,
+        hasDialogueInPrompt: positivePrompt.includes('Speech/Dialogue')
       });
 
       // Call RunPod Multitalk endpoint
