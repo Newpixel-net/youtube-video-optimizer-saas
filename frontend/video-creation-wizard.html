@@ -3690,7 +3690,7 @@
                 videoModel: {
                     provider: 'minimax',                    // 'minimax' | 'runpod' (future providers)
                     model: 'hailuo-2.3',                    // 'hailuo-2.3' | 'hailuo-2.3-fast' | 'hailuo-02'
-                    duration: '10s',                        // '6s' | '10s' - 10s for richer action
+                    duration: '10s',                        // '5s' | '6s' | '10s' - 5s for quick non-dialogue, 10s for dialogue/action
                     resolution: '768p',                     // '768p' | '1080p' (1080p only for 6s)
                     mode: 'quality'                         // 'quality' | 'fast' | 'continuity'
                 }
@@ -3737,6 +3737,7 @@
                     sceneId: null,
                     shotIndex: null,
                     selectedModel: 'minimax',   // 'minimax' | 'multitalk'
+                    selectedDuration: null,     // null = auto from shot, or '5s' | '10s' for override
                     // Multitalk-specific settings
                     multitalk: {
                         audioFile: null,        // Uploaded audio File object
@@ -4865,13 +4866,15 @@
                 state.content.videoModel.model = 'hailuo-2.3';
             }
 
-            // 10s clips only support 768p
+            // 10s clips only support 768p, 5s can use either
             if (duration === '10s' && state.content.videoModel.resolution === '1080p') {
                 state.content.videoModel.resolution = '768p';
             }
 
             // Auto-adjust pacing to match duration
-            if (duration === '6s' && state.content.pacing === 'contemplative') {
+            if (duration === '5s' && state.content.pacing === 'contemplative') {
+                // 5s is ideal for quick cuts, suggest fast pacing
+            } else if (duration === '6s' && state.content.pacing === 'contemplative') {
                 // Keep contemplative but note it's using 6s clips
             } else if (duration === '10s' && state.content.pacing === 'fast') {
                 state.content.pacing = 'balanced'; // Fast pacing doesn't match 10s clips well
@@ -8633,7 +8636,11 @@
                         duration: scene.duration || 35,  // Hollywood-style scene duration (30-60s)
                         // NEW: Pass action data for video prompt generation
                         sceneAction: scene.sceneAction || scene.action || null,
-                        actionBlueprint: scene.actionBlueprint || null
+                        actionBlueprint: scene.actionBlueprint || null,
+                        // PHASE 1: Pass audioLayer for dialogue distribution to shots
+                        audioLayer: scene.audioLayer || null,
+                        sceneType: scene.sceneType || null,
+                        charactersInScene: scene.charactersInScene || []
                     },
                     targetShotCount: state.storyboard.multiShotMode.defaultShotCount,
                     clipDuration: clipDuration,  // Pass clip duration for Hollywood math: shots = sceneDuration / clipDuration
@@ -9136,6 +9143,19 @@
                                                         ${shot.narrativeBeat?.motionDescription ? `
                                                             <div style="font-size: 0.55rem; color: #67e8f9; margin-bottom: 0.3rem; max-height: 2.4em; overflow: hidden; line-height: 1.2;" title="${shot.narrativeBeat.motionDescription}">
                                                                 🎬 ${shot.narrativeBeat.motionDescription.slice(0, 60)}${shot.narrativeBeat.motionDescription.length > 60 ? '...' : ''}
+                                                            </div>
+                                                        ` : ''}
+
+                                                        <!-- PHASE 1: Dialogue Display - shows character dialogue in this shot -->
+                                                        ${shot.hasDialogue && shot.dialogue?.length > 0 ? `
+                                                            <div style="font-size: 0.5rem; background: rgba(251, 191, 36, 0.15); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 0.25rem; padding: 0.25rem; margin-bottom: 0.3rem;">
+                                                                <div style="color: #fbbf24; font-weight: 600; margin-bottom: 0.15rem;">💬 Dialogue</div>
+                                                                ${shot.dialogue.slice(0, 2).map(d => `
+                                                                    <div style="color: rgba(255,255,255,0.8); line-height: 1.3; margin-bottom: 0.1rem;">
+                                                                        <span style="color: #fbbf24; font-weight: 500;">${d.character}:</span> "${d.line?.slice(0, 40)}${d.line?.length > 40 ? '...' : ''}"
+                                                                    </div>
+                                                                `).join('')}
+                                                                ${shot.dialogue.length > 2 ? `<div style="color: rgba(255,255,255,0.5);">+${shot.dialogue.length - 2} more...</div>` : ''}
                                                             </div>
                                                         ` : ''}
 
@@ -9746,11 +9766,19 @@
          * Open video model selector popup
          */
         function openVideoModelSelector(sceneId, shotIndex) {
+            // Get shot to determine default duration based on dialogue
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            const shot = decomposed?.shots?.[shotIndex];
+            const hasDialogue = shot?.hasDialogue || false;
+            // Default: 10s for dialogue shots, 5s for non-dialogue shots
+            const defaultDuration = hasDialogue ? '10s' : '5s';
+
             state.storyboard.videoModelSelector = {
                 open: true,
                 sceneId: sceneId,
                 shotIndex: shotIndex,
                 selectedModel: 'minimax',
+                selectedDuration: defaultDuration,
                 multitalk: {
                     audioFile: null,
                     audioUrl: null,
@@ -9777,6 +9805,15 @@
          */
         function selectVideoModel(model) {
             state.storyboard.videoModelSelector.selectedModel = model;
+            render();
+            renderShotDecompositionModal();
+        }
+
+        /**
+         * Select video duration in popup (5s or 10s)
+         */
+        function selectVideoDuration(duration) {
+            state.storyboard.videoModelSelector.selectedDuration = duration;
             render();
             renderShotDecompositionModal();
         }
@@ -9854,12 +9891,14 @@
          * Generate video with selected model
          */
         async function generateVideoWithSelectedModel() {
-            const { sceneId, shotIndex, selectedModel, multitalk } = state.storyboard.videoModelSelector;
+            const { sceneId, shotIndex, selectedModel, selectedDuration, multitalk } = state.storyboard.videoModelSelector;
 
             if (selectedModel === 'minimax') {
-                // Use existing Minimax generation
+                // Use existing Minimax generation with selected duration
                 closeVideoModelSelector();
-                generateSingleShotVideo(sceneId, shotIndex);
+                // Convert duration string to number (5s -> 5, 10s -> 10)
+                const durationNum = selectedDuration ? parseInt(selectedDuration) : null;
+                generateSingleShotVideo(sceneId, shotIndex, durationNum);
             } else if (selectedModel === 'multitalk') {
                 // Validate audio is uploaded
                 if (!multitalk.audioUrl) {
@@ -10058,6 +10097,30 @@
                         </div>
                     </div>
 
+                    <!-- Duration Selector (shown when Minimax selected) -->
+                    ${isMinimaxSelected ? (() => {
+                        const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+                        const shot = decomposed?.shots?.[shotIndex];
+                        const hasDialogue = shot?.hasDialogue || false;
+                        const recommendedDuration = hasDialogue ? '10s' : '5s';
+                        const currentDuration = selector.selectedDuration || (shot?.duration === 5 ? '5s' : '10s');
+
+                        return \`
+                            <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">
+                                <div style="font-size: 0.5rem; color: rgba(255,255,255,0.7); margin-bottom: 0.25rem;">⏱️ Duration \${hasDialogue ? '(has dialogue)' : '(no dialogue)'}</div>
+                                <div style="display: flex; gap: 0.25rem;">
+                                    <button onclick="selectVideoDuration('5s')" style="flex: 1; padding: 0.25rem; border-radius: 0.2rem; border: 1px solid \${currentDuration === '5s' ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.2)'}; background: \${currentDuration === '5s' ? 'rgba(6, 182, 212, 0.2)' : 'transparent'}; color: \${currentDuration === '5s' ? '#06b6d4' : 'rgba(255,255,255,0.7)'}; cursor: pointer; font-size: 0.5rem; font-weight: \${currentDuration === '5s' ? '600' : '400'};">
+                                        5s \${recommendedDuration === '5s' ? '✓' : ''}
+                                    </button>
+                                    <button onclick="selectVideoDuration('10s')" style="flex: 1; padding: 0.25rem; border-radius: 0.2rem; border: 1px solid \${currentDuration === '10s' ? 'rgba(6, 182, 212, 0.6)' : 'rgba(255,255,255,0.2)'}; background: \${currentDuration === '10s' ? 'rgba(6, 182, 212, 0.2)' : 'transparent'}; color: \${currentDuration === '10s' ? '#06b6d4' : 'rgba(255,255,255,0.7)'}; cursor: pointer; font-size: 0.5rem; font-weight: \${currentDuration === '10s' ? '600' : '400'};">
+                                        10s \${recommendedDuration === '10s' ? '✓' : ''}
+                                    </button>
+                                </div>
+                                <div style="font-size: 0.4rem; color: rgba(255,255,255,0.4); margin-top: 0.2rem; text-align: center;">✓ = recommended for this shot</div>
+                            </div>
+                        \`;
+                    })() : ''}
+
                     <!-- Multitalk Audio Upload (shown when Multitalk selected) -->
                     ${isMultitalkSelected ? `
                         <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">
@@ -10100,8 +10163,11 @@
 
         /**
          * Generate video for a single shot
+         * @param {number} sceneId - Scene ID
+         * @param {number} shotIndex - Shot index
+         * @param {number|null} overrideDuration - Optional duration override (5 or 10 seconds)
          */
-        async function generateSingleShotVideo(sceneId, shotIndex) {
+        async function generateSingleShotVideo(sceneId, shotIndex, overrideDuration = null) {
             const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
             if (!decomposed || !decomposed.shots[shotIndex]) {
                 showToast('Shot not found', 'error');
@@ -10113,6 +10179,9 @@
                 showToast('Generate image first before creating video', 'error');
                 return;
             }
+
+            // Use override duration if provided, otherwise use shot's duration
+            const effectiveDuration = overrideDuration || shot.duration || 10;
 
             // ==========================================
             // SMART MODEL SELECTION
@@ -10133,8 +10202,9 @@
             try {
                 const generateVideoFn = functions.httpsCallable('creationWizardGenerateShotVideo', { timeout: 120000 });
 
-                // Use shot's duration from decomposition (should be exactly 6 or 10 seconds)
-                const shotDuration = shot.duration === 10 ? '10s' : '6s';
+                // Use effective duration (from selector or shot decomposition) - 5, 6, or 10 seconds
+                const shotDuration = effectiveDuration === 10 ? '10s' : effectiveDuration === 5 ? '5s' : '6s';
+                console.log(`[Video Generation] Duration: ${shotDuration} (effective: ${effectiveDuration}, shot.duration: ${shot.duration})`);
 
                 // Use videoPrompt (ACTION-focused) for video generation, fallback to prompt for backward compatibility
                 const videoPromptToUse = shot.videoPrompt || shot.prompt;
@@ -10168,8 +10238,8 @@
                     const modeLabel = result.data.usedCharacterConsistency ? '👤' : '🎬';
                     showToast(`${modeLabel} Shot ${shotIndex + 1} video started! Polling...`, 'success');
 
-                    // Start polling for this shot - pass duration for timeout calculation
-                    startSingleShotVideoPolling(sceneId, shotIndex, result.data.taskId, shot.duration);
+                    // Start polling for this shot - pass effective duration for timeout calculation
+                    startSingleShotVideoPolling(sceneId, shotIndex, result.data.taskId, effectiveDuration);
                 } else {
                     throw new Error('Failed to start video generation');
                 }
@@ -10345,11 +10415,13 @@
             shot.videoConsecutiveErrors = 0;
 
             // Dynamic timeout based on video duration:
+            // - 5s videos: 4 minutes (120 polls × 2s) - quickest generation
             // - 6s videos: 5 minutes (150 polls × 2s) - typically complete in 3-4 minutes
             // - 10s videos: 10 minutes (300 polls × 2s) - can take 6-8 minutes on Minimax
             const is10sVideo = shotDuration === 10 || shotDuration === '10s' || shotDuration === '10';
-            const maxPolls = is10sVideo ? 300 : 150;
-            const timeoutMinutes = is10sVideo ? 10 : 5;
+            const is5sVideo = shotDuration === 5 || shotDuration === '5s' || shotDuration === '5';
+            const maxPolls = is10sVideo ? 300 : is5sVideo ? 120 : 150;
+            const timeoutMinutes = is10sVideo ? 10 : is5sVideo ? 4 : 5;
             const maxConsecutiveErrors = 10; // Stop after 10 consecutive errors
 
             console.log(`[Video Poll] Starting polling for ${shotDuration}s video - timeout: ${timeoutMinutes} minutes (${maxPolls} polls)`);
@@ -15501,6 +15573,10 @@
             const isExpanded = state.script.expandedScene === scene.id;
             const hasNarration = scene.hasNarration !== false && scene.narration && scene.narration.trim() !== '';
             const visualPrompt = scene.visualPrompt || scene.visual || '';
+            // PHASE 1: Check for character dialogue from audioLayer
+            const hasDialogue = scene.audioLayer?.dialogue?.length > 0;
+            const dialogueCount = scene.audioLayer?.dialogue?.length || 0;
+            const audioType = scene.audioLayer?.type || (hasNarration ? 'voiceover' : 'music_only');
 
             return `
                 <div class="scene-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.75rem; overflow: hidden;">
@@ -15512,10 +15588,17 @@
                         </div>
                         <div style="flex: 1; min-width: 0;">
                             <div style="color: white; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                ${hasNarration ? (scene.narration?.substring(0, 60) + (scene.narration?.length > 60 ? '...' : '')) : '<span style="color: rgba(255,255,255,0.4); font-style: italic;">🎵 Music only (no voiceover)</span>'}
+                                ${hasDialogue ?
+                                    `<span style="color: #fbbf24;">💬 ${scene.audioLayer.dialogue[0].character}:</span> "${scene.audioLayer.dialogue[0].line?.substring(0, 40)}${scene.audioLayer.dialogue[0].line?.length > 40 ? '...' : ''}"` :
+                                    hasNarration ?
+                                        (scene.narration?.substring(0, 60) + (scene.narration?.length > 60 ? '...' : '')) :
+                                        '<span style="color: rgba(255,255,255,0.4); font-style: italic;">🎵 Music only (no voiceover)</span>'
+                                }
                             </div>
-                            <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem;">
-                                ${scene.duration}s • ${scene.transition || 'cut'} ${scene.mood ? '• ' + scene.mood : ''}
+                            <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <span>${scene.duration}s • ${scene.transition || 'cut'} ${scene.mood ? '• ' + scene.mood : ''}</span>
+                                ${hasDialogue ? `<span style="font-size: 0.6rem; padding: 0.1rem 0.35rem; background: rgba(251, 191, 36, 0.2); color: #fbbf24; border-radius: 0.2rem;">${dialogueCount} dialogue${dialogueCount > 1 ? 's' : ''}</span>` : ''}
+                                ${scene.audioLayer ? `<span style="font-size: 0.6rem; color: rgba(255,255,255,0.4);">[${scene.audioLayer.type || 'auto'}]</span>` : ''}
                             </div>
                         </div>
                         <div style="color: rgba(255,255,255,0.5); transform: rotate(${isExpanded ? '180deg' : '0deg'}); transition: transform 0.2s;">▼</div>
@@ -15562,6 +15645,31 @@
                                     </div>
                                 `}
                             </div>
+
+                            <!-- PHASE 1: Character Dialogue Display (from audioLayer) -->
+                            ${scene.audioLayer?.dialogue?.length > 0 ? `
+                                <div style="margin-bottom: 1rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                        <label style="font-size: 0.75rem; color: rgba(255,255,255,0.6);">💬 Character Dialogue</label>
+                                        <span style="font-size: 0.6rem; padding: 0.15rem 0.4rem; background: rgba(251, 191, 36, 0.2); color: #fbbf24; border-radius: 0.25rem;">Characters speak</span>
+                                        <span style="font-size: 0.55rem; color: rgba(255,255,255,0.4);">${scene.audioLayer.dialogue.length} line${scene.audioLayer.dialogue.length > 1 ? 's' : ''}</span>
+                                    </div>
+                                    <div style="background: rgba(251, 191, 36, 0.05); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 0.5rem; padding: 0.75rem; max-height: 150px; overflow-y: auto;">
+                                        ${scene.audioLayer.dialogue.map((d, dIdx) => `
+                                            <div style="margin-bottom: ${dIdx < scene.audioLayer.dialogue.length - 1 ? '0.5rem' : '0'}; padding-bottom: ${dIdx < scene.audioLayer.dialogue.length - 1 ? '0.5rem' : '0'}; border-bottom: ${dIdx < scene.audioLayer.dialogue.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none'};">
+                                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem;">
+                                                    <span style="font-size: 0.75rem; font-weight: 600; color: #fbbf24;">${d.character || 'Character'}</span>
+                                                    ${d.emotion ? `<span style="font-size: 0.55rem; padding: 0.1rem 0.3rem; background: rgba(255,255,255,0.1); border-radius: 0.2rem; color: rgba(255,255,255,0.5);">${d.emotion}</span>` : ''}
+                                                </div>
+                                                <div style="font-size: 0.85rem; color: rgba(255,255,255,0.8); font-style: italic;">"${d.line || ''}"</div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    <div style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-top: 0.35rem;">
+                                        💡 Dialogue will be distributed to shots during decomposition. Use Multitalk to generate voice-synced videos.
+                                    </div>
+                                </div>
+                            ` : ''}
 
                             <!-- Duration & Transition -->
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
