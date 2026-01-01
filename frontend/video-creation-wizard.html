@@ -9984,9 +9984,6 @@
 
                         showToast(`🎤 Shot ${shotIndex + 1} Multitalk video ready!`, 'success');
 
-                        // Trigger frame chain transfer for next shot
-                        await transferLastFrameToNextShot(sceneId, shotIndex);
-
                         render();
                         renderShotDecompositionModal();
                         scheduleAutoSave();
