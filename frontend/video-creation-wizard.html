@@ -10317,6 +10317,119 @@
         }
 
         /**
+         * Generate dialogue audio using FAL ElevenLabs text-to-dialogue API
+         * Creates a single audio file with all characters' dialogue
+         */
+        async function generateDialogueAudio() {
+            const { sceneId, shotIndex, speakingCharacters } = state.storyboard.videoModelSelector;
+            const multitalk = state.storyboard.videoModelSelector.multitalk;
+
+            // Get the shot to access its dialogue
+            const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+            const shot = decomposed?.shots?.[shotIndex];
+
+            if (!shot || !shot.dialogue || shot.dialogue.length === 0) {
+                showToast('No dialogue found for this shot', 'error');
+                return;
+            }
+
+            // Build dialogue lines with voice assignments
+            const dialogueLines = shot.dialogue.map(d => {
+                // Get the voice for this character
+                const charVoice = getCharacterVoice(d.character);
+                const voiceProfile = charVoice?.voiceProfile || CHARACTER_VOICE_PROFILES[charVoice?.voiceProfileId];
+                const elevenLabsVoice = voiceProfile?.elevenLabsVoice || 'Roger';
+
+                return {
+                    character: d.character,
+                    text: d.line,
+                    voice: elevenLabsVoice
+                };
+            });
+
+            if (dialogueLines.length === 0) {
+                showToast('No valid dialogue lines found', 'error');
+                return;
+            }
+
+            // Update state to show generating status
+            multitalk.dialogueAudioStatus = 'generating';
+            render();
+            renderShotDecompositionModal();
+
+            showToast(`Generating dialogue audio for ${dialogueLines.length} line(s)...`, 'info');
+
+            try {
+                const generateDialogueAudioFn = functions.httpsCallable('creationWizardGenerateDialogueAudio');
+                const result = await generateDialogueAudioFn({
+                    projectId: state.project.id,
+                    sceneId: sceneId,
+                    shotId: shot.id || `scene-${sceneId}-shot-${shotIndex}`,
+                    dialogueLines: dialogueLines,
+                    stability: 0.5,
+                    useSpeakerBoost: true
+                });
+
+                if (result.data.success) {
+                    // Update multitalk state with generated audio
+                    multitalk.audioUrl = result.data.audioUrl;
+                    multitalk.audioDuration = result.data.audioDuration;
+                    multitalk.audioFileName = `Generated (${dialogueLines.length} voices)`;
+                    multitalk.audioUploadStatus = 'ready';
+                    multitalk.dialogueAudioStatus = 'ready';
+                    multitalk.dialogueAudioSeed = result.data.seed;
+
+                    // Also update the shot's generated audio reference
+                    shot.generatedDialogueAudio = {
+                        audioUrl: result.data.audioUrl,
+                        audioDuration: result.data.audioDuration,
+                        voiceCount: result.data.voiceCount,
+                        seed: result.data.seed,
+                        generatedAt: new Date().toISOString()
+                    };
+
+                    showToast(`Dialogue audio generated: ${result.data.audioDuration}s`, 'success');
+                    scheduleAutoSave();
+                } else {
+                    throw new Error('Failed to generate dialogue audio');
+                }
+            } catch (error) {
+                console.error('Dialogue audio generation error:', error);
+                multitalk.dialogueAudioStatus = 'error';
+                showToast('Failed to generate dialogue audio: ' + (error.message || 'Unknown error'), 'error');
+            }
+
+            render();
+            renderShotDecompositionModal();
+        }
+
+        /**
+         * Preview dialogue audio from URL
+         */
+        function previewDialogueAudio(audioUrl) {
+            if (!audioUrl) return;
+
+            // Create or reuse audio element
+            let audioPlayer = document.getElementById('dialogue-audio-preview');
+            if (!audioPlayer) {
+                audioPlayer = document.createElement('audio');
+                audioPlayer.id = 'dialogue-audio-preview';
+                document.body.appendChild(audioPlayer);
+            }
+
+            if (audioPlayer.src === audioUrl && !audioPlayer.paused) {
+                // Already playing, pause it
+                audioPlayer.pause();
+            } else {
+                audioPlayer.src = audioUrl;
+                audioPlayer.play().catch(err => {
+                    console.error('Audio playback error:', err);
+                    showToast('Could not play audio', 'error');
+                });
+            }
+        }
+
+        /**
          * Generate video with selected model
          */
         async function generateVideoWithSelectedModel() {
@@ -10329,10 +10442,19 @@
                 const durationNum = selectedDuration ? parseInt(selectedDuration) : null;
                 generateSingleShotVideo(sceneId, shotIndex, durationNum);
             } else if (selectedModel === 'multitalk') {
+                // Check if we have generated dialogue audio (NEW: FAL ElevenLabs)
+                // This is the preferred method - single audio file with all characters
+                if (multitalk.audioUrl && (multitalk.dialogueAudioStatus === 'ready' || multitalk.audioUploadStatus === 'ready')) {
+                    // Use the generated/uploaded single audio file for all characters
+                    closeVideoModelSelector();
+                    generateMultitalkVideo(sceneId, shotIndex, multitalk.audioUrl, multitalk.audioDuration, null);
+                    return;
+                }
+
+                // Fallback: Check for per-character audio uploads (legacy mode)
                 const characters = speakingCharacters || [];
                 const characterAudios = multitalk.characterAudios || {};
 
-                // Check if multi-character or single audio mode
                 if (characters.length > 1) {
                     // Multi-character: validate all character audios are uploaded
                     const missingAudios = characters.filter(charName => {
@@ -10341,7 +10463,7 @@
                     });
 
                     if (missingAudios.length > 0) {
-                        showToast('Please upload audio for all characters: ' + missingAudios.join(', '), 'error');
+                        showToast('Please generate dialogue audio or upload audio for all characters', 'error');
                         return;
                     }
 
@@ -10360,14 +10482,9 @@
                     closeVideoModelSelector();
                     generateMultitalkVideo(sceneId, shotIndex, null, totalDuration, characterAudioData);
                 } else {
-                    // Single character or no characters: use legacy single upload
-                    if (!multitalk.audioUrl) {
-                        showToast('Please upload a voiceover audio file first', 'error');
-                        return;
-                    }
-
-                    closeVideoModelSelector();
-                    generateMultitalkVideo(sceneId, shotIndex, multitalk.audioUrl, multitalk.audioDuration, null);
+                    // Single character or no characters: need audio
+                    showToast('Please generate dialogue audio or upload a voiceover file', 'error');
+                    return;
                 }
             }
         }
@@ -10602,13 +10719,17 @@
             const hasImage = shot?.status === 'ready' && shot?.imageUrl;
             const isWaitingForFrame = !hasImage && shotIndex > 0;
 
-            // Check if all required audios are ready for Multitalk
+            // Check if audio is ready for Multitalk
+            // Priority: Generated dialogue audio > Per-character uploads > Single upload
             const speakingCharacters = selector.speakingCharacters || [];
             const characterAudios = multitalk.characterAudios || {};
             let isMultitalkAudioReady = false;
 
-            if (speakingCharacters.length > 1) {
-                // Multi-character: all characters must have audio uploaded
+            // NEW: Check for generated dialogue audio (FAL ElevenLabs)
+            if (multitalk.audioUrl && (multitalk.dialogueAudioStatus === 'ready' || multitalk.audioUploadStatus === 'ready')) {
+                isMultitalkAudioReady = true;
+            } else if (speakingCharacters.length > 1) {
+                // Multi-character: all characters must have audio uploaded (legacy fallback)
                 isMultitalkAudioReady = speakingCharacters.every(charName => {
                     const charAudio = characterAudios[charName];
                     return charAudio && charAudio.audioUploadStatus === 'ready' && charAudio.audioUrl;
@@ -10697,74 +10818,73 @@
                             '</div>';
                     })() : ''}
 
-                    <!-- Multitalk Audio Upload (shown when Multitalk selected) -->
+                    <!-- Multitalk Dialogue Audio (shown when Multitalk selected) -->
                     ${isMultitalkSelected ? (() => {
                         const characters = selector.speakingCharacters || [];
-                        const characterAudios = multitalk.characterAudios || {};
+                        const dialogueAudioStatus = multitalk.dialogueAudioStatus || 'idle';
 
-                        // If multiple characters, show per-character upload slots
-                        if (characters.length > 1) {
-                            let html = '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">';
-                            html += '<div style="font-size: 0.45rem; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">🎤 Audio per character:</div>';
+                        // Get shot dialogue for display
+                        const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
+                        const shot = decomposed?.shots?.[shotIndex];
+                        const shotDialogue = shot?.dialogue || [];
 
-                            characters.forEach((charName, idx) => {
-                                const charAudio = characterAudios[charName] || {};
-                                const inputId = 'multitalk-audio-' + idx;
-                                const safeCharName = charName.replace(/'/g, "\\'");
+                        let html = '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">';
 
-                                html += '<div style="display: flex; align-items: center; gap: 0.2rem; margin-bottom: 0.2rem; padding: 0.2rem; background: rgba(0,0,0,0.2); border-radius: 0.2rem;">';
-                                html += '<div style="font-size: 0.45rem; color: #c4b5fd; min-width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + charName + '">' + charName.split(' ')[0] + '</div>';
-
-                                if (charAudio.audioUploadStatus === 'ready') {
-                                    html += '<div style="flex: 1; overflow: hidden;">';
-                                    html += '<div style="font-size: 0.4rem; color: #10b981; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">✓ ' + (charAudio.audioDuration ? charAudio.audioDuration.toFixed(1) + 's' : 'Ready') + '</div>';
-                                    html += '</div>';
-                                    html += '<button onclick="document.getElementById(\'' + inputId + '\').click()" style="padding: 0.1rem 0.2rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.15rem; color: white; cursor: pointer; font-size: 0.4rem;">↻</button>';
-                                } else if (charAudio.audioUploadStatus === 'uploading') {
-                                    html += '<div style="flex: 1; font-size: 0.4rem; color: rgba(255,255,255,0.5);">Uploading...</div>';
-                                } else {
-                                    html += '<label for="' + inputId + '" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.15rem; padding: 0.15rem; background: rgba(139, 92, 246, 0.2); border: 1px dashed rgba(139, 92, 246, 0.4); border-radius: 0.15rem; cursor: pointer;">';
-                                    html += '<span style="font-size: 0.4rem; color: #a78bfa;">Select MP3</span>';
-                                    html += '</label>';
-                                }
-
-                                html += '<input type="file" id="' + inputId + '" accept="audio/*" onchange="handleMultitalkAudioSelectForCharacter(event, \'' + safeCharName + '\')" style="display: none;">';
+                        // Show dialogue preview with voice assignments
+                        if (shotDialogue.length > 0) {
+                            html += '<div style="font-size: 0.4rem; color: rgba(255,255,255,0.5); margin-bottom: 0.2rem;">💬 Dialogue:</div>';
+                            shotDialogue.forEach(d => {
+                                const charVoice = getCharacterVoice(d.character);
+                                const voiceProfile = charVoice?.voiceProfile || CHARACTER_VOICE_PROFILES[charVoice?.voiceProfileId];
+                                const voiceName = voiceProfile?.elevenLabsVoice || 'Roger';
+                                const truncatedLine = d.line.length > 35 ? d.line.substring(0, 35) + '...' : d.line;
+                                html += '<div style="font-size: 0.4rem; margin-bottom: 0.15rem; padding: 0.15rem; background: rgba(0,0,0,0.2); border-radius: 0.15rem;">';
+                                html += '<span style="color: #c4b5fd; font-weight: 500;">' + d.character.split(' ')[0] + '</span>';
+                                html += ' <span style="color: rgba(255,255,255,0.3);">(' + voiceName + ')</span>';
+                                html += '<div style="color: rgba(255,255,255,0.6); font-style: italic; margin-top: 0.05rem;">"' + truncatedLine + '"</div>';
                                 html += '</div>';
                             });
-
-                            html += '</div>';
-                            return html;
-                        } else {
-                            // Single character or no characters - show legacy single upload
-                            if (multitalk.audioUploadStatus === 'ready') {
-                                return '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">' +
-                                    '<div style="display: flex; align-items: center; gap: 0.25rem;">' +
-                                        '<span style="font-size: 0.6rem;">✓</span>' +
-                                        '<div style="flex: 1; overflow: hidden;">' +
-                                            '<div style="font-size: 0.5rem; color: #10b981; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">' + multitalk.audioFileName + '</div>' +
-                                            '<div style="font-size: 0.45rem; color: rgba(255,255,255,0.5);">' + (multitalk.audioDuration ? multitalk.audioDuration.toFixed(1) + 's' : '') + '</div>' +
-                                        '</div>' +
-                                        '<button onclick="document.getElementById(\'multitalk-audio-input\').click()" style="padding: 0.1rem 0.25rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.15rem; color: white; cursor: pointer; font-size: 0.45rem;">Change</button>' +
-                                    '</div>' +
-                                    '<input type="file" id="multitalk-audio-input" accept="audio/*" onchange="handleMultitalkAudioSelect(event)" style="display: none;">' +
-                                '</div>';
-                            } else if (multitalk.audioUploadStatus === 'uploading') {
-                                return '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">' +
-                                    '<div style="text-align: center; padding: 0.25rem;">' +
-                                        '<div class="animate-spin" style="display: inline-block; width: 12px; height: 12px; border: 1.5px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%;"></div>' +
-                                        '<div style="font-size: 0.45rem; color: rgba(255,255,255,0.6); margin-top: 0.15rem;">Uploading...</div>' +
-                                    '</div>' +
-                                '</div>';
-                            } else {
-                                return '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">' +
-                                    '<label style="display: flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.3rem; background: rgba(139, 92, 246, 0.2); border: 1px dashed rgba(139, 92, 246, 0.5); border-radius: 0.2rem; cursor: pointer;">' +
-                                        '<span style="font-size: 0.6rem;">📁</span>' +
-                                        '<span style="font-size: 0.5rem; color: #a78bfa;">Select MP3/WAV</span>' +
-                                        '<input type="file" id="multitalk-audio-input" accept="audio/*" onchange="handleMultitalkAudioSelect(event)" style="display: none;">' +
-                                    '</label>' +
-                                '</div>';
-                            }
                         }
+
+                        // Audio status section
+                        if (dialogueAudioStatus === 'ready' || multitalk.audioUploadStatus === 'ready') {
+                            // Audio is ready - show player and regenerate option
+                            html += '<div style="margin-top: 0.3rem; padding: 0.2rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.2rem;">';
+                            html += '<div style="display: flex; align-items: center; gap: 0.2rem;">';
+                            html += '<span style="font-size: 0.5rem; color: #10b981;">✓</span>';
+                            html += '<div style="flex: 1;">';
+                            html += '<div style="font-size: 0.4rem; color: #10b981;">Audio Ready</div>';
+                            html += '<div style="font-size: 0.35rem; color: rgba(255,255,255,0.5);">' + (multitalk.audioDuration ? multitalk.audioDuration.toFixed(1) + 's' : '') + '</div>';
+                            html += '</div>';
+                            html += '<button onclick="previewDialogueAudio(\'' + (multitalk.audioUrl || '').replace(/'/g, "\\'") + '\')" style="padding: 0.1rem 0.2rem; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 0.15rem; color: #10b981; cursor: pointer; font-size: 0.4rem;">▶</button>';
+                            html += '<button onclick="generateDialogueAudio()" style="padding: 0.1rem 0.2rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.15rem; color: white; cursor: pointer; font-size: 0.4rem;">↻</button>';
+                            html += '</div>';
+                            html += '</div>';
+                        } else if (dialogueAudioStatus === 'generating') {
+                            // Generating audio
+                            html += '<div style="margin-top: 0.3rem; text-align: center; padding: 0.3rem;">';
+                            html += '<div class="animate-spin" style="display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%;"></div>';
+                            html += '<div style="font-size: 0.4rem; color: rgba(255,255,255,0.6); margin-top: 0.15rem;">Generating dialogue audio...</div>';
+                            html += '</div>';
+                        } else {
+                            // No audio yet - show generate button
+                            html += '<button onclick="generateDialogueAudio()" style="width: 100%; margin-top: 0.3rem; padding: 0.3rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(236, 72, 153, 0.3)); border: 1px solid rgba(139, 92, 246, 0.5); border-radius: 0.2rem; color: white; cursor: pointer; font-size: 0.45rem; font-weight: 500;">';
+                            html += '🎤 Generate Dialogue Audio';
+                            html += '</button>';
+                            html += '<div style="font-size: 0.35rem; color: rgba(255,255,255,0.4); text-align: center; margin-top: 0.15rem;">Uses ElevenLabs AI voices</div>';
+
+                            // Optional: Manual upload fallback
+                            html += '<div style="margin-top: 0.25rem; padding-top: 0.2rem; border-top: 1px dashed rgba(255,255,255,0.1);">';
+                            html += '<label style="display: flex; align-items: center; justify-content: center; gap: 0.15rem; padding: 0.15rem; cursor: pointer;">';
+                            html += '<span style="font-size: 0.35rem; color: rgba(255,255,255,0.4);">or upload custom: </span>';
+                            html += '<span style="font-size: 0.35rem; color: #a78bfa; text-decoration: underline;">Browse</span>';
+                            html += '<input type="file" id="multitalk-audio-input" accept="audio/*" onchange="handleMultitalkAudioSelect(event)" style="display: none;">';
+                            html += '</label>';
+                            html += '</div>';
+                        }
+
+                        html += '</div>';
+                        return html;
                     })() : ''}
 
                     <!-- Generate or Save Button -->
@@ -19381,23 +19501,30 @@
 
         // PHASE 3: Character Voice Profiles
         // Available voice profiles matching backend CHARACTER_VOICE_ENGINE
+        // Uses FAL ElevenLabs text-to-dialogue API voices
         const CHARACTER_VOICE_PROFILES = {
-            // Male voices
-            'male-hero': { name: 'Heroic Male', gender: 'male', description: 'Strong, confident hero voice' },
-            'male-wise': { name: 'Wise Mentor', gender: 'male', description: 'Deep, wise mentor voice' },
-            'male-villain': { name: 'Menacing Male', gender: 'male', description: 'Cold, calculating villain voice' },
-            'male-young': { name: 'Young Male', gender: 'male', description: 'Youthful, energetic voice' },
-            'male-rugged': { name: 'Rugged Male', gender: 'male', description: 'Rough, weathered voice' },
-            // Female voices
-            'female-hero': { name: 'Heroic Female', gender: 'female', description: 'Strong, confident heroine voice' },
-            'female-wise': { name: 'Wise Female', gender: 'female', description: 'Warm, wise mentor voice' },
-            'female-villain': { name: 'Femme Fatale', gender: 'female', description: 'Sultry, dangerous voice' },
-            'female-young': { name: 'Young Female', gender: 'female', description: 'Youthful, bright voice' },
-            'female-warrior': { name: 'Warrior Woman', gender: 'female', description: 'Fierce, battle-ready voice' },
+            // Male voices - FAL ElevenLabs: Roger, Charlie, George, Callum, Liam, Will, Eric, Chris, Brian, Daniel, Bill
+            'male-hero': { name: 'Heroic Male', gender: 'male', description: 'Strong, confident hero voice', elevenLabsVoice: 'Roger' },
+            'male-wise': { name: 'Wise Mentor', gender: 'male', description: 'Deep, wise mentor voice', elevenLabsVoice: 'George' },
+            'male-villain': { name: 'Menacing Male', gender: 'male', description: 'Cold, calculating villain voice', elevenLabsVoice: 'Daniel' },
+            'male-young': { name: 'Young Male', gender: 'male', description: 'Youthful, energetic voice', elevenLabsVoice: 'Liam' },
+            'male-rugged': { name: 'Rugged Male', gender: 'male', description: 'Rough, weathered voice', elevenLabsVoice: 'Brian' },
+            // Female voices - FAL ElevenLabs: Aria, Sarah, Laura, River, Charlotte, Alice, Matilda, Jessica, Lily
+            'female-hero': { name: 'Heroic Female', gender: 'female', description: 'Strong, confident heroine voice', elevenLabsVoice: 'Aria' },
+            'female-wise': { name: 'Wise Female', gender: 'female', description: 'Warm, wise mentor voice', elevenLabsVoice: 'Sarah' },
+            'female-villain': { name: 'Femme Fatale', gender: 'female', description: 'Sultry, dangerous voice', elevenLabsVoice: 'Jessica' },
+            'female-young': { name: 'Young Female', gender: 'female', description: 'Youthful, bright voice', elevenLabsVoice: 'Charlotte' },
+            'female-warrior': { name: 'Warrior Woman', gender: 'female', description: 'Fierce, battle-ready voice', elevenLabsVoice: 'Laura' },
             // Special voices
-            'narrator-omniscient': { name: 'Narrator', gender: 'neutral', description: 'Classic documentary narrator' },
-            'child': { name: 'Child', gender: 'neutral', description: 'Childlike voice' },
-            'robot': { name: 'Robot/AI', gender: 'neutral', description: 'Synthetic AI voice' }
+            'narrator-omniscient': { name: 'Narrator', gender: 'neutral', description: 'Classic documentary narrator', elevenLabsVoice: 'Roger' },
+            'child': { name: 'Child', gender: 'neutral', description: 'Childlike voice', elevenLabsVoice: 'Alice' },
+            'robot': { name: 'Robot/AI', gender: 'neutral', description: 'Synthetic AI voice', elevenLabsVoice: 'Charlie' }
+        };
+
+        // FAL ElevenLabs available voices for UI
+        const FAL_ELEVENLABS_VOICES = {
+            male: ['Roger', 'Charlie', 'George', 'Callum', 'Liam', 'Will', 'Eric', 'Chris', 'Brian', 'Daniel', 'Bill'],
+            female: ['Aria', 'Sarah', 'Laura', 'River', 'Charlotte', 'Alice', 'Matilda', 'Jessica', 'Lily']
         };
 
         function setCharacterVoice(characterName, voiceProfileId) {

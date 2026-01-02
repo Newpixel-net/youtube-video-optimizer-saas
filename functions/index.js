@@ -33717,6 +33717,168 @@ exports.creationWizardGenerateVoiceover = functions.https.onCall(async (data, co
 });
 
 /**
+ * creationWizardGenerateDialogueAudio - Generate multi-voice dialogue audio using FAL ElevenLabs
+ *
+ * Uses FAL's ElevenLabs text-to-dialogue API to generate realistic multi-character dialogue
+ * in a single audio file. Perfect for Multitalk lip-sync video generation.
+ *
+ * Available voices (FAL ElevenLabs):
+ * - Male: Roger, Charlie, George, Callum, Liam, Will, Eric, Chris, Brian, Daniel, Bill
+ * - Female: Aria, Sarah, Laura, River, Charlotte, Alice, Matilda, Jessica, Lily
+ *
+ * @param {string} projectId - Project ID
+ * @param {number} sceneId - Scene ID
+ * @param {string} shotId - Shot ID
+ * @param {Array} dialogueLines - Array of { character, text, voice } objects
+ * @param {number} stability - Voice consistency (0-1), lower = broader emotional range
+ * @param {boolean} useSpeakerBoost - Enhance voice clarity
+ * @returns {Object} { audioUrl, audioDuration, seed }
+ */
+exports.creationWizardGenerateDialogueAudio = functions
+  .runWith({ timeoutSeconds: 120, memory: '512MB' })
+  .https.onCall(async (data, context) => {
+  const uid = await verifyAuth(context);
+  const { projectId, sceneId, shotId, dialogueLines, stability = 0.5, useSpeakerBoost = true } = data;
+
+  // Validate input
+  if (!dialogueLines || !Array.isArray(dialogueLines) || dialogueLines.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Dialogue lines are required');
+  }
+
+  // Get FAL API key
+  const falKey = functions.config().fal?.key;
+  if (!falKey) {
+    throw new functions.https.HttpsError('failed-precondition', 'FAL API key not configured');
+  }
+
+  // Valid FAL ElevenLabs voices
+  const validVoices = [
+    'Aria', 'Roger', 'Sarah', 'Laura', 'Charlie', 'George', 'Callum', 'River',
+    'Liam', 'Charlotte', 'Alice', 'Matilda', 'Will', 'Jessica', 'Eric', 'Chris',
+    'Brian', 'Daniel', 'Lily', 'Bill'
+  ];
+
+  // Build inputs array for FAL API
+  const inputs = dialogueLines.map(line => {
+    // Validate and normalize voice name
+    let voice = line.voice || 'Roger';
+    // Capitalize first letter for FAL API
+    voice = voice.charAt(0).toUpperCase() + voice.slice(1).toLowerCase();
+    if (!validVoices.includes(voice)) {
+      console.warn(`[creationWizardGenerateDialogueAudio] Invalid voice '${line.voice}', using default 'Roger'`);
+      voice = 'Roger';
+    }
+
+    return {
+      text: line.text || line.line || '',
+      voice: voice
+    };
+  }).filter(input => input.text.trim().length > 0);
+
+  if (inputs.length === 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'No valid dialogue text found');
+  }
+
+  console.log(`[creationWizardGenerateDialogueAudio] Generating dialogue for ${inputs.length} lines:`,
+    inputs.map(i => `${i.voice}: "${i.text.substring(0, 30)}..."`).join(', '));
+
+  try {
+    // Configure FAL client
+    fal.config({ credentials: falKey });
+
+    // Call FAL ElevenLabs text-to-dialogue API
+    const result = await fal.subscribe('fal-ai/elevenlabs/text-to-dialogue/eleven-v3', {
+      input: {
+        inputs: inputs,
+        stability: Math.max(0, Math.min(1, stability)),
+        use_speaker_boost: useSpeakerBoost
+      },
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === 'IN_PROGRESS') {
+          console.log(`[creationWizardGenerateDialogueAudio] Processing: ${update.logs?.map(l => l.message).join(', ') || 'generating...'}`);
+        }
+      }
+    });
+
+    if (!result.audio?.url) {
+      throw new Error('FAL API did not return audio URL');
+    }
+
+    console.log(`[creationWizardGenerateDialogueAudio] Audio generated: ${result.audio.url}`);
+
+    // Download the audio from FAL and upload to Firebase Storage for permanence
+    const audioResponse = await axios.get(result.audio.url, { responseType: 'arraybuffer' });
+    const audioBuffer = Buffer.from(audioResponse.data);
+
+    // Upload to Firebase Storage
+    const fileName = `creation-projects/${projectId || uid}/dialogue-audio/${shotId || `scene-${sceneId}`}_${Date.now()}.mp3`;
+    const bucket = admin.storage().bucket();
+    const file = bucket.file(fileName);
+
+    await file.save(audioBuffer, {
+      metadata: {
+        contentType: 'audio/mpeg',
+        metadata: {
+          sceneId: String(sceneId),
+          shotId: shotId || '',
+          voiceCount: String(inputs.length),
+          generator: 'fal-elevenlabs-dialogue',
+          seed: String(result.seed || 0)
+        }
+      }
+    });
+
+    // Make file public and get URL
+    await file.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+
+    // Estimate duration based on text length
+    // Average speaking rate is ~150 words per minute for dialogue
+    const totalText = inputs.map(i => i.text).join(' ');
+    const wordCount = totalText.split(/\s+/).length;
+    const estimatedDuration = Math.max(2, Math.ceil((wordCount / 150) * 60));
+
+    // Log usage for billing/tracking
+    await db.collection('apiUsage').add({
+      userId: uid,
+      type: 'dialogue_audio_generation',
+      model: 'fal-elevenlabs-dialogue-v3',
+      projectId: projectId || null,
+      sceneId,
+      shotId: shotId || null,
+      characterCount: totalText.length,
+      voiceCount: inputs.length,
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    return {
+      success: true,
+      sceneId,
+      shotId: shotId || null,
+      audioUrl: publicUrl,
+      audioDuration: estimatedDuration,
+      fileName,
+      seed: result.seed,
+      voiceCount: inputs.length,
+      characterCount: totalText.length,
+      dialogueSummary: inputs.map(i => ({ voice: i.voice, textLength: i.text.length }))
+    };
+
+  } catch (error) {
+    console.error('[creationWizardGenerateDialogueAudio] Error:', error);
+
+    // Handle specific FAL errors
+    if (error.message?.includes('quota') || error.message?.includes('rate limit')) {
+      throw new functions.https.HttpsError('resource-exhausted', 'FAL API rate limit exceeded. Please try again later.');
+    }
+
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError('internal', sanitizeErrorMessage(error, 'Failed to generate dialogue audio'));
+  }
+});
+
+/**
  * creationWizardAnimateScene - Animate image with voiceover using RunPod Multi-talk
  *
  * Creates a video clip from a still image and audio using the Multi-talk API
@@ -44818,7 +44980,7 @@ const QUALITY_ASSURANCE_ENGINE = {
     voiceProfile: {
       voiceProfileId: 'male-hero',
       voiceProfile: { id: 'male-hero', name: 'Heroic Male', gender: 'male' },
-      elevenLabsVoice: 'adam',
+      elevenLabsVoice: 'Roger', // FAL ElevenLabs voice
       detected: false,
       fallback: true
     },
@@ -45713,6 +45875,9 @@ const CHARACTER_VOICE_ENGINE = {
   // ==========================================================================
   // VOICE PROFILE LIBRARY
   // Pre-defined voice types with characteristics
+  // Uses FAL ElevenLabs text-to-dialogue API voices:
+  // Male: Roger, Charlie, George, Callum, Liam, Will, Eric, Chris, Brian, Daniel, Bill
+  // Female: Aria, Sarah, Laura, River, Charlotte, Alice, Matilda, Jessica, Lily
   // ==========================================================================
   VOICE_PROFILES: {
     // Male voices
@@ -45725,7 +45890,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'medium-low',
       tempo: 'moderate',
       suitableFor: ['protagonist', 'leader', 'action_hero', 'protector'],
-      elevenLabsVoice: 'adam', // ElevenLabs voice ID
+      elevenLabsVoice: 'Roger', // FAL ElevenLabs voice - confident, heroic
       description: 'Strong, confident male voice suitable for heroes and leaders'
     },
     'male-wise': {
@@ -45737,7 +45902,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'low',
       tempo: 'slow',
       suitableFor: ['mentor', 'sage', 'elder', 'teacher', 'narrator'],
-      elevenLabsVoice: 'antoni',
+      elevenLabsVoice: 'George', // FAL ElevenLabs voice - mature, wise
       description: 'Deep, wise voice for mentors and narrators'
     },
     'male-villain': {
@@ -45749,7 +45914,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'low',
       tempo: 'deliberate',
       suitableFor: ['antagonist', 'villain', 'dark_lord', 'manipulator'],
-      elevenLabsVoice: 'daniel',
+      elevenLabsVoice: 'Daniel', // FAL ElevenLabs voice - cold, calculating
       description: 'Cold, calculating voice for villains and antagonists'
     },
     'male-young': {
@@ -45761,7 +45926,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'medium-high',
       tempo: 'fast',
       suitableFor: ['sidekick', 'apprentice', 'youth', 'rebel', 'trickster'],
-      elevenLabsVoice: 'josh',
+      elevenLabsVoice: 'Liam', // FAL ElevenLabs voice - youthful, energetic
       description: 'Youthful, energetic male voice'
     },
     'male-rugged': {
@@ -45773,7 +45938,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'low',
       tempo: 'measured',
       suitableFor: ['warrior', 'soldier', 'anti_hero', 'survivor', 'ranger'],
-      elevenLabsVoice: 'arnold',
+      elevenLabsVoice: 'Brian', // FAL ElevenLabs voice - rough, weathered
       description: 'Rough, weathered voice for hardened characters'
     },
 
@@ -45787,7 +45952,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'medium',
       tempo: 'moderate',
       suitableFor: ['protagonist', 'leader', 'action_hero', 'warrior'],
-      elevenLabsVoice: 'rachel',
+      elevenLabsVoice: 'Aria', // FAL ElevenLabs voice - strong, confident
       description: 'Strong, confident female voice for heroines'
     },
     'female-wise': {
@@ -45799,7 +45964,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'medium-low',
       tempo: 'measured',
       suitableFor: ['mentor', 'sage', 'mother_figure', 'oracle', 'healer'],
-      elevenLabsVoice: 'domi',
+      elevenLabsVoice: 'Sarah', // FAL ElevenLabs voice - warm, wise
       description: 'Warm, wise female voice for mentors'
     },
     'female-villain': {
@@ -45811,7 +45976,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'low',
       tempo: 'slow',
       suitableFor: ['antagonist', 'villain', 'temptress', 'manipulator'],
-      elevenLabsVoice: 'bella',
+      elevenLabsVoice: 'Jessica', // FAL ElevenLabs voice - sultry, dangerous
       description: 'Sultry, dangerous female voice'
     },
     'female-young': {
@@ -45823,7 +45988,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'high',
       tempo: 'fast',
       suitableFor: ['sidekick', 'apprentice', 'youth', 'dreamer', 'innocent'],
-      elevenLabsVoice: 'elli',
+      elevenLabsVoice: 'Charlotte', // FAL ElevenLabs voice - youthful, bright
       description: 'Youthful, bright female voice'
     },
     'female-warrior': {
@@ -45835,7 +46000,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'medium-low',
       tempo: 'sharp',
       suitableFor: ['warrior', 'soldier', 'fighter', 'amazon', 'ranger'],
-      elevenLabsVoice: 'rachel',
+      elevenLabsVoice: 'Laura', // FAL ElevenLabs voice - fierce, commanding
       description: 'Fierce, battle-ready female voice'
     },
 
@@ -45849,7 +46014,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'medium',
       tempo: 'measured',
       suitableFor: ['narrator', 'voiceover', 'documentary'],
-      elevenLabsVoice: 'adam',
+      elevenLabsVoice: 'Roger', // FAL ElevenLabs voice - authoritative narrator
       description: 'Classic narrator voice for documentaries and voiceovers'
     },
     'child': {
@@ -45861,7 +46026,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'high',
       tempo: 'fast',
       suitableFor: ['child', 'youth', 'innocent', 'wonder'],
-      elevenLabsVoice: 'elli',
+      elevenLabsVoice: 'Alice', // FAL ElevenLabs voice - childlike quality
       description: 'Childlike voice for young characters'
     },
     'robot': {
@@ -45873,7 +46038,7 @@ const CHARACTER_VOICE_ENGINE = {
       pitch: 'medium',
       tempo: 'measured',
       suitableFor: ['ai', 'robot', 'computer', 'android', 'droid'],
-      elevenLabsVoice: 'sam',
+      elevenLabsVoice: 'Charlie', // FAL ElevenLabs voice - synthetic quality
       description: 'Synthetic voice for AI/robot characters'
     }
   },
@@ -46076,7 +46241,7 @@ const CHARACTER_VOICE_ENGINE = {
         characterName,
         voiceProfileId: 'male-hero',
         voiceProfile: this.VOICE_PROFILES['male-hero'],
-        elevenLabsVoice: 'adam',
+        elevenLabsVoice: 'Roger', // FAL ElevenLabs voice
         emotion: dialogueLine.emotion || 'neutral',
         delivery: dialogueLine.delivery || null,
         warning: `No voice assignment found for character '${characterName}', using default`
@@ -46131,7 +46296,7 @@ const CHARACTER_VOICE_ENGINE = {
       return {
         character: charName,
         voiceProfileId: assignment?.voiceProfileId || 'male-hero',
-        elevenLabsVoice: assignment?.customVoiceId || assignment?.elevenLabsVoice || 'adam'
+        elevenLabsVoice: assignment?.customVoiceId || assignment?.elevenLabsVoice || 'Roger'
       };
     });
 
@@ -46165,8 +46330,8 @@ const CHARACTER_VOICE_ENGINE = {
         emotion: d.emotion,
         delivery: d.delivery,
         // Voice properties - 'voice' is required by frontend validation
-        voice: d.voice?.elevenLabsVoice || 'adam',  // Frontend validation checks this
-        voiceId: d.voice?.elevenLabsVoice || 'adam',
+        voice: d.voice?.elevenLabsVoice || 'Roger',  // Frontend validation checks this (FAL ElevenLabs)
+        voiceId: d.voice?.elevenLabsVoice || 'Roger',
         voiceProfileId: d.voice?.voiceProfileId || 'narrator_dramatic',
         startTimeInShot: d.startTimeInShot || 0,
         durationInShot: d.durationInShot || 2
