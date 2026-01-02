@@ -27478,12 +27478,53 @@ Each scene must be structured like actual cinema - with proper scene types and a
    audioLayer: {
      type: "dialogue",
      dialogue: [
-       { character: "Maya", line: "We have to leave. Now.", emotion: "urgent" },
-       { character: "Kai", line: "Not without the artifact.", emotion: "determined" }
+       {
+         character: "Maya",
+         line: "We have to leave. Now.",
+         emotion: "urgent",
+         delivery: "whispered_intense",
+         emphasis: ["leave", "Now"],
+         pacing: "quick_clipped",
+         eyeline: "glancing_at_door",
+         actionDuring: "grabs Kai's arm"
+       },
+       {
+         character: "Kai",
+         line: "Not without the artifact.",
+         emotion: "determined",
+         delivery: "firm_resolute",
+         emphasis: ["Not", "artifact"],
+         pacing: "measured_deliberate",
+         eyeline: "locked_on_Maya",
+         actionDuring: "pulls arm free, stands ground"
+       }
      ],
      sfx: ["wind_howling", "distant_thunder"],
      musicMood: "tension_building"
    }
+
+   DIALOGUE PERFORMANCE METADATA (CRITICAL FOR PROFESSIONAL DELIVERY):
+   - delivery: HOW the line is spoken. Options include:
+     * whispered, whispered_intense, whispered_fearful
+     * spoken_normal, spoken_soft, spoken_firm
+     * shouted, shouted_angry, shouted_desperate
+     * trembling, breaking, choked_with_emotion
+     * sarcastic, deadpan, mocking
+     * commanding, pleading, questioning
+   - emphasis: Array of 1-3 KEY WORDS that should be stressed
+   - pacing: Speed and rhythm of delivery:
+     * quick_clipped (fast, urgent)
+     * measured_deliberate (slow, purposeful)
+     * halting_uncertain (pauses, hesitation)
+     * rapid_breathless (no pauses, panic)
+     * drawn_out (elongated words, dramatic)
+   - eyeline: Where character looks during line:
+     * locked_on_[character] (intense eye contact)
+     * looking_away (avoidance, shame)
+     * glancing_at_[object/direction] (distraction, concern)
+     * eyes_closed (internal, emotional)
+     * scanning_environment (alertness, fear)
+   - actionDuring: Physical action WHILE speaking (subtle movements only)
 
 2. For "opening_narration" or "closing_narration" - audioLayer.type = "voiceover":
    audioLayer: {
@@ -27586,9 +27627,23 @@ Return ONLY valid JSON:
         "type": "voiceover|dialogue|internal_monologue|action_sfx|music_only",
         "voiceover": "Narrator text if type=voiceover, otherwise null",
         "dialogue": [
-          { "character": "Name", "line": "What they say", "emotion": "how they feel" }
+          {
+            "character": "Name",
+            "line": "What they say",
+            "emotion": "emotional_state",
+            "delivery": "whispered|spoken_soft|spoken_firm|shouted|trembling|commanding|pleading",
+            "emphasis": ["key", "words"],
+            "pacing": "quick_clipped|measured_deliberate|halting_uncertain|rapid_breathless",
+            "eyeline": "locked_on_[character]|looking_away|glancing_at_[object]|eyes_closed",
+            "actionDuring": "subtle physical action while speaking"
+          }
         ],
-        "internalMonologue": { "character": "Name", "thought": "Their internal thought" },
+        "internalMonologue": {
+          "character": "Name",
+          "thought": "Their internal thought",
+          "delivery": "soft_reflective|urgent_anxious|bitter_resigned",
+          "pacing": "slow_contemplative|fragmented_distressed"
+        },
         "sfx": ["sound_effect_1", "sound_effect_2"],
         "musicMood": "tension_building|action_intense|emotional_sad|etc",
         "musicTransition": "continue|fade_out|crescendo|sudden_stop"
@@ -52224,6 +52279,770 @@ const CHARACTER_ACTION_GUIDELINES = {
   }
 };
 
+/**
+ * DIALOGUE_PERFORMANCE_PROFILES
+ * Professional voice performance guidance for TTS and video generation.
+ * Maps delivery types to technical parameters and descriptive guidance.
+ */
+const DIALOGUE_PERFORMANCE_PROFILES = {
+  delivery: {
+    'whispered': {
+      description: 'Quiet, intimate, secretive',
+      ttsGuidance: 'Very soft, breathy, low volume',
+      videoGuidance: 'Character leans in, hand may cup mouth, reduced lip movement',
+      emotionalContext: ['fear', 'secrecy', 'intimacy', 'conspiracy']
+    },
+    'whispered_intense': {
+      description: 'Urgent whisper, strained',
+      ttsGuidance: 'Soft but with tension, slightly strained voice',
+      videoGuidance: 'Wide eyes, tense jaw, leaning forward urgently',
+      emotionalContext: ['urgent_fear', 'warning', 'desperate_secrecy']
+    },
+    'spoken_normal': {
+      description: 'Conversational, natural',
+      ttsGuidance: 'Natural pace, moderate volume, relaxed tone',
+      videoGuidance: 'Natural gestures, relaxed posture, normal eye contact',
+      emotionalContext: ['neutral', 'casual', 'informative']
+    },
+    'spoken_soft': {
+      description: 'Gentle, tender, careful',
+      ttsGuidance: 'Slightly below normal volume, warm tone, measured pace',
+      videoGuidance: 'Soft expression, possibly touching arm or face, gentle movements',
+      emotionalContext: ['comfort', 'love', 'sympathy', 'reassurance']
+    },
+    'spoken_firm': {
+      description: 'Confident, authoritative, clear',
+      ttsGuidance: 'Clear articulation, steady pace, strong projection',
+      videoGuidance: 'Direct eye contact, squared shoulders, minimal but deliberate gestures',
+      emotionalContext: ['determination', 'authority', 'conviction', 'instruction']
+    },
+    'shouted': {
+      description: 'Loud, projecting, attention-grabbing',
+      ttsGuidance: 'High volume, slightly faster, forceful',
+      videoGuidance: 'Body tenses, possibly standing, dramatic gesture',
+      emotionalContext: ['anger', 'alarm', 'celebration', 'call_to_action']
+    },
+    'shouted_angry': {
+      description: 'Rage-filled, aggressive',
+      ttsGuidance: 'High volume, clipped words, aggressive tone',
+      videoGuidance: 'Clenched fists, red face, aggressive stance, pointing',
+      emotionalContext: ['rage', 'confrontation', 'accusation']
+    },
+    'shouted_desperate': {
+      description: 'Panicked, pleading loudly',
+      ttsGuidance: 'High volume but cracking, uneven pace, emotional breaks',
+      videoGuidance: 'Reaching out, tears possible, unstable stance',
+      emotionalContext: ['panic', 'desperation', 'plea']
+    },
+    'trembling': {
+      description: 'Shaky, emotional, vulnerable',
+      ttsGuidance: 'Unsteady voice, slight wavering, possible breaks',
+      videoGuidance: 'Visible trembling, hands shaking, avoiding eye contact',
+      emotionalContext: ['fear', 'grief', 'vulnerability', 'shock']
+    },
+    'breaking': {
+      description: 'Voice cracking with emotion',
+      ttsGuidance: 'Voice breaks mid-sentence, uneven, emotional',
+      videoGuidance: 'Fighting tears, hand to chest or face, looking away',
+      emotionalContext: ['grief', 'overwhelming_emotion', 'confession']
+    },
+    'commanding': {
+      description: 'Authoritative, expecting obedience',
+      ttsGuidance: 'Strong, clear, no hesitation, downward inflection',
+      videoGuidance: 'Standing tall, direct gaze, commanding gestures',
+      emotionalContext: ['leadership', 'order', 'authority', 'urgency']
+    },
+    'pleading': {
+      description: 'Begging, desperate request',
+      ttsGuidance: 'Upward inflection, emotional, slightly faster',
+      videoGuidance: 'Hands clasped or reaching, desperate eyes, lowered posture',
+      emotionalContext: ['desperation', 'hope', 'vulnerability']
+    },
+    'sarcastic': {
+      description: 'Mocking, ironic tone',
+      ttsGuidance: 'Exaggerated inflection, drawn out words, hint of sneer',
+      videoGuidance: 'Eye roll, smirk, dismissive gesture',
+      emotionalContext: ['mockery', 'frustration', 'deflection']
+    },
+    'deadpan': {
+      description: 'Flat, emotionless delivery',
+      ttsGuidance: 'Monotone, even pace, no inflection',
+      videoGuidance: 'Minimal expression, still face, limited movement',
+      emotionalContext: ['shock', 'dissociation', 'dry_humor', 'exhaustion']
+    }
+  },
+  pacing: {
+    'quick_clipped': {
+      description: 'Fast, urgent, no pauses',
+      wordsPerSecond: 3.5,
+      pauseBetweenSentences: 0.2,
+      emotionalContext: ['urgency', 'excitement', 'panic', 'anger']
+    },
+    'measured_deliberate': {
+      description: 'Slow, purposeful, weight to each word',
+      wordsPerSecond: 2.0,
+      pauseBetweenSentences: 0.8,
+      emotionalContext: ['gravity', 'warning', 'importance', 'threat']
+    },
+    'halting_uncertain': {
+      description: 'Pauses, hesitation, searching for words',
+      wordsPerSecond: 1.8,
+      pauseBetweenSentences: 1.0,
+      midSentencePauses: true,
+      emotionalContext: ['uncertainty', 'fear', 'confession', 'difficult_truth']
+    },
+    'rapid_breathless': {
+      description: 'No pauses, running words together',
+      wordsPerSecond: 4.0,
+      pauseBetweenSentences: 0.1,
+      emotionalContext: ['panic', 'excitement', 'mania', 'revelation']
+    },
+    'drawn_out': {
+      description: 'Elongated words, dramatic pauses',
+      wordsPerSecond: 1.5,
+      pauseBetweenSentences: 1.2,
+      emotionalContext: ['drama', 'threat', 'seduction', 'importance']
+    }
+  },
+  eyeline: {
+    'locked_on_character': {
+      description: 'Intense direct eye contact',
+      videoGuidance: 'Eyes fixed on other character, unblinking or slow blinks',
+      emotionalContext: ['confrontation', 'intimacy', 'sincerity', 'challenge']
+    },
+    'looking_away': {
+      description: 'Avoiding eye contact',
+      videoGuidance: 'Eyes cast down or to side, occasional glances back',
+      emotionalContext: ['shame', 'guilt', 'deception', 'submission']
+    },
+    'glancing_around': {
+      description: 'Eyes scanning environment',
+      videoGuidance: 'Quick glances to doors/windows, nervous energy',
+      emotionalContext: ['fear', 'alertness', 'paranoia', 'searching']
+    },
+    'eyes_closed': {
+      description: 'Eyes shut during delivery',
+      videoGuidance: 'Eyes closed, possibly head tilted, internal focus',
+      emotionalContext: ['pain', 'memory', 'concentration', 'prayer']
+    },
+    'distant_gaze': {
+      description: 'Looking past the other person',
+      videoGuidance: 'Unfocused eyes, looking through or past subject',
+      emotionalContext: ['memory', 'shock', 'dissociation', 'vision']
+    }
+  }
+};
+
+/**
+ * SHOT_EMOTIONAL_ARC_SYSTEM
+ * Tracks emotional progression within and across shots.
+ * Each shot has an emotional entry point, peak, and exit that connects to adjacent shots.
+ */
+const SHOT_EMOTIONAL_ARC_SYSTEM = {
+  // Primary emotional states for tracking
+  emotionalStates: {
+    // Positive
+    'hopeful': { valence: 0.7, arousal: 0.4, color: 'warm_golden' },
+    'joyful': { valence: 0.9, arousal: 0.7, color: 'bright_warm' },
+    'peaceful': { valence: 0.6, arousal: 0.2, color: 'soft_blue' },
+    'triumphant': { valence: 0.9, arousal: 0.9, color: 'golden_bright' },
+    'loving': { valence: 0.8, arousal: 0.4, color: 'warm_soft' },
+    'relieved': { valence: 0.6, arousal: 0.3, color: 'soft_warm' },
+    'curious': { valence: 0.5, arousal: 0.5, color: 'cool_bright' },
+    'determined': { valence: 0.6, arousal: 0.7, color: 'strong_warm' },
+
+    // Negative
+    'fearful': { valence: 0.2, arousal: 0.8, color: 'cold_dark' },
+    'angry': { valence: 0.2, arousal: 0.9, color: 'hot_red' },
+    'sad': { valence: 0.2, arousal: 0.2, color: 'cool_desaturated' },
+    'anxious': { valence: 0.3, arousal: 0.7, color: 'unstable_cool' },
+    'grieving': { valence: 0.1, arousal: 0.3, color: 'muted_cold' },
+    'desperate': { valence: 0.2, arousal: 0.8, color: 'harsh_contrast' },
+    'betrayed': { valence: 0.1, arousal: 0.7, color: 'cold_harsh' },
+    'guilty': { valence: 0.2, arousal: 0.4, color: 'shadow_heavy' },
+
+    // Neutral/Complex
+    'neutral': { valence: 0.5, arousal: 0.3, color: 'balanced' },
+    'tense': { valence: 0.4, arousal: 0.6, color: 'contrast_building' },
+    'suspicious': { valence: 0.3, arousal: 0.5, color: 'shadow_detail' },
+    'conflicted': { valence: 0.4, arousal: 0.5, color: 'mixed_tones' },
+    'shocked': { valence: 0.3, arousal: 0.9, color: 'stark_contrast' },
+    'contemplative': { valence: 0.5, arousal: 0.2, color: 'soft_depth' },
+    'resigned': { valence: 0.3, arousal: 0.2, color: 'muted_flat' }
+  },
+
+  // Shot arc patterns - how emotion flows within a single shot
+  shotArcPatterns: {
+    'steady': {
+      description: 'Emotion remains consistent throughout',
+      intensityCurve: [0.5, 0.5, 0.5, 0.5],
+      cameraGuidance: 'Static or very slow movement',
+      useCase: 'Establishing shots, contemplative moments'
+    },
+    'build': {
+      description: 'Emotion intensifies toward end',
+      intensityCurve: [0.3, 0.5, 0.7, 0.9],
+      cameraGuidance: 'Slow push-in, building tension',
+      useCase: 'Revelation building, threat approaching'
+    },
+    'release': {
+      description: 'High emotion resolves/calms',
+      intensityCurve: [0.9, 0.7, 0.5, 0.3],
+      cameraGuidance: 'Pull back, breathing room',
+      useCase: 'After climax, resolution'
+    },
+    'peak': {
+      description: 'Builds to peak then slight release',
+      intensityCurve: [0.4, 0.7, 0.95, 0.8],
+      cameraGuidance: 'Push to peak, hold',
+      useCase: 'Key moments, dramatic reveals'
+    },
+    'wave': {
+      description: 'Fluctuating emotion',
+      intensityCurve: [0.4, 0.7, 0.5, 0.8],
+      cameraGuidance: 'Dynamic, responsive movement',
+      useCase: 'Conflict, back-and-forth dialogue'
+    },
+    'shock': {
+      description: 'Sudden spike from low',
+      intensityCurve: [0.3, 0.3, 0.95, 0.9],
+      cameraGuidance: 'Static then sudden movement',
+      useCase: 'Jump scares, sudden revelations'
+    }
+  },
+
+  // Purpose templates that are more specific than generic labels
+  purposeTemplates: {
+    dialogue: {
+      speaker_introduces: '{character} reveals their position on {topic}',
+      speaker_responds: '{character} reacts to {other_character}\'s statement',
+      speaker_challenges: '{character} challenges {other_character}\'s view',
+      speaker_confesses: '{character} admits {revelation}',
+      speaker_pleads: '{character} desperately tries to convince {other_character}',
+      listener_processes: '{character} absorbs the weight of what was said',
+      listener_realizes: 'The truth dawns on {character}',
+      both_connect: '{character} and {other_character} reach understanding',
+      tension_builds: 'Unspoken tension fills the space between them'
+    },
+    action: {
+      action_begins: '{character} initiates {action}',
+      action_escalates: 'The {action} intensifies',
+      action_peaks: 'The critical moment of {action}',
+      action_resolves: 'The aftermath of {action}',
+      reaction_shot: '{character} responds to {event}'
+    },
+    emotional: {
+      emotion_surfaces: '{emotion} breaks through {character}\'s composure',
+      emotion_peaks: '{character} is overwhelmed by {emotion}',
+      emotion_shared: '{character} and {other_character} share {emotion}',
+      emotion_suppressed: '{character} struggles to contain {emotion}',
+      emotion_released: '{character} finally lets go'
+    },
+    revelation: {
+      before_reveal: 'The moment before {character} discovers the truth',
+      the_reveal: '{character} sees/learns {revelation}',
+      processing: '{character} processes what this means',
+      aftermath: 'The world has changed for {character}'
+    }
+  },
+
+  /**
+   * Generate emotional arc for a shot based on context
+   */
+  generateShotEmotionalArc(shotContext) {
+    const {
+      sceneType,
+      shotIndex,
+      totalShots,
+      previousShotEmotion,
+      sceneEmotionalTarget,
+      dialogueLine,
+      isClimax
+    } = shotContext;
+
+    // Determine position in scene
+    const isFirst = shotIndex === 0;
+    const isLast = shotIndex === totalShots - 1;
+    const progress = totalShots > 1 ? shotIndex / (totalShots - 1) : 0.5;
+
+    // Default emotional arc
+    let entryEmotion = previousShotEmotion || 'neutral';
+    let peakEmotion = sceneEmotionalTarget || 'neutral';
+    let exitEmotion = sceneEmotionalTarget || 'neutral';
+    let arcPattern = 'steady';
+    let intensity = 0.5;
+
+    // Adjust based on position
+    if (isFirst) {
+      arcPattern = 'build';
+      intensity = 0.4;
+    } else if (isLast) {
+      arcPattern = isClimax ? 'peak' : 'release';
+      intensity = isClimax ? 0.9 : 0.6;
+    } else {
+      // Middle shots - build toward climax
+      arcPattern = progress > 0.6 ? 'build' : 'steady';
+      intensity = 0.4 + (progress * 0.4);
+    }
+
+    // Extract emotion from dialogue if present
+    if (dialogueLine && dialogueLine.emotion) {
+      peakEmotion = dialogueLine.emotion;
+      if (dialogueLine.delivery) {
+        // Adjust arc based on delivery
+        if (dialogueLine.delivery.includes('shouted')) {
+          arcPattern = 'peak';
+          intensity = 0.9;
+        } else if (dialogueLine.delivery.includes('whispered')) {
+          arcPattern = 'steady';
+          intensity = 0.4;
+        } else if (dialogueLine.delivery.includes('trembling') || dialogueLine.delivery.includes('breaking')) {
+          arcPattern = 'wave';
+          intensity = 0.7;
+        }
+      }
+    }
+
+    return {
+      entryEmotion,
+      peakEmotion,
+      exitEmotion,
+      arcPattern,
+      intensity,
+      intensityCurve: this.shotArcPatterns[arcPattern]?.intensityCurve || [0.5, 0.5, 0.5, 0.5],
+      cameraGuidance: this.shotArcPatterns[arcPattern]?.cameraGuidance || 'Static'
+    };
+  },
+
+  /**
+   * Generate specific purpose description for a shot
+   */
+  generateShotPurpose(context) {
+    const {
+      sceneType,
+      shotType,
+      character,
+      otherCharacter,
+      dialogueLine,
+      action,
+      emotion,
+      revelation
+    } = context;
+
+    const templates = this.purposeTemplates[sceneType] || this.purposeTemplates.dialogue;
+
+    // Select appropriate template
+    let template = '';
+    let params = { character, other_character: otherCharacter, emotion, action, revelation, topic: 'the situation' };
+
+    if (sceneType === 'dialogue') {
+      if (shotType.includes('over_shoulder') || shotType === 'medium') {
+        template = dialogueLine ? templates.speaker_responds : templates.listener_processes;
+      } else if (shotType === 'closeup' || shotType === 'reaction') {
+        template = templates.listener_realizes;
+      } else if (shotType === 'two_shot' || shotType === 'wide') {
+        template = templates.both_connect;
+      } else {
+        template = templates.tension_builds;
+      }
+    } else if (sceneType === 'emotional') {
+      template = emotion ? templates.emotion_surfaces : templates.emotion_peaks;
+    } else if (sceneType === 'revelation') {
+      template = templates.the_reveal;
+    } else if (sceneType === 'action') {
+      template = templates.action_peaks;
+    }
+
+    // Fill in template
+    if (template) {
+      for (const [key, value] of Object.entries(params)) {
+        template = template.replace(`{${key}}`, value || 'the character');
+      }
+    }
+
+    return template || `${shotType} coverage of scene`;
+  }
+};
+
+/**
+ * SCENE_DURATION_VALIDATION_SYSTEM
+ *
+ * Validates that scene duration properly accommodates dialogue content.
+ * Compares estimated dialogue duration vs allocated scene time.
+ * Provides recommendations for adjustments when scenes are too short.
+ *
+ * This runs AFTER TTS generation to validate actual audio fits in scene.
+ */
+const SCENE_DURATION_VALIDATION_SYSTEM = {
+  // Speaking rate profiles (words per second)
+  speakingRates: {
+    'whispered': 2.0,           // Slower, breathy
+    'whispered_intense': 2.2,
+    'spoken_normal': 2.5,       // Standard conversational pace
+    'spoken_soft': 2.3,
+    'spoken_firm': 2.7,
+    'shouted': 3.0,             // Fast, urgent
+    'shouted_angry': 3.2,
+    'shouted_desperate': 3.5,
+    'trembling': 1.8,           // Slower, emotional breaks
+    'breaking': 1.5,            // Very slow, emotional
+    'commanding': 2.8,
+    'pleading': 2.2,
+    'sarcastic': 2.4,
+    'deadpan': 2.6
+  },
+
+  // Pacing-based pause durations (seconds)
+  pauseDurations: {
+    'quick_clipped': 0.3,       // Minimal pauses
+    'measured_deliberate': 0.8, // Thoughtful pauses
+    'halting_uncertain': 1.2,   // Frequent pauses
+    'rapid_breathless': 0.2,    // Almost no pauses
+    'drawn_out': 1.5,           // Long pauses
+    'default': 0.5              // Standard pause
+  },
+
+  // Buffer time between dialogue lines (seconds)
+  interDialogueBuffer: {
+    'same_speaker': 0.5,        // Same person continues
+    'different_speaker': 1.0,   // Speaker change
+    'emotional_beat': 2.0,      // Pause for emotional weight
+    'reaction_shot': 1.5,       // Time for reaction coverage
+    'default': 1.0
+  },
+
+  /**
+   * Calculate estimated duration for a single dialogue line
+   * @param {object} dialogueLine - Dialogue object with line, delivery, pacing, emotion
+   * @returns {object} { speakingDuration, totalDuration, breakdown }
+   */
+  calculateLineDuration(dialogueLine) {
+    const text = dialogueLine.line || dialogueLine.text || '';
+    const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+
+    // Get speaking rate based on delivery
+    const delivery = dialogueLine.delivery || 'spoken_normal';
+    const wordsPerSecond = this.speakingRates[delivery] || this.speakingRates['spoken_normal'];
+
+    // Base speaking time
+    let speakingDuration = wordCount / wordsPerSecond;
+
+    // Add pauses based on pacing
+    const pacing = dialogueLine.pacing || 'default';
+    const pauseTime = this.pauseDurations[pacing] || this.pauseDurations['default'];
+
+    // Count sentences for pause insertion
+    const sentenceCount = (text.match(/[.!?]+/g) || []).length || 1;
+    const internalPauses = (sentenceCount - 1) * pauseTime;
+
+    // Emphasis words get slight pauses
+    const emphasisCount = (dialogueLine.emphasis || []).length;
+    const emphasisPauses = emphasisCount * 0.2;
+
+    // Emotional delivery adjustments
+    let emotionalMultiplier = 1.0;
+    const emotion = dialogueLine.emotion || '';
+    if (emotion.includes('grief') || emotion.includes('shock') || emotion.includes('devastated')) {
+      emotionalMultiplier = 1.3; // Slower, more pauses
+    } else if (emotion.includes('angry') || emotion.includes('urgent') || emotion.includes('panic')) {
+      emotionalMultiplier = 0.9; // Faster
+    }
+
+    speakingDuration *= emotionalMultiplier;
+
+    const totalDuration = speakingDuration + internalPauses + emphasisPauses;
+
+    return {
+      wordCount,
+      speakingDuration: Math.round(speakingDuration * 10) / 10,
+      internalPauses: Math.round(internalPauses * 10) / 10,
+      emphasisPauses: Math.round(emphasisPauses * 10) / 10,
+      totalDuration: Math.round(totalDuration * 10) / 10,
+      wordsPerSecond,
+      delivery,
+      pacing
+    };
+  },
+
+  /**
+   * Calculate total estimated duration for all dialogue in a scene
+   * @param {Array} dialogue - Array of dialogue objects
+   * @returns {object} { totalDialogueDuration, lineBreakdowns, recommendations }
+   */
+  calculateSceneDialogueDuration(dialogue) {
+    if (!dialogue || !Array.isArray(dialogue) || dialogue.length === 0) {
+      return {
+        totalDialogueDuration: 0,
+        lineBreakdowns: [],
+        hasDialogue: false
+      };
+    }
+
+    const lineBreakdowns = [];
+    let totalDuration = 0;
+    let previousSpeaker = null;
+
+    dialogue.forEach((line, idx) => {
+      const lineDuration = this.calculateLineDuration(line);
+
+      // Add inter-dialogue buffer
+      let bufferType = 'default';
+      if (idx > 0) {
+        const currentSpeaker = line.character || line.speaker || 'unknown';
+        if (currentSpeaker === previousSpeaker) {
+          bufferType = 'same_speaker';
+        } else {
+          bufferType = 'different_speaker';
+        }
+
+        // Check if previous line was emotional
+        const prevEmotion = dialogue[idx - 1].emotion || '';
+        if (prevEmotion.includes('grief') || prevEmotion.includes('shock') || prevEmotion.includes('revelation')) {
+          bufferType = 'emotional_beat';
+        }
+      }
+
+      const buffer = idx > 0 ? this.interDialogueBuffer[bufferType] : 0;
+
+      lineBreakdowns.push({
+        index: idx,
+        character: line.character || line.speaker || 'Unknown',
+        preview: (line.line || line.text || '').substring(0, 50) + '...',
+        ...lineDuration,
+        bufferBefore: buffer,
+        cumulativeTime: totalDuration + lineDuration.totalDuration + buffer
+      });
+
+      totalDuration += lineDuration.totalDuration + buffer;
+      previousSpeaker = line.character || line.speaker;
+    });
+
+    return {
+      totalDialogueDuration: Math.round(totalDuration * 10) / 10,
+      lineBreakdowns,
+      hasDialogue: true,
+      lineCount: dialogue.length,
+      averageLineLength: Math.round((totalDuration / dialogue.length) * 10) / 10
+    };
+  },
+
+  /**
+   * Validate that scene duration can accommodate dialogue
+   * @param {number} sceneDuration - Allocated scene duration in seconds
+   * @param {Array} dialogue - Array of dialogue objects
+   * @param {object} options - { includeBuffer, shotCount, hasNarration }
+   * @returns {object} Validation result with recommendations
+   */
+  validateSceneDuration(sceneDuration, dialogue, options = {}) {
+    const {
+      includeBuffer = true,
+      shotCount = 4,
+      hasNarration = false,
+      narrationWordCount = 0
+    } = options;
+
+    const dialogueAnalysis = this.calculateSceneDialogueDuration(dialogue);
+
+    // Calculate narration duration if present
+    let narrationDuration = 0;
+    if (hasNarration && narrationWordCount > 0) {
+      narrationDuration = narrationWordCount / 2.3; // Slightly slower for narration
+    }
+
+    // Add buffer for visual coverage (reaction shots, establishing shots)
+    const visualBuffer = includeBuffer ? (shotCount * 0.5) : 0; // 0.5s per shot for non-dialogue coverage
+
+    // Total required duration
+    const totalAudioDuration = dialogueAnalysis.totalDialogueDuration + narrationDuration;
+    const totalRequiredDuration = totalAudioDuration + visualBuffer;
+
+    // Compare to allocated duration
+    const isValid = sceneDuration >= totalRequiredDuration;
+    const deficit = Math.max(0, totalRequiredDuration - sceneDuration);
+    const surplus = Math.max(0, sceneDuration - totalRequiredDuration);
+
+    // Generate recommendations
+    const recommendations = [];
+
+    if (!isValid) {
+      recommendations.push({
+        type: 'duration_increase',
+        severity: deficit > 5 ? 'critical' : 'warning',
+        message: `Scene needs ${Math.ceil(deficit)}s more to fit all dialogue`,
+        suggestedDuration: Math.ceil(totalRequiredDuration)
+      });
+
+      // Suggest splitting scene if deficit is large
+      if (deficit > 15) {
+        recommendations.push({
+          type: 'scene_split',
+          severity: 'suggestion',
+          message: `Consider splitting into ${Math.ceil(totalRequiredDuration / 30)} scenes for better pacing`
+        });
+      }
+
+      // Suggest trimming dialogue if minor deficit
+      if (deficit <= 5 && dialogueAnalysis.lineCount > 3) {
+        recommendations.push({
+          type: 'dialogue_trim',
+          severity: 'suggestion',
+          message: `Trimming 1-2 dialogue lines could fit within current duration`
+        });
+      }
+    } else if (surplus > 10) {
+      recommendations.push({
+        type: 'add_content',
+        severity: 'info',
+        message: `Scene has ${Math.floor(surplus)}s of visual breathing room - good for reaction shots`
+      });
+    }
+
+    // Shot duration recommendation
+    const optimalShotDuration = totalAudioDuration / shotCount;
+    if (optimalShotDuration < 3) {
+      recommendations.push({
+        type: 'reduce_shots',
+        severity: 'warning',
+        message: `${shotCount} shots results in ${optimalShotDuration.toFixed(1)}s avg - consider fewer shots for dialogue coverage`
+      });
+    }
+
+    return {
+      isValid,
+      sceneDuration,
+      dialogueDuration: dialogueAnalysis.totalDialogueDuration,
+      narrationDuration: Math.round(narrationDuration * 10) / 10,
+      visualBuffer: Math.round(visualBuffer * 10) / 10,
+      totalRequired: Math.round(totalRequiredDuration * 10) / 10,
+      deficit: Math.round(deficit * 10) / 10,
+      surplus: Math.round(surplus * 10) / 10,
+      recommendations,
+      lineBreakdowns: dialogueAnalysis.lineBreakdowns,
+      summary: isValid
+        ? `✓ Scene duration (${sceneDuration}s) accommodates all content (${Math.round(totalRequiredDuration)}s needed)`
+        : `⚠ Scene too short: ${sceneDuration}s allocated, ${Math.round(totalRequiredDuration)}s needed`
+    };
+  },
+
+  /**
+   * Validate with actual TTS audio durations (post-generation)
+   * @param {number} sceneDuration - Allocated scene duration
+   * @param {Array} ttsResults - Array of { lineIndex, audioDuration } from TTS generation
+   * @returns {object} Validation with actual durations
+   */
+  validateWithActualTTS(sceneDuration, ttsResults) {
+    if (!ttsResults || ttsResults.length === 0) {
+      return {
+        isValid: true,
+        message: 'No TTS audio to validate'
+      };
+    }
+
+    const totalTTSDuration = ttsResults.reduce((sum, r) => sum + (r.audioDuration || 0), 0);
+
+    // Add inter-line buffers (1s per transition)
+    const buffers = Math.max(0, ttsResults.length - 1) * 1.0;
+    const totalRequired = totalTTSDuration + buffers;
+
+    const isValid = sceneDuration >= totalRequired;
+    const deficit = Math.max(0, totalRequired - sceneDuration);
+
+    return {
+      isValid,
+      sceneDuration,
+      totalTTSDuration: Math.round(totalTTSDuration * 10) / 10,
+      buffers: Math.round(buffers * 10) / 10,
+      totalRequired: Math.round(totalRequired * 10) / 10,
+      deficit: Math.round(deficit * 10) / 10,
+      lineCount: ttsResults.length,
+      averageTTSLength: Math.round((totalTTSDuration / ttsResults.length) * 10) / 10,
+      message: isValid
+        ? `✓ TTS audio (${Math.round(totalTTSDuration)}s) fits in scene (${sceneDuration}s)`
+        : `⚠ TTS audio (${Math.round(totalRequired)}s total) exceeds scene (${sceneDuration}s) by ${Math.round(deficit)}s`
+    };
+  },
+
+  /**
+   * Generate shot timing based on dialogue placement
+   * @param {Array} dialogue - Array of dialogue objects
+   * @param {number} shotCount - Number of shots in scene
+   * @param {number} sceneDuration - Total scene duration
+   * @returns {Array} Shot timing recommendations
+   */
+  generateShotTimingFromDialogue(dialogue, shotCount, sceneDuration) {
+    const dialogueAnalysis = this.calculateSceneDialogueDuration(dialogue);
+
+    if (!dialogueAnalysis.hasDialogue) {
+      // No dialogue - even distribution
+      const shotDuration = sceneDuration / shotCount;
+      return Array(shotCount).fill(null).map((_, idx) => ({
+        shotIndex: idx,
+        startTime: idx * shotDuration,
+        duration: shotDuration,
+        hasDialogue: false
+      }));
+    }
+
+    const shotTimings = [];
+    const lineBreakdowns = dialogueAnalysis.lineBreakdowns;
+
+    // Distribute shots across dialogue lines
+    // First shot: establishing (2-3s before dialogue starts)
+    // Middle shots: aligned with dialogue lines
+    // Last shot: resolution (after dialogue ends)
+
+    const establishingDuration = Math.min(3, sceneDuration * 0.1);
+    const resolutionDuration = Math.min(3, sceneDuration * 0.1);
+    const dialogueTime = sceneDuration - establishingDuration - resolutionDuration;
+
+    // First shot - establishing
+    shotTimings.push({
+      shotIndex: 0,
+      startTime: 0,
+      duration: establishingDuration,
+      hasDialogue: false,
+      purpose: 'establishing'
+    });
+
+    // Distribute remaining shots across dialogue
+    const middleShots = shotCount - 2;
+    if (middleShots > 0 && lineBreakdowns.length > 0) {
+      const linesPerShot = Math.ceil(lineBreakdowns.length / middleShots);
+
+      for (let i = 0; i < middleShots; i++) {
+        const startLineIdx = i * linesPerShot;
+        const endLineIdx = Math.min(startLineIdx + linesPerShot - 1, lineBreakdowns.length - 1);
+
+        const startLine = lineBreakdowns[startLineIdx];
+        const endLine = lineBreakdowns[endLineIdx];
+
+        const shotStart = establishingDuration + (startLine?.cumulativeTime - startLine?.totalDuration || i * (dialogueTime / middleShots));
+        const shotEnd = establishingDuration + (endLine?.cumulativeTime || (i + 1) * (dialogueTime / middleShots));
+
+        shotTimings.push({
+          shotIndex: i + 1,
+          startTime: Math.round(shotStart * 10) / 10,
+          duration: Math.round((shotEnd - shotStart) * 10) / 10,
+          hasDialogue: true,
+          dialogueLines: lineBreakdowns.slice(startLineIdx, endLineIdx + 1).map(l => l.index),
+          purpose: 'dialogue_coverage'
+        });
+      }
+    }
+
+    // Last shot - resolution
+    shotTimings.push({
+      shotIndex: shotCount - 1,
+      startTime: sceneDuration - resolutionDuration,
+      duration: resolutionDuration,
+      hasDialogue: false,
+      purpose: 'resolution'
+    });
+
+    return shotTimings;
+  }
+};
+
 const SHOT_DECOMPOSITION_ENGINE = {
   // Shot type library with cinematographic purpose
   shotTypes: {
@@ -52581,7 +53400,15 @@ const SHOT_DECOMPOSITION_ENGINE = {
    */
   generateShotSequence(sceneType, shotCount, sceneDuration, clipDuration = 10, options = {}) {
     const pattern = this.scenePatterns[sceneType] || this.scenePatterns['dialogue'];
-    const { dialogueLines = 0, characterCount = 2, genre = 'drama', characters = [] } = options;
+    const {
+      dialogueLines = 0,
+      characterCount = 2,
+      genre = 'drama',
+      characters = [],
+      dialogueData = [],        // NEW: Full dialogue array for emotional arc
+      sceneEmotionalTarget = 'neutral',  // NEW: Scene's target emotion
+      isClimax = false          // NEW: Is this a climax scene?
+    } = options;
     const sequence = [];
 
     // MINIMAX CONSTRAINT: Each shot must be exactly 6s or 10s
@@ -52592,6 +53419,9 @@ const SHOT_DECOMPOSITION_ENGINE = {
 
     // Get character action guidelines for this scene type
     const actionGuidelines = CHARACTER_ACTION_GUIDELINES[sceneType] || CHARACTER_ACTION_GUIDELINES['dialogue'];
+
+    // Track emotional progression across shots
+    let previousShotEmotion = 'neutral';
 
     // For dialogue scenes, use professional coverage pattern
     if (sceneType === 'dialogue' && pattern.useShotReverseShot) {
@@ -52606,26 +53436,72 @@ const SHOT_DECOMPOSITION_ENGINE = {
 
         // Assign character for shot/reverse shot
         let assignedCharacter = null;
+        let otherCharacter = null;
         if (patternShot.shotType.includes('_A') && characters[0]) {
           assignedCharacter = characters[0];
+          otherCharacter = characters[1] || null;
         } else if (patternShot.shotType.includes('_B') && characters[1]) {
           assignedCharacter = characters[1];
+          otherCharacter = characters[0] || null;
         }
+
+        // Get dialogue line for this shot if available
+        const dialogueLine = dialogueData[i % dialogueData.length] || null;
+
+        // Generate emotional arc for this shot
+        const emotionalArc = SHOT_EMOTIONAL_ARC_SYSTEM.generateShotEmotionalArc({
+          sceneType,
+          shotIndex: i,
+          totalShots: shotCount,
+          previousShotEmotion,
+          sceneEmotionalTarget,
+          dialogueLine,
+          isClimax
+        });
+
+        // Generate specific purpose description
+        const specificPurpose = SHOT_EMOTIONAL_ARC_SYSTEM.generateShotPurpose({
+          sceneType,
+          shotType: shotTypeKey,
+          character: assignedCharacter,
+          otherCharacter,
+          dialogueLine,
+          emotion: dialogueLine?.emotion || sceneEmotionalTarget
+        });
+
+        // Update emotion tracking
+        previousShotEmotion = emotionalArc.exitEmotion;
 
         sequence.push({
           shotIndex: i + 1,
           shotType: shotTypeKey,
           shotTypeName: shotType?.name || patternShot.shotType,
           duration: validClipDuration,
-          cameraMovement: patternShot.cameraMovement || 'static',
+          cameraMovement: patternShot.cameraMovement || emotionalArc.cameraGuidance || 'static',
           promptPrefix: shotType?.promptPrefix || `[${patternShot.shotType}]`,
-          purpose: patternShot.purpose,
+          purpose: specificPurpose || patternShot.purpose,
           transition: 'cut',
-          // NEW: Professional coverage metadata
+          // Professional coverage metadata
           coverageRole: patternShot.purpose,
           assignedCharacter: assignedCharacter,
           characterAction: actionGuidelines.promptModifier,
-          genreStyle: genreProfile.name
+          genreStyle: genreProfile.name,
+          // NEW: Emotional arc tracking
+          emotionalArc: {
+            entryEmotion: emotionalArc.entryEmotion,
+            peakEmotion: emotionalArc.peakEmotion,
+            exitEmotion: emotionalArc.exitEmotion,
+            arcPattern: emotionalArc.arcPattern,
+            intensity: emotionalArc.intensity,
+            intensityCurve: emotionalArc.intensityCurve
+          },
+          // NEW: Performance direction if dialogue present
+          performanceDirection: dialogueLine ? {
+            delivery: dialogueLine.delivery,
+            pacing: dialogueLine.pacing,
+            eyeline: dialogueLine.eyeline,
+            emphasis: dialogueLine.emphasis
+          } : null
         });
       }
     } else {
@@ -52640,6 +53516,28 @@ const SHOT_DECOMPOSITION_ENGINE = {
         // Get appropriate camera movement
         const cameraMovement = this.getCameraMovementForScene(sceneType, i, shotCount, shotTypeKey);
 
+        // Generate emotional arc for this shot
+        const emotionalArc = SHOT_EMOTIONAL_ARC_SYSTEM.generateShotEmotionalArc({
+          sceneType,
+          shotIndex: i,
+          totalShots: shotCount,
+          previousShotEmotion,
+          sceneEmotionalTarget,
+          dialogueLine: null,
+          isClimax
+        });
+
+        // Generate specific purpose
+        const specificPurpose = SHOT_EMOTIONAL_ARC_SYSTEM.generateShotPurpose({
+          sceneType,
+          shotType: shotTypeKey,
+          character: characters[0] || null,
+          emotion: sceneEmotionalTarget
+        });
+
+        // Update emotion tracking
+        previousShotEmotion = emotionalArc.exitEmotion;
+
         sequence.push({
           shotIndex: i + 1,
           shotType: shotTypeKey,
@@ -52647,10 +53545,19 @@ const SHOT_DECOMPOSITION_ENGINE = {
           duration: validClipDuration,
           cameraMovement: cameraMovement,
           promptPrefix: shotType?.promptPrefix || `[${shotTypeKey}]`,
-          purpose: shotType?.useCases?.[0] || 'scene coverage',
+          purpose: specificPurpose || shotType?.useCases?.[0] || 'scene coverage',
           transition: isLastShot ? 'cut' : 'cut',
           characterAction: actionGuidelines.promptModifier,
-          genreStyle: genreProfile.name
+          genreStyle: genreProfile.name,
+          // NEW: Emotional arc tracking
+          emotionalArc: {
+            entryEmotion: emotionalArc.entryEmotion,
+            peakEmotion: emotionalArc.peakEmotion,
+            exitEmotion: emotionalArc.exitEmotion,
+            arcPattern: emotionalArc.arcPattern,
+            intensity: emotionalArc.intensity,
+            intensityCurve: emotionalArc.intensityCurve
+          }
         });
       }
     }
@@ -54371,6 +55278,9 @@ exports.GENRE_CINEMATOGRAPHY_PROFILES = GENRE_CINEMATOGRAPHY_PROFILES;
 exports.DIALOGUE_COVERAGE_PATTERNS = DIALOGUE_COVERAGE_PATTERNS;
 exports.CAMERA_MOVEMENT_RULES = CAMERA_MOVEMENT_RULES;
 exports.CHARACTER_ACTION_GUIDELINES = CHARACTER_ACTION_GUIDELINES;
+exports.DIALOGUE_PERFORMANCE_PROFILES = DIALOGUE_PERFORMANCE_PROFILES;
+exports.SHOT_EMOTIONAL_ARC_SYSTEM = SHOT_EMOTIONAL_ARC_SYSTEM;
+exports.SCENE_DURATION_VALIDATION_SYSTEM = SCENE_DURATION_VALIDATION_SYSTEM;
 
 // =============================================================================
 // PHASE 12B: SHOT VIDEO GENERATION & ASSEMBLY
@@ -55646,6 +56556,35 @@ Return JSON:
         const dialogueLines = SHOT_DECOMPOSITION_ENGINE.countDialogueLines(scene);
         const dialogueCharacters = SHOT_DECOMPOSITION_ENGINE.extractDialogueCharacters(scene);
         const genre = globalVisualProfile?.genre || scene.genre || 'drama';
+
+        // ===============================================================
+        // SCENE DURATION VALIDATION (Phase 1.3)
+        // Validate that scene duration can accommodate all dialogue
+        // ===============================================================
+        if (scene.dialogue && scene.dialogue.length > 0) {
+          const durationValidation = SCENE_DURATION_VALIDATION_SYSTEM.validateSceneDuration(
+            sceneDuration,
+            scene.dialogue,
+            {
+              includeBuffer: true,
+              shotCount: targetShotCount || 4,
+              hasNarration: !!scene.narration,
+              narrationWordCount: scene.narration ? scene.narration.split(/\s+/).length : 0
+            }
+          );
+
+          console.log(`[SceneDurationValidation] Scene ${i + 1}: ${durationValidation.summary}`);
+
+          if (!durationValidation.isValid) {
+            console.warn(`[SceneDurationValidation] Scene ${i + 1} WARNINGS:`);
+            durationValidation.recommendations.forEach(rec => {
+              console.warn(`  - [${rec.severity}] ${rec.message}`);
+            });
+
+            // Store validation result for potential UI warning
+            scene.durationValidation = durationValidation;
+          }
+        }
 
         // Use enhanced shot count calculation
         const calculatedShotCount = SHOT_DECOMPOSITION_ENGINE.calculateShotCount(
