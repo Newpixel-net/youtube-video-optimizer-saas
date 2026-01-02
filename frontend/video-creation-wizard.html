@@ -10457,19 +10457,37 @@
          * Generate video with selected model
          */
         async function generateVideoWithSelectedModel() {
+            console.log('[generateVideoWithSelectedModel] Called');
             const { sceneId, shotIndex, selectedModel, selectedDuration, multitalk, speakingCharacters } = state.storyboard.videoModelSelector;
 
+            console.log('[generateVideoWithSelectedModel] State:', {
+                sceneId, shotIndex, selectedModel,
+                audioUrl: multitalk?.audioUrl,
+                dialogueAudioStatus: multitalk?.dialogueAudioStatus,
+                audioUploadStatus: multitalk?.audioUploadStatus,
+                audioDuration: multitalk?.audioDuration,
+                speakingCharacters
+            });
+
             if (selectedModel === 'minimax') {
+                console.log('[generateVideoWithSelectedModel] Using Minimax');
                 // Use existing Minimax generation with selected duration
                 closeVideoModelSelector();
                 // Convert duration string to number (5s -> 5, 10s -> 10)
                 const durationNum = selectedDuration ? parseInt(selectedDuration) : null;
                 generateSingleShotVideo(sceneId, shotIndex, durationNum);
             } else if (selectedModel === 'multitalk') {
+                console.log('[generateVideoWithSelectedModel] Using Multitalk');
                 // Check if we have generated dialogue audio (NEW: FAL ElevenLabs)
                 // This is the preferred method - single audio file with all characters
+                const hasAudioUrl = !!multitalk.audioUrl;
+                const hasDialogueStatus = multitalk.dialogueAudioStatus === 'ready';
+                const hasUploadStatus = multitalk.audioUploadStatus === 'ready';
+                console.log('[generateVideoWithSelectedModel] Audio check:', { hasAudioUrl, hasDialogueStatus, hasUploadStatus });
+
                 if (multitalk.audioUrl && (multitalk.dialogueAudioStatus === 'ready' || multitalk.audioUploadStatus === 'ready')) {
                     // Use the generated/uploaded single audio file for all characters
+                    console.log('[generateVideoWithSelectedModel] Starting Multitalk with audio:', multitalk.audioUrl);
                     closeVideoModelSelector();
                     generateMultitalkVideo(sceneId, shotIndex, multitalk.audioUrl, multitalk.audioDuration, null);
                     return;
@@ -10478,6 +10496,7 @@
                 // Fallback: Check for per-character audio uploads (legacy mode)
                 const characters = speakingCharacters || [];
                 const characterAudios = multitalk.characterAudios || {};
+                console.log('[generateVideoWithSelectedModel] Fallback check - characters:', characters.length);
 
                 if (characters.length > 1) {
                     // Multi-character: validate all character audios are uploaded
@@ -10487,6 +10506,7 @@
                     });
 
                     if (missingAudios.length > 0) {
+                        console.log('[generateVideoWithSelectedModel] Missing audio for:', missingAudios);
                         showToast('Please generate dialogue audio or upload audio for all characters', 'error');
                         return;
                     }
@@ -10507,6 +10527,7 @@
                     generateMultitalkVideo(sceneId, shotIndex, null, totalDuration, characterAudioData);
                 } else {
                     // Single character or no characters: need audio
+                    console.log('[generateVideoWithSelectedModel] No audio and no multi-character setup');
                     showToast('Please generate dialogue audio or upload a voiceover file', 'error');
                     return;
                 }
@@ -10554,14 +10575,19 @@
          * @param {Object|null} characterAudioData - Per-character audio data { charName: { audioUrl, audioDuration } }
          */
         async function generateMultitalkVideo(sceneId, shotIndex, audioUrl, audioDuration, characterAudioData = null) {
+            console.log('[generateMultitalkVideo] Called with:', { sceneId, shotIndex, audioUrl, audioDuration, hasCharacterData: !!characterAudioData });
+
             const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
             if (!decomposed || !decomposed.shots[shotIndex]) {
+                console.error('[generateMultitalkVideo] Shot not found');
                 showToast('Shot not found', 'error');
                 return;
             }
 
             const shot = decomposed.shots[shotIndex];
+            console.log('[generateMultitalkVideo] Shot status:', shot.status, 'hasImage:', !!shot.imageUrl);
             if (!shot.imageUrl || shot.status !== 'ready') {
+                console.error('[generateMultitalkVideo] Image not ready');
                 showToast('Generate image first before creating video', 'error');
                 return;
             }
@@ -19559,7 +19585,7 @@
             female: ['Aria', 'Sarah', 'Laura', 'River', 'Charlotte', 'Alice', 'Matilda', 'Jessica', 'Lily']
         };
 
-        // Map old OpenAI TTS voices to FAL ElevenLabs voices
+        // Map old OpenAI TTS voices and voice profile IDs to FAL ElevenLabs voices
         // Used for backward compatibility with projects created before ElevenLabs integration
         const OPENAI_TO_ELEVENLABS_VOICE_MAP = {
             // OpenAI male voices -> ElevenLabs male voices
@@ -19579,27 +19605,72 @@
             'arnold': 'Will',     // Strong male
             'sam': 'Chris',       // Casual male
             'antoni': 'Eric',     // Friendly male
-            // Direct pass-through for already-valid ElevenLabs voices
-            'Roger': 'Roger', 'Charlie': 'Charlie', 'George': 'George', 'Callum': 'Callum',
-            'Liam': 'Liam', 'Will': 'Will', 'Eric': 'Eric', 'Chris': 'Chris', 'Brian': 'Brian',
-            'Daniel': 'Daniel', 'Bill': 'Bill', 'Aria': 'Aria', 'Sarah': 'Sarah', 'Laura': 'Laura',
-            'River': 'River', 'Charlotte': 'Charlotte', 'Alice': 'Alice', 'Matilda': 'Matilda',
-            'Jessica': 'Jessica', 'Lily': 'Lily'
+
+            // Voice Profile IDs -> ElevenLabs voices (matching CHARACTER_VOICE_PROFILES)
+            'male-hero': 'Roger',
+            'male-wise': 'George',
+            'male-villain': 'Daniel',
+            'male-young': 'Liam',
+            'male-rugged': 'Brian',
+            'female-hero': 'Aria',
+            'female-wise': 'Sarah',
+            'female-villain': 'Jessica',
+            'female-young': 'Charlotte',
+            'female-warrior': 'Laura',
+            'narrator-omniscient': 'Roger',
+            'child': 'Alice',
+            'robot': 'Charlie',
+
+            // Direct pass-through for already-valid ElevenLabs voices (case-insensitive)
+            'roger': 'Roger', 'charlie': 'Charlie', 'george': 'George', 'callum': 'Callum',
+            'liam': 'Liam', 'will': 'Will', 'eric': 'Eric', 'chris': 'Chris', 'brian': 'Brian',
+            'daniel': 'Daniel', 'bill': 'Bill', 'aria': 'Aria', 'sarah': 'Sarah', 'laura': 'Laura',
+            'river': 'River', 'charlotte': 'Charlotte', 'alice': 'Alice', 'matilda': 'Matilda',
+            'jessica': 'Jessica', 'lily': 'Lily'
         };
 
-        // Helper function to convert any voice name to ElevenLabs voice
-        function toElevenLabsVoice(voiceName) {
-            if (!voiceName) return 'Roger';
-            const normalized = voiceName.toLowerCase();
-            // Check direct mapping
-            if (OPENAI_TO_ELEVENLABS_VOICE_MAP[normalized]) {
-                return OPENAI_TO_ELEVENLABS_VOICE_MAP[normalized];
+        // Helper function to convert any voice name/object to ElevenLabs voice
+        function toElevenLabsVoice(voiceInput) {
+            if (!voiceInput) return 'Roger';
+
+            // Handle object inputs - extract the voice ID string
+            let voiceName = voiceInput;
+            if (typeof voiceInput === 'object') {
+                // Priority: elevenLabsVoice > voiceProfileId > voiceProfile.elevenLabsVoice > id
+                voiceName = voiceInput.elevenLabsVoice ||
+                            voiceInput.voiceProfileId ||
+                            voiceInput.voiceProfile?.elevenLabsVoice ||
+                            voiceInput.id ||
+                            voiceInput.name ||
+                            'Roger';
+                console.log(`[toElevenLabsVoice] Extracted '${voiceName}' from object:`, voiceInput);
             }
+
+            // Ensure we have a string
+            if (typeof voiceName !== 'string') {
+                console.warn('[toElevenLabsVoice] Non-string voice, defaulting to Roger:', voiceName);
+                return 'Roger';
+            }
+
+            const normalized = voiceName.toLowerCase();
+
+            // Check direct mapping (handles both OpenAI names and voice profile IDs)
+            if (OPENAI_TO_ELEVENLABS_VOICE_MAP[normalized]) {
+                const mapped = OPENAI_TO_ELEVENLABS_VOICE_MAP[normalized];
+                console.log(`[toElevenLabsVoice] Mapped '${voiceName}' -> '${mapped}'`);
+                return mapped;
+            }
+
             // Check if already a valid ElevenLabs voice (case-insensitive)
             const allVoices = [...FAL_ELEVENLABS_VOICES.male, ...FAL_ELEVENLABS_VOICES.female];
             const match = allVoices.find(v => v.toLowerCase() === normalized);
-            if (match) return match;
+            if (match) {
+                console.log(`[toElevenLabsVoice] Already valid ElevenLabs voice: '${match}'`);
+                return match;
+            }
+
             // Default fallback
+            console.log(`[toElevenLabsVoice] No mapping for '${voiceName}', defaulting to Roger`);
             return 'Roger';
         }
 
