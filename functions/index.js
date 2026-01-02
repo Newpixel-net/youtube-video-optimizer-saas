@@ -58182,7 +58182,7 @@ Tone: Natural, expressive.`;
         // Video settings
         aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
         scale_to_length: 1280,    // 720p resolution (1280x720 for 16:9)
-        scale_to_side: 'longest',  // Scale longest side to target length
+        scale_to_side: 'None',  // Must be "None" string to match workflow
         fps: fps,
         num_frames: numFrames,
 
