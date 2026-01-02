@@ -10602,17 +10602,21 @@
                 // Continue anyway with enhanced config - graceful degradation
             }
             const validatedTTSConfig = ttsValidation.enhanced;
+            console.log('[generateMultitalkVideo] TTS validation complete, setting status...');
 
             shot.videoStatus = 'generating';
             shot.videoModel = 'multitalk';
             shot.videoModelReason = characterAudioData ? 'Multitalk with multi-character audio' : 'Multitalk with voiceover';
+            console.log('[generateMultitalkVideo] Calling render...');
             render();
             renderShotDecompositionModal();
 
             const characterCount = characterAudioData ? Object.keys(characterAudioData).length : 1;
+            console.log('[generateMultitalkVideo] Showing toast, preparing cloud function call...');
             showToast(`🎤 Multitalk: Starting video with ${characterCount} voice track(s)...`, 'info');
 
             try {
+                console.log('[generateMultitalkVideo] Creating httpsCallable...');
                 const generateVideoFn = functions.httpsCallable('creationWizardGenerateMultitalkVideo', { timeout: 300000 });
 
                 // Use videoPrompt for the animation
@@ -10630,6 +10634,16 @@
                         text: d.line || d.text || ''
                     }));
                 }
+
+                console.log('[generateMultitalkVideo] Calling cloud function with:', {
+                    projectId: state.project.id,
+                    sceneId,
+                    shotId: shot.id,
+                    imageUrl: shot.imageUrl?.substring(0, 50) + '...',
+                    audioUrl: audioUrl?.substring(0, 50) + '...',
+                    audioDuration: audioDuration || 10,
+                    dialogueLinesCount: dialogueLines.length
+                });
 
                 const result = await generateVideoFn({
                     projectId: state.project.id,
@@ -10650,6 +10664,8 @@
                     // NEW: Per-character audio data for multi-voice shots
                     characterAudioData: characterAudioData
                 });
+
+                console.log('[generateMultitalkVideo] Cloud function returned:', result.data);
 
                 if (result.data.success) {
                     shot.videoTaskId = result.data.jobId;
