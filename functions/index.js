@@ -33801,14 +33801,20 @@ exports.creationWizardGenerateDialogueAudio = functions
       }
     });
 
-    if (!result.audio?.url) {
-      throw new Error('FAL API did not return audio URL');
+    console.log(`[creationWizardGenerateDialogueAudio] FAL API response:`, JSON.stringify(result, null, 2));
+
+    // Handle different response formats from FAL
+    const audioUrl = result.audio?.url || result.output?.audio?.url || (typeof result.audio === 'string' ? result.audio : null);
+
+    if (!audioUrl) {
+      console.error('[creationWizardGenerateDialogueAudio] No audio URL in response. Full result:', JSON.stringify(result));
+      throw new Error('FAL API did not return audio URL. Check function logs for details.');
     }
 
-    console.log(`[creationWizardGenerateDialogueAudio] Audio generated: ${result.audio.url}`);
+    console.log(`[creationWizardGenerateDialogueAudio] Audio generated: ${audioUrl}`);
 
     // Download the audio from FAL and upload to Firebase Storage for permanence
-    const audioResponse = await axios.get(result.audio.url, { responseType: 'arraybuffer' });
+    const audioResponse = await axios.get(audioUrl, { responseType: 'arraybuffer' });
     const audioBuffer = Buffer.from(audioResponse.data);
 
     // Upload to Firebase Storage
