@@ -58099,7 +58099,7 @@ exports.creationWizardGenerateMultitalkVideo = functions
         version: 'v4',
         action: 'write',
         expires: Date.now() + 30 * 60 * 1000, // 30 minutes
-        contentType: 'application/octet-stream',
+        contentType: 'video/mp4',
       });
 
       // Map aspect ratio to Multitalk format
@@ -58201,6 +58201,7 @@ Tone: Natural, expressive.`;
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
         imageUrl: imageUrl.substring(0, 50) + '...',
         audioUrl: effectiveAudioUrl.substring(0, 50) + '...',
+        uploadUrl: uploadUrl.substring(0, 80) + '...',
         audioCropEnd: runpodInput.audio_crop_end_time,
         numFrames: runpodInput.num_frames,
         fps: runpodInput.fps,
