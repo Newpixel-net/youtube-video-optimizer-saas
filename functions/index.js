@@ -46164,13 +46164,15 @@ const CHARACTER_VOICE_ENGINE = {
         text: d.line,  // Use 'text' property to match validation expectations
         emotion: d.emotion,
         delivery: d.delivery,
-        voiceId: d.voice.elevenLabsVoice,
-        voiceProfileId: d.voice.voiceProfileId,
+        // Voice properties - 'voice' is required by frontend validation
+        voice: d.voice?.elevenLabsVoice || 'adam',  // Frontend validation checks this
+        voiceId: d.voice?.elevenLabsVoice || 'adam',
+        voiceProfileId: d.voice?.voiceProfileId || 'narrator_dramatic',
         startTimeInShot: d.startTimeInShot || 0,
         durationInShot: d.durationInShot || 2
       })),
       totalLines: enhancedDialogue.length,
-      uniqueVoices: [...new Set(enhancedDialogue.map(d => d.voice.voiceProfileId))].length,
+      uniqueVoices: [...new Set(enhancedDialogue.map(d => d.voice?.voiceProfileId || 'default'))].length,
       estimatedDuration: shot.dialogueDuration || 5
     };
   }
@@ -54123,13 +54125,63 @@ exports.creationWizardGenerateMultitalkVideo = functions
       ttsConfig,           // TTS configuration from shot decomposition
       voiceRequirements,   // Voice requirements summary
       characterVoices,     // Map of character -> voiceProfileId
-      dialogue             // Raw dialogue array as fallback
+      dialogue,            // Raw dialogue array as fallback
+      // NEW: Per-character audio data for multi-voice shots
+      characterAudioData   // { charName: { audioUrl, audioDuration } }
     } = data;
 
     if (!imageUrl) {
       throw new functions.https.HttpsError('invalid-argument', 'Image URL is required');
     }
-    if (!audioUrl) {
+
+    // Determine effective audio URL and duration
+    // Priority: 1) characterAudioData (multi-character), 2) single audioUrl
+    let effectiveAudioUrl = audioUrl;
+    let effectiveAudioDuration = audioDuration || 10;
+    let isMultiCharacterAudio = false;
+    let characterAudioInfo = [];
+
+    if (characterAudioData && typeof characterAudioData === 'object') {
+      const characterNames = Object.keys(characterAudioData);
+      if (characterNames.length > 0) {
+        isMultiCharacterAudio = true;
+
+        // For now, use the longest audio (covers full dialogue)
+        // Future: Implement audio concatenation/mixing
+        let longestDuration = 0;
+        let primaryAudioUrl = null;
+
+        characterNames.forEach(charName => {
+          const charAudio = characterAudioData[charName];
+          characterAudioInfo.push({
+            character: charName,
+            duration: charAudio.audioDuration || 0,
+            hasAudio: !!charAudio.audioUrl
+          });
+
+          if (charAudio.audioDuration && charAudio.audioDuration > longestDuration) {
+            longestDuration = charAudio.audioDuration;
+            primaryAudioUrl = charAudio.audioUrl;
+            effectiveAudioDuration = charAudio.audioDuration;
+          } else if (!primaryAudioUrl && charAudio.audioUrl) {
+            // Fallback to first available if no duration info
+            primaryAudioUrl = charAudio.audioUrl;
+          }
+        });
+
+        if (primaryAudioUrl) {
+          effectiveAudioUrl = primaryAudioUrl;
+        }
+
+        console.log('[creationWizardGenerateMultitalkVideo] Multi-character audio:', {
+          characterCount: characterNames.length,
+          characters: characterAudioInfo,
+          usingLongestDuration: effectiveAudioDuration
+        });
+      }
+    }
+
+    if (!effectiveAudioUrl) {
       throw new functions.https.HttpsError('invalid-argument', 'Audio URL is required');
     }
 
@@ -54180,9 +54232,9 @@ exports.creationWizardGenerateMultitalkVideo = functions
       // Calculate parameters based on audio duration
       // Multitalk uses 16 fps as per working reference
       const fps = 16;
-      const effectiveDuration = audioDuration || 10;
+      // Use effectiveAudioDuration (already calculated from characterAudioData or audioDuration)
       // num_frames = duration * fps (e.g., 18 seconds * 16 fps = 288 frames)
-      const numFrames = Math.ceil(effectiveDuration * fps);
+      const numFrames = Math.ceil(effectiveAudioDuration * fps);
 
       // Format audio crop times as "M:SS" strings
       const formatAudioTime = (seconds) => {
@@ -54235,12 +54287,12 @@ Tone: Natural, expressive.`;
       const runpodInput = {
         // Core required parameters
         image_url: imageUrl,
-        audio_url: audioUrl,
-        video_upload_url: uploadUrl,  // Correct parameter name
+        audio_url: effectiveAudioUrl,  // Use effective URL (may be from characterAudioData)
+        video_upload_url: uploadUrl,   // Correct parameter name
 
         // Audio timing (format: "M:SS")
         audio_crop_start_time: '0:00',
-        audio_crop_end_time: formatAudioTime(effectiveDuration),
+        audio_crop_end_time: formatAudioTime(effectiveAudioDuration),
 
         // Prompts
         positive_prompt: positivePrompt,
@@ -54267,12 +54319,14 @@ Tone: Natural, expressive.`;
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
         imageUrl: imageUrl.substring(0, 50) + '...',
-        audioUrl: audioUrl.substring(0, 50) + '...',
+        audioUrl: effectiveAudioUrl.substring(0, 50) + '...',
         audioCropEnd: runpodInput.audio_crop_end_time,
         numFrames: runpodInput.num_frames,
         fps: runpodInput.fps,
         aspectRatio: runpodInput.aspect_ratio,
-        hasDialogueInPrompt: positivePrompt.includes('Speech/Dialogue')
+        hasDialogueInPrompt: positivePrompt.includes('Speech/Dialogue'),
+        isMultiCharacterAudio: isMultiCharacterAudio,
+        characterCount: characterAudioInfo.length || 1
       });
 
       // Call RunPod Multitalk endpoint
