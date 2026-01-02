@@ -58093,13 +58093,13 @@ exports.creationWizardGenerateMultitalkVideo = functions
       const fileName = `creation-projects/${projectId || uid}/multitalk-videos/scene_${sceneId}_shot_${shotIndex}_${Date.now()}_${seed}.mp4`;
 
       // Create signed URL for upload
+      // NOTE: Not specifying contentType so the Multitalk worker can upload with any content-type
       const bucket = admin.storage().bucket();
       const file = bucket.file(fileName);
       const [uploadUrl] = await file.getSignedUrl({
         version: 'v4',
         action: 'write',
-        expires: Date.now() + 30 * 60 * 1000, // 30 minutes
-        contentType: 'video/mp4',
+        expires: Date.now() + 60 * 60 * 1000, // 60 minutes (longer expiry)
       });
 
       // Map aspect ratio to Multitalk format
