@@ -58315,10 +58315,27 @@ exports.creationWizardCheckMultitalkStatus = functions.https.onCall(async (data,
     let errorMsg = null;
 
     if (result.status === 'COMPLETED') {
-      mappedStatus = 'COMPLETED';
-      // Video URL should be in the payload or we constructed it earlier
-      if (result.output?.payload?.videoUrl) {
-        videoUrl = result.output.payload.videoUrl;
+      // Check if the handler returned an error status in output
+      // RunPod marks job as COMPLETED even when handler returns {status: 500, message: "error"}
+      if (result.output?.status === 500 || result.output?.status === 400) {
+        mappedStatus = 'FAILED';
+        errorMsg = result.output?.message || 'Multitalk worker returned an error';
+        console.error('[creationWizardCheckMultitalkStatus] Worker error:', {
+          status: result.output?.status,
+          message: result.output?.message
+        });
+      } else if (result.output?.status === 200) {
+        // Explicit success from handler
+        mappedStatus = 'COMPLETED';
+        if (result.output?.payload?.videoUrl) {
+          videoUrl = result.output.payload.videoUrl;
+        }
+      } else {
+        // Legacy handling - assume success if no explicit status
+        mappedStatus = 'COMPLETED';
+        if (result.output?.payload?.videoUrl) {
+          videoUrl = result.output.payload.videoUrl;
+        }
       }
     } else if (result.status === 'FAILED') {
       mappedStatus = 'FAILED';
