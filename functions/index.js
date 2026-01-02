@@ -54223,6 +54223,928 @@ const CHARACTER_FACE_ANCHORING_SYSTEM = {
   }
 };
 
+/**
+ * CONTINUITY_VALIDATION_SYSTEM
+ *
+ * Validates continuity across shots and scenes for professional production quality.
+ * Checks visual, audio, character, timing, and narrative continuity.
+ * Generates warnings and recommendations for continuity issues.
+ */
+const CONTINUITY_VALIDATION_SYSTEM = {
+  // Continuity check categories
+  categories: {
+    'visual': {
+      name: 'Visual Continuity',
+      checks: ['lighting', 'color_grade', 'camera_angle', 'framing', 'depth_of_field'],
+      severity: 'high',
+      description: 'Ensures visual consistency across cuts'
+    },
+    'spatial': {
+      name: 'Spatial Continuity',
+      checks: ['180_degree_rule', 'screen_direction', 'eyeline_match', 'position_match'],
+      severity: 'high',
+      description: 'Maintains spatial relationships and screen geography'
+    },
+    'temporal': {
+      name: 'Temporal Continuity',
+      checks: ['action_match', 'timing_flow', 'pace_consistency'],
+      severity: 'medium',
+      description: 'Ensures smooth action flow across cuts'
+    },
+    'character': {
+      name: 'Character Continuity',
+      checks: ['costume', 'props', 'hair_makeup', 'position', 'expression_flow'],
+      severity: 'high',
+      description: 'Maintains character appearance consistency'
+    },
+    'audio': {
+      name: 'Audio Continuity',
+      checks: ['ambient_sound', 'music_flow', 'dialogue_sync', 'room_tone'],
+      severity: 'medium',
+      description: 'Ensures audio consistency across cuts'
+    },
+    'narrative': {
+      name: 'Narrative Continuity',
+      checks: ['story_logic', 'emotional_arc', 'information_flow'],
+      severity: 'low',
+      description: 'Maintains story coherence'
+    }
+  },
+
+  // 180-degree rule validation
+  rule180: {
+    description: 'Camera must stay on one side of the action axis',
+    violations: {
+      'crossed_line': {
+        severity: 'error',
+        message: 'Camera crossed the 180-degree line without transition',
+        fix: 'Insert neutral shot or motivated camera move'
+      },
+      'confusing_geography': {
+        severity: 'warning',
+        message: 'Screen direction may confuse viewer spatial understanding',
+        fix: 'Establish clear eyelines or add wide shot'
+      }
+    }
+  },
+
+  // Screen direction tracking
+  screenDirection: {
+    'left_to_right': { meaning: 'progress', forward: true },
+    'right_to_left': { meaning: 'return', forward: false },
+    'toward_camera': { meaning: 'approach', intensity: 'increasing' },
+    'away_from_camera': { meaning: 'departure', intensity: 'decreasing' },
+    'static': { meaning: 'contemplation', intensity: 'neutral' }
+  },
+
+  // Match cut requirements
+  matchCutRequirements: {
+    'action_match': {
+      overlapFrames: 3,
+      positionTolerance: 0.15,
+      description: 'Cut during action, match position/movement'
+    },
+    'eyeline_match': {
+      angleTolerance: 15,
+      heightTolerance: 0.1,
+      description: 'Eyelines must match across shots'
+    },
+    'position_match': {
+      positionTolerance: 0.2,
+      scaleTolerance: 0.3,
+      description: 'Character positions must be consistent'
+    }
+  },
+
+  /**
+   * Validate continuity between two consecutive shots
+   */
+  validateShotContinuity(shot1, shot2, context = {}) {
+    const issues = [];
+    const warnings = [];
+    const passes = [];
+
+    // Visual continuity checks
+    const visualResult = this.checkVisualContinuity(shot1, shot2);
+    issues.push(...visualResult.issues);
+    warnings.push(...visualResult.warnings);
+    passes.push(...visualResult.passes);
+
+    // Spatial continuity checks
+    const spatialResult = this.checkSpatialContinuity(shot1, shot2, context);
+    issues.push(...spatialResult.issues);
+    warnings.push(...spatialResult.warnings);
+    passes.push(...spatialResult.passes);
+
+    // Character continuity checks
+    const characterResult = this.checkCharacterContinuity(shot1, shot2);
+    issues.push(...characterResult.issues);
+    warnings.push(...characterResult.warnings);
+    passes.push(...characterResult.passes);
+
+    // Temporal continuity checks
+    const temporalResult = this.checkTemporalContinuity(shot1, shot2);
+    issues.push(...temporalResult.issues);
+    warnings.push(...temporalResult.warnings);
+    passes.push(...temporalResult.passes);
+
+    const hasErrors = issues.some(i => i.severity === 'error');
+    const hasWarnings = warnings.length > 0 || issues.some(i => i.severity === 'warning');
+
+    return {
+      isValid: !hasErrors,
+      hasWarnings,
+      issues,
+      warnings,
+      passes,
+      score: this.calculateContinuityScore(issues, warnings, passes),
+      summary: this.generateSummary(issues, warnings, passes)
+    };
+  },
+
+  /**
+   * Check visual continuity between shots
+   */
+  checkVisualContinuity(shot1, shot2) {
+    const issues = [];
+    const warnings = [];
+    const passes = [];
+
+    // Check lighting consistency
+    if (shot1.lighting && shot2.lighting) {
+      if (shot1.lighting.context !== shot2.lighting.context) {
+        warnings.push({
+          type: 'lighting_change',
+          severity: 'warning',
+          message: `Lighting changed from ${shot1.lighting.context} to ${shot2.lighting.context}`,
+          category: 'visual'
+        });
+      } else {
+        passes.push({ type: 'lighting_match', category: 'visual' });
+      }
+    }
+
+    // Check color grade consistency
+    if (shot1.colorAnchors && shot2.colorAnchors) {
+      if (shot1.colorAnchors.grading?.profileName !== shot2.colorAnchors.grading?.profileName) {
+        issues.push({
+          type: 'color_grade_mismatch',
+          severity: 'warning',
+          message: 'Color grading profile changed between shots',
+          category: 'visual'
+        });
+      } else {
+        passes.push({ type: 'color_grade_match', category: 'visual' });
+      }
+    }
+
+    // Check for jump cut (similar framing, same subject)
+    if (shot1.shotType === shot2.shotType && shot1.subject === shot2.subject) {
+      const isValidJumpCut = this.isIntentionalJumpCut(shot1, shot2);
+      if (!isValidJumpCut) {
+        warnings.push({
+          type: 'potential_jump_cut',
+          severity: 'warning',
+          message: 'Similar framing on same subject may create jump cut',
+          fix: 'Change angle by 30+ degrees or shot size significantly',
+          category: 'visual'
+        });
+      }
+    }
+
+    return { issues, warnings, passes };
+  },
+
+  /**
+   * Check spatial continuity (180-degree rule, screen direction)
+   */
+  checkSpatialContinuity(shot1, shot2, context = {}) {
+    const issues = [];
+    const warnings = [];
+    const passes = [];
+
+    // 180-degree rule check
+    if (shot1.cameraPosition && shot2.cameraPosition) {
+      const crossed = this.check180DegreeRule(shot1.cameraPosition, shot2.cameraPosition, context.actionAxis);
+      if (crossed) {
+        issues.push({
+          type: '180_degree_violation',
+          severity: 'error',
+          message: 'Camera crossed the 180-degree line',
+          fix: 'Insert neutral shot or motivated camera movement',
+          category: 'spatial'
+        });
+      } else {
+        passes.push({ type: '180_degree_maintained', category: 'spatial' });
+      }
+    }
+
+    // Screen direction consistency
+    if (shot1.screenDirection && shot2.screenDirection) {
+      const directionIssue = this.checkScreenDirection(shot1.screenDirection, shot2.screenDirection);
+      if (directionIssue) {
+        warnings.push({
+          type: 'screen_direction_change',
+          severity: 'warning',
+          message: directionIssue.message,
+          category: 'spatial'
+        });
+      } else {
+        passes.push({ type: 'screen_direction_consistent', category: 'spatial' });
+      }
+    }
+
+    // Eyeline match check for dialogue
+    if (shot1.eyeline && shot2.eyeline) {
+      const eyelineMatch = this.checkEyelineMatch(shot1.eyeline, shot2.eyeline);
+      if (!eyelineMatch.valid) {
+        warnings.push({
+          type: 'eyeline_mismatch',
+          severity: 'warning',
+          message: eyelineMatch.message,
+          category: 'spatial'
+        });
+      } else {
+        passes.push({ type: 'eyeline_match', category: 'spatial' });
+      }
+    }
+
+    return { issues, warnings, passes };
+  },
+
+  /**
+   * Check character continuity
+   */
+  checkCharacterContinuity(shot1, shot2) {
+    const issues = [];
+    const warnings = [];
+    const passes = [];
+
+    // Check character anchors if present
+    if (shot1.characterAnchors && shot2.characterAnchors) {
+      // Find common characters
+      const chars1 = Object.keys(shot1.characterAnchors);
+      const chars2 = Object.keys(shot2.characterAnchors);
+      const commonChars = chars1.filter(c => chars2.includes(c));
+
+      commonChars.forEach(charName => {
+        const anchor1 = shot1.characterAnchors[charName];
+        const anchor2 = shot2.characterAnchors[charName];
+
+        // Position continuity
+        if (anchor1.position && anchor2.position) {
+          const positionJump = this.calculatePositionJump(anchor1.position, anchor2.position);
+          if (positionJump > 0.5) {
+            warnings.push({
+              type: 'character_position_jump',
+              severity: 'warning',
+              message: `${charName} position jumped significantly between shots`,
+              category: 'character'
+            });
+          } else {
+            passes.push({ type: 'character_position_consistent', character: charName, category: 'character' });
+          }
+        }
+
+        // Expression flow
+        if (anchor1.expression && anchor2.expression) {
+          const flowValid = this.checkExpressionFlow(anchor1.expression, anchor2.expression);
+          if (!flowValid) {
+            warnings.push({
+              type: 'expression_jump',
+              severity: 'info',
+              message: `${charName} expression changed abruptly`,
+              category: 'character'
+            });
+          }
+        }
+      });
+    }
+
+    return { issues, warnings, passes };
+  },
+
+  /**
+   * Check temporal continuity (action matching)
+   */
+  checkTemporalContinuity(shot1, shot2) {
+    const issues = [];
+    const warnings = [];
+    const passes = [];
+
+    // Check action continuation
+    if (shot1.endAction && shot2.startAction) {
+      const actionMatch = this.checkActionMatch(shot1.endAction, shot2.startAction);
+      if (!actionMatch.valid) {
+        warnings.push({
+          type: 'action_discontinuity',
+          severity: 'warning',
+          message: actionMatch.message,
+          category: 'temporal'
+        });
+      } else {
+        passes.push({ type: 'action_match', category: 'temporal' });
+      }
+    }
+
+    // Check pacing consistency
+    if (shot1.duration && shot2.duration) {
+      const pacingRatio = shot1.duration / shot2.duration;
+      if (pacingRatio > 3 || pacingRatio < 0.33) {
+        warnings.push({
+          type: 'pacing_jump',
+          severity: 'info',
+          message: `Large duration change: ${shot1.duration}s to ${shot2.duration}s`,
+          category: 'temporal'
+        });
+      }
+    }
+
+    return { issues, warnings, passes };
+  },
+
+  /**
+   * Check 180-degree rule
+   */
+  check180DegreeRule(pos1, pos2, actionAxis) {
+    if (!actionAxis) return false;
+
+    const side1 = this.getCameraSide(pos1, actionAxis);
+    const side2 = this.getCameraSide(pos2, actionAxis);
+
+    return side1 !== side2 && side1 !== 'neutral' && side2 !== 'neutral';
+  },
+
+  /**
+   * Get which side of action axis camera is on
+   */
+  getCameraSide(cameraPos, actionAxis) {
+    if (cameraPos === 'front' || cameraPos === 'center') return 'neutral';
+    if (cameraPos === 'left' || cameraPos === 'left_quarter') return 'left';
+    if (cameraPos === 'right' || cameraPos === 'right_quarter') return 'right';
+    return 'neutral';
+  },
+
+  /**
+   * Check screen direction consistency
+   */
+  checkScreenDirection(dir1, dir2) {
+    // Opposite directions without motivation is a problem
+    if ((dir1 === 'left_to_right' && dir2 === 'right_to_left') ||
+        (dir1 === 'right_to_left' && dir2 === 'left_to_right')) {
+      return {
+        message: 'Screen direction reversed without transition shot'
+      };
+    }
+    return null;
+  },
+
+  /**
+   * Check eyeline match
+   */
+  checkEyelineMatch(eyeline1, eyeline2) {
+    // In shot/reverse shot, eyelines should be complementary
+    if (eyeline1.direction === 'left' && eyeline2.direction === 'left') {
+      return { valid: false, message: 'Both characters looking same direction' };
+    }
+    if (eyeline1.direction === 'right' && eyeline2.direction === 'right') {
+      return { valid: false, message: 'Both characters looking same direction' };
+    }
+    return { valid: true };
+  },
+
+  /**
+   * Check if jump cut is intentional (stylistic)
+   */
+  isIntentionalJumpCut(shot1, shot2) {
+    // Jump cuts can be intentional for:
+    // - Time compression
+    // - Emotional emphasis
+    // - Documentary style
+    if (shot1.intentionalJumpCut || shot2.intentionalJumpCut) return true;
+    if (shot1.timeCompression || shot2.timeCompression) return true;
+    return false;
+  },
+
+  /**
+   * Calculate position jump magnitude
+   */
+  calculatePositionJump(pos1, pos2) {
+    if (typeof pos1 === 'string' && typeof pos2 === 'string') {
+      // Simple string comparison
+      return pos1 === pos2 ? 0 : 0.5;
+    }
+    if (pos1.x !== undefined && pos2.x !== undefined) {
+      const dx = pos1.x - pos2.x;
+      const dy = (pos1.y || 0) - (pos2.y || 0);
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    return 0;
+  },
+
+  /**
+   * Check expression flow validity
+   */
+  checkExpressionFlow(expr1, expr2) {
+    // Some expression transitions are jarring
+    const jarringTransitions = [
+      ['happy', 'angry'],
+      ['sad', 'happy'],
+      ['neutral', 'terrified']
+    ];
+
+    for (const [from, to] of jarringTransitions) {
+      if (expr1 === from && expr2 === to) return false;
+    }
+    return true;
+  },
+
+  /**
+   * Check action match across cut
+   */
+  checkActionMatch(endAction, startAction) {
+    if (!endAction || !startAction) {
+      return { valid: true };
+    }
+
+    // Actions should be continuous or logically connected
+    if (endAction.type === 'walking' && startAction.type === 'sitting') {
+      return { valid: false, message: 'Character was walking, now sitting without transition' };
+    }
+
+    if (endAction.direction && startAction.direction) {
+      if (endAction.direction !== startAction.direction) {
+        return { valid: false, message: 'Action direction changed across cut' };
+      }
+    }
+
+    return { valid: true };
+  },
+
+  /**
+   * Calculate overall continuity score
+   */
+  calculateContinuityScore(issues, warnings, passes) {
+    let score = 100;
+
+    issues.forEach(issue => {
+      if (issue.severity === 'error') score -= 20;
+      else if (issue.severity === 'warning') score -= 10;
+      else score -= 5;
+    });
+
+    warnings.forEach(() => {
+      score -= 5;
+    });
+
+    return Math.max(0, Math.min(100, score));
+  },
+
+  /**
+   * Generate summary of continuity check
+   */
+  generateSummary(issues, warnings, passes) {
+    const errorCount = issues.filter(i => i.severity === 'error').length;
+    const warningCount = issues.filter(i => i.severity === 'warning').length + warnings.length;
+    const passCount = passes.length;
+
+    if (errorCount > 0) {
+      return `⚠️ ${errorCount} error(s), ${warningCount} warning(s) - continuity issues detected`;
+    } else if (warningCount > 0) {
+      return `⚡ ${warningCount} warning(s) - minor continuity notes`;
+    } else {
+      return `✓ All ${passCount} continuity checks passed`;
+    }
+  },
+
+  /**
+   * Validate continuity across entire scene
+   */
+  validateSceneContinuity(shots) {
+    const results = [];
+
+    for (let i = 0; i < shots.length - 1; i++) {
+      const result = this.validateShotContinuity(shots[i], shots[i + 1], {
+        shotIndex: i,
+        totalShots: shots.length
+      });
+
+      results.push({
+        fromShot: i,
+        toShot: i + 1,
+        ...result
+      });
+    }
+
+    const overallScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
+    const allIssues = results.flatMap(r => r.issues);
+    const allWarnings = results.flatMap(r => r.warnings);
+
+    return {
+      shotResults: results,
+      overallScore: Math.round(overallScore),
+      totalIssues: allIssues.length,
+      totalWarnings: allWarnings.length,
+      isValid: !allIssues.some(i => i.severity === 'error'),
+      summary: this.generateSceneSummary(results, shots.length)
+    };
+  },
+
+  /**
+   * Generate scene-level summary
+   */
+  generateSceneSummary(results, shotCount) {
+    const avgScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
+    const errorCuts = results.filter(r => !r.isValid).length;
+    const warningCuts = results.filter(r => r.hasWarnings).length;
+
+    if (avgScore >= 90) {
+      return `✓ Excellent continuity (${Math.round(avgScore)}%) across ${shotCount} shots`;
+    } else if (avgScore >= 70) {
+      return `⚡ Good continuity (${Math.round(avgScore)}%) with ${warningCuts} cuts needing attention`;
+    } else {
+      return `⚠️ Continuity issues (${Math.round(avgScore)}%) - ${errorCuts} problematic cuts`;
+    }
+  }
+};
+
+/**
+ * CAPTION_GENERATION_SYSTEM
+ *
+ * Generates professional captions/subtitles for video content.
+ * Handles timing, formatting, accessibility, and style guidelines.
+ */
+const CAPTION_GENERATION_SYSTEM = {
+  // Caption style presets
+  stylePresets: {
+    'broadcast_standard': {
+      maxCharsPerLine: 42,
+      maxLines: 2,
+      minDuration: 1.0,
+      maxDuration: 7.0,
+      readingSpeed: 160,      // words per minute
+      position: 'bottom_center',
+      fontStyle: 'sans_serif',
+      backgroundColor: 'semi_transparent_black',
+      textColor: 'white'
+    },
+    'streaming': {
+      maxCharsPerLine: 45,
+      maxLines: 2,
+      minDuration: 0.8,
+      maxDuration: 8.0,
+      readingSpeed: 180,
+      position: 'bottom_center',
+      fontStyle: 'sans_serif',
+      backgroundColor: 'box_black',
+      textColor: 'white'
+    },
+    'cinematic': {
+      maxCharsPerLine: 38,
+      maxLines: 2,
+      minDuration: 1.2,
+      maxDuration: 6.0,
+      readingSpeed: 140,
+      position: 'bottom_center',
+      fontStyle: 'serif',
+      backgroundColor: 'none',
+      textColor: 'white_shadow'
+    },
+    'social_media': {
+      maxCharsPerLine: 35,
+      maxLines: 2,
+      minDuration: 0.5,
+      maxDuration: 5.0,
+      readingSpeed: 200,
+      position: 'center',
+      fontStyle: 'bold_sans',
+      backgroundColor: 'none',
+      textColor: 'white_outline'
+    },
+    'accessibility': {
+      maxCharsPerLine: 40,
+      maxLines: 2,
+      minDuration: 1.5,
+      maxDuration: 6.0,
+      readingSpeed: 120,
+      position: 'bottom_center',
+      fontStyle: 'sans_serif_large',
+      backgroundColor: 'solid_black',
+      textColor: 'high_contrast'
+    }
+  },
+
+  // Speaker identification formats
+  speakerFormats: {
+    'none': '',
+    'name_colon': '{name}: ',
+    'name_dash': '{name} - ',
+    'parenthetical': '({name}) ',
+    'uppercase': '{NAME}: ',
+    'bracketed': '[{name}] '
+  },
+
+  // Sound description formats (for accessibility)
+  soundDescriptions: {
+    'music': '[♪ {description} ♪]',
+    'sound_effect': '[{description}]',
+    'ambient': '[ambient: {description}]',
+    'silence': '[silence]',
+    'inaudible': '[inaudible]',
+    'crosstalk': '[overlapping speech]'
+  },
+
+  /**
+   * Generate captions from dialogue array
+   */
+  generateCaptions(dialogue, options = {}) {
+    const {
+      style = 'broadcast_standard',
+      speakerFormat = 'name_colon',
+      includeEmotions = false,
+      includeSoundDescriptions = true,
+      language = 'en'
+    } = options;
+
+    const preset = this.stylePresets[style] || this.stylePresets['broadcast_standard'];
+    const captions = [];
+    let currentTime = 0;
+
+    dialogue.forEach((line, index) => {
+      const speaker = line.character || line.speaker || '';
+      const text = line.line || line.text || '';
+      const emotion = line.emotion || '';
+      const delivery = line.delivery || '';
+
+      // Calculate duration based on text length and reading speed
+      const wordCount = text.split(/\s+/).length;
+      const baseDuration = (wordCount / preset.readingSpeed) * 60;
+      const duration = Math.max(preset.minDuration, Math.min(preset.maxDuration, baseDuration));
+
+      // Format speaker identifier
+      const speakerPrefix = this.formatSpeaker(speaker, speakerFormat);
+
+      // Split long text into multiple captions
+      const segments = this.splitIntoSegments(text, preset.maxCharsPerLine, preset.maxLines);
+
+      segments.forEach((segment, segIndex) => {
+        const segmentDuration = duration / segments.length;
+
+        const caption = {
+          index: captions.length,
+          dialogueIndex: index,
+          startTime: currentTime,
+          endTime: currentTime + segmentDuration,
+          duration: segmentDuration,
+          text: segIndex === 0 ? speakerPrefix + segment : segment,
+          speaker,
+          style: {
+            ...preset,
+            emotion: includeEmotions ? emotion : null,
+            delivery: delivery
+          },
+          metadata: {
+            wordCount: segment.split(/\s+/).length,
+            charCount: segment.length,
+            isFirstSegment: segIndex === 0,
+            totalSegments: segments.length
+          }
+        };
+
+        // Add emotion indicator if enabled
+        if (includeEmotions && emotion && segIndex === 0) {
+          caption.emotionIndicator = this.getEmotionIndicator(emotion);
+        }
+
+        captions.push(caption);
+        currentTime += segmentDuration;
+      });
+
+      // Add gap between dialogue lines
+      currentTime += 0.3;
+    });
+
+    return {
+      captions,
+      totalDuration: currentTime,
+      captionCount: captions.length,
+      style: preset,
+      metadata: {
+        dialogueLines: dialogue.length,
+        averageDuration: currentTime / captions.length,
+        language
+      }
+    };
+  },
+
+  /**
+   * Format speaker name
+   */
+  formatSpeaker(name, format) {
+    if (!name || format === 'none') return '';
+
+    const template = this.speakerFormats[format] || this.speakerFormats['name_colon'];
+    return template
+      .replace('{name}', name)
+      .replace('{NAME}', name.toUpperCase());
+  },
+
+  /**
+   * Split text into segments respecting line limits
+   */
+  splitIntoSegments(text, maxCharsPerLine, maxLines) {
+    const words = text.split(/\s+/);
+    const segments = [];
+    let currentSegment = [];
+    let currentLine = '';
+    let lineCount = 0;
+
+    words.forEach(word => {
+      const testLine = currentLine ? currentLine + ' ' + word : word;
+
+      if (testLine.length > maxCharsPerLine) {
+        // Line is full
+        if (currentLine) {
+          currentSegment.push(currentLine);
+          lineCount++;
+        }
+
+        if (lineCount >= maxLines) {
+          // Segment is full
+          segments.push(currentSegment.join('\n'));
+          currentSegment = [];
+          lineCount = 0;
+        }
+
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    });
+
+    // Add remaining content
+    if (currentLine) {
+      currentSegment.push(currentLine);
+    }
+    if (currentSegment.length > 0) {
+      segments.push(currentSegment.join('\n'));
+    }
+
+    return segments;
+  },
+
+  /**
+   * Get emotion indicator for accessibility
+   */
+  getEmotionIndicator(emotion) {
+    const indicators = {
+      'happy': '😊',
+      'sad': '😢',
+      'angry': '😠',
+      'fearful': '😨',
+      'surprised': '😲',
+      'disgusted': '😖',
+      'neutral': '',
+      'excited': '😃',
+      'worried': '😟',
+      'confused': '😕'
+    };
+
+    return indicators[emotion] || '';
+  },
+
+  /**
+   * Generate SRT format output
+   */
+  toSRT(captions) {
+    return captions.map((cap, index) => {
+      const startTime = this.formatSRTTime(cap.startTime);
+      const endTime = this.formatSRTTime(cap.endTime);
+
+      return `${index + 1}\n${startTime} --> ${endTime}\n${cap.text}\n`;
+    }).join('\n');
+  },
+
+  /**
+   * Generate VTT format output
+   */
+  toVTT(captions) {
+    const header = 'WEBVTT\n\n';
+    const body = captions.map((cap, index) => {
+      const startTime = this.formatVTTTime(cap.startTime);
+      const endTime = this.formatVTTTime(cap.endTime);
+
+      let style = '';
+      if (cap.style.position === 'center') {
+        style = ' align:center';
+      }
+
+      return `${index + 1}\n${startTime} --> ${endTime}${style}\n${cap.text}\n`;
+    }).join('\n');
+
+    return header + body;
+  },
+
+  /**
+   * Format time for SRT (00:00:00,000)
+   */
+  formatSRTTime(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    const ms = Math.round((seconds % 1) * 1000);
+
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
+  },
+
+  /**
+   * Format time for VTT (00:00:00.000)
+   */
+  formatVTTTime(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    const ms = Math.round((seconds % 1) * 1000);
+
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+  },
+
+  /**
+   * Generate captions for narration
+   */
+  generateNarrationCaptions(narration, options = {}) {
+    const {
+      style = 'cinematic',
+      wordsPerCaption = 8,
+      narrator = 'Narrator'
+    } = options;
+
+    const preset = this.stylePresets[style] || this.stylePresets['cinematic'];
+    const words = narration.split(/\s+/);
+    const captions = [];
+    let currentTime = 0;
+
+    // Group words into caption-sized chunks
+    for (let i = 0; i < words.length; i += wordsPerCaption) {
+      const chunk = words.slice(i, i + wordsPerCaption).join(' ');
+      const duration = (chunk.split(/\s+/).length / preset.readingSpeed) * 60;
+      const clampedDuration = Math.max(preset.minDuration, Math.min(preset.maxDuration, duration));
+
+      captions.push({
+        index: captions.length,
+        startTime: currentTime,
+        endTime: currentTime + clampedDuration,
+        duration: clampedDuration,
+        text: chunk,
+        speaker: narrator,
+        isNarration: true,
+        style: preset
+      });
+
+      currentTime += clampedDuration + 0.1;
+    }
+
+    return {
+      captions,
+      totalDuration: currentTime,
+      captionCount: captions.length
+    };
+  },
+
+  /**
+   * Merge dialogue and narration captions with proper timing
+   */
+  mergeCaptions(dialogueCaptions, narrationCaptions) {
+    const merged = [...dialogueCaptions, ...narrationCaptions];
+
+    // Sort by start time
+    merged.sort((a, b) => a.startTime - b.startTime);
+
+    // Re-index
+    merged.forEach((cap, idx) => {
+      cap.index = idx;
+    });
+
+    // Check for overlaps
+    const overlaps = [];
+    for (let i = 0; i < merged.length - 1; i++) {
+      if (merged[i].endTime > merged[i + 1].startTime) {
+        overlaps.push({
+          caption1: i,
+          caption2: i + 1,
+          overlapDuration: merged[i].endTime - merged[i + 1].startTime
+        });
+      }
+    }
+
+    return {
+      captions: merged,
+      overlaps,
+      hasOverlaps: overlaps.length > 0
+    };
+  }
+};
+
 const SHOT_DECOMPOSITION_ENGINE = {
   // Shot type library with cinematographic purpose
   shotTypes: {
@@ -56464,6 +57386,8 @@ exports.SCENE_DURATION_VALIDATION_SYSTEM = SCENE_DURATION_VALIDATION_SYSTEM;
 exports.AUDIO_POST_PRODUCTION_SYSTEM = AUDIO_POST_PRODUCTION_SYSTEM;
 exports.COLOR_CONSISTENCY_SYSTEM = COLOR_CONSISTENCY_SYSTEM;
 exports.CHARACTER_FACE_ANCHORING_SYSTEM = CHARACTER_FACE_ANCHORING_SYSTEM;
+exports.CONTINUITY_VALIDATION_SYSTEM = CONTINUITY_VALIDATION_SYSTEM;
+exports.CAPTION_GENERATION_SYSTEM = CAPTION_GENERATION_SYSTEM;
 
 // =============================================================================
 // PHASE 12B: SHOT VIDEO GENERATION & ASSEMBLY
@@ -57800,6 +58724,15 @@ Return JSON:
         const cameraRules = CAMERA_MOVEMENT_RULES[sceneType] || CAMERA_MOVEMENT_RULES['dialogue'];
         const genreProfile = GENRE_CINEMATOGRAPHY_PROFILES[genre] || GENRE_CINEMATOGRAPHY_PROFILES['drama'];
 
+        // ===============================================================
+        // COLOR CONSISTENCY (Phase 3.3)
+        // Generate color anchors for scene-wide visual consistency
+        // ===============================================================
+        const colorAnchors = COLOR_CONSISTENCY_SYSTEM.generateColorAnchors(scene, genre);
+        scene.colorAnchors = colorAnchors;
+
+        console.log(`[ColorConsistency] Scene ${i + 1}: palette=${colorAnchors.palette.paletteName}, lighting=${colorAnchors.lighting.context}`);
+
         // Build prompt with global consistency requirements - UPGRADED with action guidelines
         const systemPrompt = `You are a Hollywood cinematographer decomposing Scene ${i + 1} of ${scenes.length} into shots.
 
@@ -57919,6 +58852,37 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
         const sceneEndState = shotData.sceneEndState ||
           (normalizedShots.length > 0 ? normalizedShots[normalizedShots.length - 1].endState : null);
 
+        // ===============================================================
+        // CONTINUITY VALIDATION (Phase 3.3)
+        // Validate shot-to-shot continuity within scene
+        // ===============================================================
+        let continuityValidation = null;
+        if (normalizedShots.length > 1) {
+          continuityValidation = CONTINUITY_VALIDATION_SYSTEM.validateSceneContinuity(normalizedShots);
+          console.log(`[ContinuityValidation] Scene ${i + 1}: ${continuityValidation.summary}`);
+        }
+
+        // ===============================================================
+        // AUDIO POST-PRODUCTION (Phase 3.3)
+        // Generate audio mix recommendations for scene
+        // ===============================================================
+        const audioMixData = AUDIO_POST_PRODUCTION_SYSTEM.calculateSceneMix(scene, genre);
+        scene.audioMix = audioMixData;
+
+        // ===============================================================
+        // CAPTION GENERATION (Phase 3.3)
+        // Generate captions for dialogue if present
+        // ===============================================================
+        let captionData = null;
+        if (scene.dialogue && scene.dialogue.length > 0) {
+          captionData = CAPTION_GENERATION_SYSTEM.generateCaptions(scene.dialogue, {
+            style: 'cinematic',
+            speakerFormat: 'name_colon',
+            includeEmotions: false
+          });
+          console.log(`[CaptionGeneration] Scene ${i + 1}: ${captionData.captionCount} captions generated`);
+        }
+
         results.push({
           sceneId: scene.id,
           sceneIndex: i,
@@ -57934,7 +58898,12 @@ IMPORTANT: Do NOT include duration in your response - durations are fixed at ${c
             transitionFromPrevious: crossSceneContext?.transitionType || null,
             sceneEndState: sceneEndState,
             suggestedNextTransition: shotData.suggestedNextTransition || 'cut'
-          }
+          },
+          // Phase 3: Professional production data
+          colorAnchors: colorAnchors,
+          continuityValidation: continuityValidation,
+          audioMix: audioMixData,
+          captions: captionData
         });
 
         // Update cross-scene tracking for next iteration (Upgrade 3)
