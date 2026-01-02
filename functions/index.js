@@ -45507,19 +45507,24 @@ const DIALOGUE_DISTRIBUTION_ENGINE = {
    * Distribute dialogue lines to shots based on timing
    * @param {Array} dialogue - Scene's dialogue array
    * @param {Array} shots - Array of shots with duration
+   * @param {string} sceneAudioType - Scene's audio type ('voiceover', 'dialogue', 'music_only', etc.)
    * @returns {Array} Shots with dialogue assigned
    */
-  distributeDialogueToShots(dialogue, shots) {
+  distributeDialogueToShots(dialogue, shots, sceneAudioType = 'music_only') {
+    // Determine if this is narrator voiceover (no lip-sync needed)
+    const isNarratorVoiceover = sceneAudioType === 'voiceover';
+
     if (!dialogue || !Array.isArray(dialogue) || dialogue.length === 0) {
       // No dialogue - mark shots as non-dialogue
       return shots.map(shot => ({
         ...shot,
-        audioType: 'music_only',
+        audioType: sceneAudioType || 'music_only',
         dialogue: [],
         dialogueText: null,
         speakingCharacters: [],
         hasDialogue: false,
-        dialogueDuration: 0
+        dialogueDuration: 0,
+        requiresLipSync: false
       }));
     }
 
@@ -45527,12 +45532,13 @@ const DIALOGUE_DISTRIBUTION_ENGINE = {
     if (!timing.hasDialogue) {
       return shots.map(shot => ({
         ...shot,
-        audioType: 'music_only',
+        audioType: sceneAudioType || 'music_only',
         dialogue: [],
         dialogueText: null,
         speakingCharacters: [],
         hasDialogue: false,
-        dialogueDuration: 0
+        dialogueDuration: 0,
+        requiresLipSync: false
       }));
     }
 
@@ -45582,17 +45588,32 @@ const DIALOGUE_DISTRIBUTION_ENGINE = {
       // Calculate dialogue duration in this shot
       const dialogueDuration = shotDialogue.reduce((sum, d) => sum + d.durationInShot, 0);
 
+      // Determine audioType: preserve 'voiceover' for narrator, use 'dialogue' for character speech
+      // Key distinction: voiceover = narrator speaks OVER visuals (no lip-sync)
+      //                  dialogue = character speaks ON SCREEN (lip-sync needed)
+      const hasContent = shotDialogue.length > 0;
+      let shotAudioType = 'music_only';
+      if (hasContent) {
+        // Preserve voiceover type for narrator - don't convert to dialogue
+        shotAudioType = isNarratorVoiceover ? 'voiceover' : 'dialogue';
+      }
+
+      // Lip-sync only required for character dialogue, NOT for narrator voiceover
+      const requiresLipSync = hasContent && !isNarratorVoiceover;
+
       return {
         ...shot,
-        audioType: shotDialogue.length > 0 ? 'dialogue' : 'music_only',
+        audioType: shotAudioType,
         dialogue: shotDialogue,
         dialogueText,
         speakingCharacters,
-        hasDialogue: shotDialogue.length > 0,
+        hasDialogue: hasContent,
+        hasNarration: hasContent && isNarratorVoiceover,  // New flag for narrator voiceover
         dialogueDuration,
         dialogueCount: shotDialogue.length,
+        requiresLipSync,  // Explicit flag for video model selection
         // Suggested optimal duration based on dialogue
-        suggestedDuration: shotDialogue.length > 0
+        suggestedDuration: hasContent
           ? Math.ceil(dialogueDuration + this.VISUAL_BUFFER)
           : shot.duration
       };
@@ -52897,9 +52918,11 @@ exports.creationWizardDecomposeSceneToShots = functions
     const sanitizedDialogue = dialogueValidation.sanitized || [];
 
     // Apply dialogue distribution to shots (using sanitized dialogue)
+    // IMPORTANT: Pass sceneAudioType to preserve 'voiceover' vs 'dialogue' distinction
     const dialogueEnhancedShots = DIALOGUE_DISTRIBUTION_ENGINE.distributeDialogueToShots(
       sanitizedDialogue,
-      timelineEnhancedShots
+      timelineEnhancedShots,
+      sceneAudioType  // Preserves narrator voiceover type through distribution
     );
 
     // Log dialogue distribution results
@@ -53062,6 +53085,8 @@ exports.creationWizardDecomposeSceneToShots = functions
         dialogueText: shot.dialogueText || null,  // Combined text for display: "Kai: \"line\"\nMaya: \"line\""
         speakingCharacters: shot.speakingCharacters || [],  // Characters speaking in this shot
         hasDialogue: shot.hasDialogue || false,  // Quick flag for UI
+        hasNarration: shot.hasNarration || false,  // True if narrator voiceover (no lip-sync needed)
+        requiresLipSync: shot.requiresLipSync || false,  // True only for character dialogue (needs Multitalk)
         dialogueDuration: shot.dialogueDuration || 0,  // Total dialogue time in seconds
         dialogueCount: shot.dialogueCount || 0,  // Number of dialogue lines
         suggestedDuration: shot.suggestedDuration || shot.duration,  // Optimal duration based on dialogue
