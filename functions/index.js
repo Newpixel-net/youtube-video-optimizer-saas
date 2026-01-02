@@ -58169,7 +58169,7 @@ Tone: Natural, expressive.`;
         // Core required parameters
         image_url: imageUrl,
         audio_url: effectiveAudioUrl,  // Use effective URL (may be from characterAudioData)
-        video_upload_url: uploadUrl,   // Correct parameter name
+        output_url: uploadUrl,   // Same parameter name as creationWizardAnimateScene
 
         // Audio timing (format: "M:SS")
         audio_crop_start_time: '0:00',
