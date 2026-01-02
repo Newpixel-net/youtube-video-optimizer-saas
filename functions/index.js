@@ -51936,6 +51936,294 @@ const NARRATIVE_BEAT_GENERATOR = {
  * This engine decomposes scene descriptions into shot sequences while maintaining
  * visual consistency across all shots in the scene.
  */
+
+/**
+ * GENRE_CINEMATOGRAPHY_PROFILES
+ * Professional cinematography settings based on film genre.
+ * Each genre has distinct visual language, pacing, and camera conventions.
+ */
+const GENRE_CINEMATOGRAPHY_PROFILES = {
+  'drama': {
+    name: 'Drama',
+    avgShotLength: 6,
+    preferredMovements: ['static', 'subtle_push', 'subtle_pull'],
+    lightingStyle: 'motivated',
+    colorPalette: 'muted_natural',
+    dialogueCoverage: 'intimate',
+    actionIntensity: 'subtle',
+    shotDistribution: { wide: 15, medium: 40, closeup: 35, insert: 10 }
+  },
+  'thriller': {
+    name: 'Thriller/Suspense',
+    avgShotLength: 4,
+    preferredMovements: ['subtle_push', 'static', 'slow_handheld'],
+    lightingStyle: 'low_key',
+    colorPalette: 'desaturated_accent',
+    dialogueCoverage: 'tense',
+    actionIntensity: 'building',
+    shotDistribution: { wide: 20, medium: 35, closeup: 40, insert: 5 }
+  },
+  'action': {
+    name: 'Action/Adventure',
+    avgShotLength: 2.5,
+    preferredMovements: ['tracking', 'crane', 'handheld', 'whip_pan'],
+    lightingStyle: 'high_contrast',
+    colorPalette: 'saturated',
+    dialogueCoverage: 'efficient',
+    actionIntensity: 'high',
+    shotDistribution: { wide: 30, medium: 35, closeup: 25, insert: 10 }
+  },
+  'scifi': {
+    name: 'Science Fiction',
+    avgShotLength: 5,
+    preferredMovements: ['slow_tracking', 'crane', 'static'],
+    lightingStyle: 'stylized',
+    colorPalette: 'cool_neon',
+    dialogueCoverage: 'contemplative',
+    actionIntensity: 'variable',
+    shotDistribution: { wide: 30, medium: 35, closeup: 25, insert: 10 }
+  },
+  'horror': {
+    name: 'Horror',
+    avgShotLength: 5,
+    preferredMovements: ['static', 'very_slow_push', 'handheld'],
+    lightingStyle: 'low_key_extreme',
+    colorPalette: 'desaturated',
+    dialogueCoverage: 'isolated',
+    actionIntensity: 'sudden_bursts',
+    shotDistribution: { wide: 25, medium: 30, closeup: 35, insert: 10 }
+  },
+  'comedy': {
+    name: 'Comedy',
+    avgShotLength: 4,
+    preferredMovements: ['static', 'whip_pan', 'quick_zoom'],
+    lightingStyle: 'high_key',
+    colorPalette: 'bright_warm',
+    dialogueCoverage: 'reactive',
+    actionIntensity: 'comedic_timing',
+    shotDistribution: { wide: 20, medium: 45, closeup: 30, insert: 5 }
+  },
+  'fantasy': {
+    name: 'Fantasy/Epic',
+    avgShotLength: 6,
+    preferredMovements: ['crane', 'slow_tracking', 'static'],
+    lightingStyle: 'dramatic_natural',
+    colorPalette: 'rich_saturated',
+    dialogueCoverage: 'formal',
+    actionIntensity: 'epic_scale',
+    shotDistribution: { wide: 35, medium: 35, closeup: 20, insert: 10 }
+  },
+  'noir': {
+    name: 'Neo-Noir',
+    avgShotLength: 5,
+    preferredMovements: ['slow_tracking', 'static', 'dutch_angle'],
+    lightingStyle: 'chiaroscuro',
+    colorPalette: 'high_contrast_limited',
+    dialogueCoverage: 'atmospheric',
+    actionIntensity: 'stylized',
+    shotDistribution: { wide: 25, medium: 35, closeup: 30, insert: 10 }
+  },
+  'romance': {
+    name: 'Romance',
+    avgShotLength: 5,
+    preferredMovements: ['static', 'subtle_push', 'slow_orbit'],
+    lightingStyle: 'soft_warm',
+    colorPalette: 'warm_pastels',
+    dialogueCoverage: 'intimate',
+    actionIntensity: 'gentle',
+    shotDistribution: { wide: 15, medium: 40, closeup: 40, insert: 5 }
+  },
+  'documentary': {
+    name: 'Documentary Style',
+    avgShotLength: 4,
+    preferredMovements: ['handheld', 'static', 'slow_pan'],
+    lightingStyle: 'natural',
+    colorPalette: 'realistic',
+    dialogueCoverage: 'observational',
+    actionIntensity: 'authentic',
+    shotDistribution: { wide: 25, medium: 45, closeup: 25, insert: 5 }
+  }
+};
+
+/**
+ * DIALOGUE_COVERAGE_PATTERNS
+ * Professional shot patterns for dialogue scenes based on character count.
+ * Implements proper shot/reverse shot and coverage conventions.
+ */
+const DIALOGUE_COVERAGE_PATTERNS = {
+  'monologue': {
+    name: 'Single Character Speaking',
+    minShots: 3,
+    maxShots: 5,
+    pattern: [
+      { shotType: 'medium', purpose: 'establish speaker', cameraMovement: 'static' },
+      { shotType: 'closeup', purpose: 'emotional depth', cameraMovement: 'subtle_push' },
+      { shotType: 'medium_wide', purpose: 'breathing room', cameraMovement: 'static' },
+      { shotType: 'extreme_closeup', purpose: 'key moment', cameraMovement: 'static' },
+      { shotType: 'medium', purpose: 'conclude', cameraMovement: 'subtle_pull' }
+    ],
+    cameraRules: { maxMovingShots: 2, preferStatic: true }
+  },
+  'two_character': {
+    name: 'Two Character Dialogue (Shot/Reverse Shot)',
+    minShots: 5,
+    maxShots: 10,
+    pattern: [
+      { shotType: 'establishing_wide', purpose: 'set scene', cameraMovement: 'static' },
+      { shotType: 'two_shot', purpose: 'show relationship', cameraMovement: 'static' },
+      { shotType: 'over_shoulder_A', purpose: 'A speaks', cameraMovement: 'static' },
+      { shotType: 'over_shoulder_B', purpose: 'B responds', cameraMovement: 'static' },
+      { shotType: 'closeup_A', purpose: 'A reaction', cameraMovement: 'static' },
+      { shotType: 'medium_B', purpose: 'B continues', cameraMovement: 'subtle_push' },
+      { shotType: 'closeup_B', purpose: 'B emotional', cameraMovement: 'static' },
+      { shotType: 'over_shoulder_A', purpose: 'A responds', cameraMovement: 'static' },
+      { shotType: 'two_shot', purpose: 'resolution', cameraMovement: 'subtle_pull' },
+      { shotType: 'wide', purpose: 'scene end', cameraMovement: 'static' }
+    ],
+    cameraRules: { maxMovingShots: 2, preferStatic: true },
+    shotReverseShot: true
+  },
+  'multi_character': {
+    name: 'Multi-Character Ensemble',
+    minShots: 6,
+    maxShots: 12,
+    pattern: [
+      { shotType: 'establishing_wide', purpose: 'show all characters', cameraMovement: 'slow_pan' },
+      { shotType: 'group_medium', purpose: 'establish dynamics', cameraMovement: 'static' },
+      { shotType: 'single_medium', purpose: 'speaker 1', cameraMovement: 'static' },
+      { shotType: 'reaction_group', purpose: 'others react', cameraMovement: 'static' },
+      { shotType: 'single_medium', purpose: 'speaker 2', cameraMovement: 'static' },
+      { shotType: 'closeup', purpose: 'emotional peak', cameraMovement: 'subtle_push' },
+      { shotType: 'over_shoulder', purpose: 'perspective', cameraMovement: 'static' },
+      { shotType: 'wide', purpose: 'reestablish', cameraMovement: 'static' },
+      { shotType: 'single_closeup', purpose: 'key reaction', cameraMovement: 'static' },
+      { shotType: 'group_medium', purpose: 'resolution', cameraMovement: 'subtle_pull' }
+    ],
+    cameraRules: { maxMovingShots: 3, preferStatic: true }
+  }
+};
+
+/**
+ * CAMERA_MOVEMENT_RULES
+ * Defines appropriate camera movements for different scene types.
+ * Ensures subtle movements for dialogue, dynamic for action.
+ */
+const CAMERA_MOVEMENT_RULES = {
+  'dialogue': {
+    allowed: ['static', 'subtle_push', 'subtle_pull'],
+    forbidden: ['crane', 'fast_tracking', 'handheld', 'orbit', 'whip_pan'],
+    defaultSpeed: 'very_slow',
+    maxMovingShots: 2,
+    movementDescription: 'static or imperceptible movement'
+  },
+  'emotional': {
+    allowed: ['static', 'very_slow_push', 'subtle_pull'],
+    forbidden: ['tracking', 'handheld', 'crane', 'fast_pan'],
+    defaultSpeed: 'glacial',
+    maxMovingShots: 1,
+    movementDescription: 'mostly static, occasional glacial push'
+  },
+  'action': {
+    allowed: ['tracking', 'handheld', 'crane', 'whip_pan', 'orbit', 'fast_push'],
+    forbidden: [],
+    defaultSpeed: 'dynamic',
+    maxMovingShots: null,
+    movementDescription: 'dynamic tracking and handheld'
+  },
+  'establishing': {
+    allowed: ['slow_pan', 'slow_crane', 'static', 'very_slow_push'],
+    forbidden: ['handheld', 'whip_pan', 'fast_tracking'],
+    defaultSpeed: 'slow',
+    maxMovingShots: 1,
+    movementDescription: 'slow sweeping or static'
+  },
+  'contemplative': {
+    allowed: ['static', 'imperceptible_push'],
+    forbidden: ['tracking', 'handheld', 'crane', 'pan', 'tilt'],
+    defaultSpeed: 'almost_static',
+    maxMovingShots: 1,
+    movementDescription: 'static or barely perceptible'
+  },
+  'montage': {
+    allowed: ['static', 'slow_push', 'slow_pull', 'pan'],
+    forbidden: ['handheld'],
+    defaultSpeed: 'moderate',
+    maxMovingShots: null,
+    movementDescription: 'varied but controlled'
+  }
+};
+
+/**
+ * CHARACTER_ACTION_GUIDELINES
+ * Defines appropriate character movements for different scene types.
+ * Prevents overly dramatic action during dialogue.
+ */
+const CHARACTER_ACTION_GUIDELINES = {
+  'dialogue': {
+    allowed: [
+      'subtle hand gestures while speaking',
+      'natural head movements and nods',
+      'eye contact shifts',
+      'gentle lean forward or back',
+      'small facial expression changes',
+      'picking up or setting down objects naturally',
+      'slow deliberate walk while talking',
+      'crossing arms or adjusting posture',
+      'taking a sip of drink',
+      'writing or reading briefly'
+    ],
+    forbidden: [
+      'running or fast movement',
+      'fighting or combat',
+      'dramatic gesturing',
+      'jumping or climbing',
+      'extreme physical action'
+    ],
+    promptModifier: 'Natural subtle movements during conversation. No dramatic physical action. Characters move realistically as in real conversation.',
+    intensityLevel: 'minimal'
+  },
+  'emotional': {
+    allowed: [
+      'tears forming or falling',
+      'trembling hands or lips',
+      'embracing another character',
+      'turning away slowly',
+      'head in hands',
+      'deep breath or sigh visible',
+      'reaching out tentatively'
+    ],
+    forbidden: [
+      'violent outbursts',
+      'running away dramatically',
+      'throwing objects'
+    ],
+    promptModifier: 'Subtle emotional physical responses. Internal emotion visible through small movements. Restrained but genuine.',
+    intensityLevel: 'low'
+  },
+  'action': {
+    allowed: ['full range of physical movement'],
+    forbidden: [],
+    promptModifier: 'Dynamic, fluid physical action with clear choreography.',
+    intensityLevel: 'high'
+  },
+  'contemplative': {
+    allowed: [
+      'staring into distance',
+      'slow breathing visible',
+      'minimal movement',
+      'turning head slowly',
+      'closing eyes briefly'
+    ],
+    forbidden: [
+      'any fast movement',
+      'talking',
+      'interaction with others'
+    ],
+    promptModifier: 'Almost still. Minimal movement. Contemplative stillness with only subtle signs of life.',
+    intensityLevel: 'minimal'
+  }
+};
+
 const SHOT_DECOMPOSITION_ENGINE = {
   // Shot type library with cinematographic purpose
   shotTypes: {
@@ -52055,55 +52343,82 @@ const SHOT_DECOMPOSITION_ENGINE = {
   },
 
   // Scene type patterns - what shots work well for different scene types
+  // UPGRADED: More shots per scene, professional coverage patterns
   scenePatterns: {
     'action': {
       name: 'Action Sequence',
-      recommendedShots: ['wide', 'medium', 'closeup', 'insert'],
+      recommendedShots: ['wide', 'medium', 'closeup', 'insert', 'tracking', 'pov'],
       pacing: 'fast',
-      avgShotsPerScene: 5,
-      shotDurationMultiplier: 0.7
+      avgShotsPerScene: 8,           // UPGRADED from 5
+      shotDurationMultiplier: 0.6,   // Faster cuts
+      cameraStyle: 'dynamic',
+      characterAction: 'high_intensity'
     },
     'dialogue': {
       name: 'Dialogue Scene',
-      recommendedShots: ['medium', 'over_shoulder', 'closeup', 'reaction'],
+      // UPGRADED: Professional shot/reverse shot coverage
+      recommendedShots: ['establishing_wide', 'two_shot', 'over_shoulder', 'medium', 'closeup', 'reaction'],
       pacing: 'moderate',
-      avgShotsPerScene: 4,
-      shotDurationMultiplier: 1.0
+      avgShotsPerScene: 7,           // UPGRADED from 4 - proper coverage
+      shotDurationMultiplier: 1.0,
+      cameraStyle: 'static_subtle',  // Mostly static, occasional subtle push
+      characterAction: 'minimal',    // Natural subtle movements only
+      useShotReverseShot: true,      // Enable proper dialogue coverage
+      coveragePattern: 'two_character' // Default dialogue pattern
     },
     'emotional': {
       name: 'Emotional Moment',
-      recommendedShots: ['medium_closeup', 'closeup', 'extreme_closeup', 'reaction'],
+      recommendedShots: ['medium', 'medium_closeup', 'closeup', 'extreme_closeup', 'reaction'],
       pacing: 'slow',
-      avgShotsPerScene: 3,
-      shotDurationMultiplier: 1.3
+      avgShotsPerScene: 5,           // UPGRADED from 3 - allow emotion to breathe
+      shotDurationMultiplier: 1.2,   // Longer shots for weight
+      cameraStyle: 'static_glacial', // Almost no movement
+      characterAction: 'low_intensity'
     },
     'establishing': {
       name: 'Establishing Scene',
-      recommendedShots: ['establishing_wide', 'wide', 'medium_wide'],
+      recommendedShots: ['establishing_wide', 'wide', 'medium_wide', 'pan'],
       pacing: 'slow',
-      avgShotsPerScene: 2,
-      shotDurationMultiplier: 1.5
+      avgShotsPerScene: 3,           // UPGRADED from 2
+      shotDurationMultiplier: 1.3,
+      cameraStyle: 'slow_sweeping',
+      characterAction: 'minimal'
     },
     'revelation': {
       name: 'Reveal/Discovery',
-      recommendedShots: ['medium', 'pov', 'reaction', 'closeup'],
+      recommendedShots: ['medium', 'pov', 'insert', 'reaction', 'closeup', 'extreme_closeup'],
       pacing: 'building',
-      avgShotsPerScene: 4,
-      shotDurationMultiplier: 1.1
+      avgShotsPerScene: 6,           // UPGRADED from 4
+      shotDurationMultiplier: 1.0,
+      cameraStyle: 'building_tension',
+      characterAction: 'reactive'
     },
     'montage': {
       name: 'Montage Sequence',
-      recommendedShots: ['wide', 'medium', 'closeup', 'insert'],
+      recommendedShots: ['wide', 'medium', 'closeup', 'insert', 'tracking'],
       pacing: 'fast',
-      avgShotsPerScene: 6,
-      shotDurationMultiplier: 0.6
+      avgShotsPerScene: 10,          // UPGRADED from 6 - many quick shots
+      shotDurationMultiplier: 0.5,   // Very fast cuts
+      cameraStyle: 'varied',
+      characterAction: 'varied'
     },
     'contemplative': {
       name: 'Contemplative/Reflective',
-      recommendedShots: ['wide', 'medium_closeup', 'closeup'],
+      recommendedShots: ['wide', 'medium', 'medium_closeup', 'closeup'],
       pacing: 'very_slow',
-      avgShotsPerScene: 2,
-      shotDurationMultiplier: 1.5
+      avgShotsPerScene: 3,           // UPGRADED from 2
+      shotDurationMultiplier: 1.4,   // Longer shots
+      cameraStyle: 'static_minimal',
+      characterAction: 'minimal'
+    },
+    'voiceover': {
+      name: 'Voiceover/Narration',
+      recommendedShots: ['establishing_wide', 'wide', 'medium', 'insert', 'closeup'],
+      pacing: 'moderate',
+      avgShotsPerScene: 5,
+      shotDurationMultiplier: 1.1,
+      cameraStyle: 'slow_tracking',
+      characterAction: 'contextual'
     }
   },
 
@@ -52151,64 +52466,331 @@ const SHOT_DECOMPOSITION_ENGINE = {
   },
 
   /**
-   * Calculate optimal number of shots based on scene duration
+   * Calculate optimal number of shots based on scene duration, type, and content
+   * UPGRADED: Uses genre profiles and dialogue line count for better coverage
+   *
+   * @param {number} sceneDuration - Scene duration in seconds
+   * @param {string} sceneType - Type of scene (dialogue, action, etc.)
+   * @param {object} options - { dialogueLines, genre, characterCount }
    */
-  calculateShotCount(sceneDuration, sceneType) {
+  calculateShotCount(sceneDuration, sceneType, options = {}) {
+    const pattern = this.scenePatterns[sceneType] || this.scenePatterns['dialogue'];
+    const { dialogueLines = 0, genre = 'drama', characterCount = 2 } = options;
+
+    // Get genre profile for avg shot length
+    const genreProfile = GENRE_CINEMATOGRAPHY_PROFILES[genre] || GENRE_CINEMATOGRAPHY_PROFILES['drama'];
+    const avgShotLength = genreProfile.avgShotLength || 5;
+
+    // Base calculation from scene pattern
+    let baseShotCount = pattern.avgShotsPerScene;
+
+    // For dialogue scenes, calculate based on lines spoken
+    if (sceneType === 'dialogue' && dialogueLines > 0) {
+      // Professional coverage: ~1.5 shots per dialogue line for shot/reverse shot
+      const dialogueShotCount = Math.ceil(dialogueLines * 1.5);
+
+      // Add establishing + closing shots
+      const coverageShotCount = dialogueShotCount + 2;
+
+      // Use whichever is higher
+      baseShotCount = Math.max(baseShotCount, coverageShotCount);
+
+      // Multi-character adjustment
+      if (characterCount > 2) {
+        baseShotCount = Math.ceil(baseShotCount * 1.3); // More coverage for ensemble
+      }
+    }
+
+    // Duration-based adjustment
+    const durationBasedCount = Math.ceil(sceneDuration / avgShotLength);
+
+    // Use the higher of pattern-based or duration-based
+    let shotCount = Math.max(baseShotCount, durationBasedCount);
+
+    // Apply scene type multiplier
+    shotCount = Math.round(shotCount * (pattern.shotDurationMultiplier || 1.0));
+
+    // Clamp to reasonable bounds (expanded max for professional coverage)
+    const minShots = sceneType === 'dialogue' ? 4 : 2;
+    const maxShots = sceneType === 'montage' ? 15 : 12;
+
+    console.log(`[calculateShotCount] ${sceneType} scene: ${dialogueLines} dialogue lines, ${sceneDuration}s → ${shotCount} shots (genre: ${genre})`);
+
+    return Math.max(minShots, Math.min(maxShots, shotCount));
+  },
+
+  /**
+   * Determine dialogue coverage pattern based on character count
+   */
+  getDialogueCoveragePattern(characterCount, dialogueLines) {
+    if (characterCount <= 1 || dialogueLines <= 2) {
+      return DIALOGUE_COVERAGE_PATTERNS['monologue'];
+    } else if (characterCount === 2) {
+      return DIALOGUE_COVERAGE_PATTERNS['two_character'];
+    } else {
+      return DIALOGUE_COVERAGE_PATTERNS['multi_character'];
+    }
+  },
+
+  /**
+   * Get appropriate camera movement for scene type
+   * UPGRADED: Uses CAMERA_MOVEMENT_RULES for professional subtlety
+   */
+  getCameraMovementForScene(sceneType, shotIndex, totalShots, shotTypeKey) {
+    const rules = CAMERA_MOVEMENT_RULES[sceneType] || CAMERA_MOVEMENT_RULES['dialogue'];
     const pattern = this.scenePatterns[sceneType];
-    const baseShotCount = pattern.avgShotsPerScene;
 
-    // Adjust based on duration (assume 5s per shot baseline)
-    const durationFactor = sceneDuration / (baseShotCount * 5);
+    const isFirst = shotIndex === 0;
+    const isLast = shotIndex === totalShots - 1;
 
-    // Calculate shot count, clamped between 2 and 8
-    return Math.max(2, Math.min(8, Math.round(baseShotCount * durationFactor)));
+    // For dialogue/emotional scenes, prefer static
+    if (rules.preferStatic !== false && sceneType !== 'action') {
+      // Count moving shots already assigned
+      const movingAllowed = rules.maxMovingShots || 2;
+
+      // Only allow movement on first/last shots, and only if subtle
+      if (isFirst && rules.allowed.includes('subtle_push')) {
+        return 'subtle_push';
+      } else if (isLast && rules.allowed.includes('subtle_pull')) {
+        return 'subtle_pull';
+      }
+
+      // Default to static for most dialogue shots
+      return 'static';
+    }
+
+    // For action scenes, use dynamic movements
+    if (pattern.pacing === 'fast') {
+      const dynamicMovements = ['tracking', 'handheld', 'whip_pan'];
+      return dynamicMovements[shotIndex % dynamicMovements.length];
+    }
+
+    return 'static';
   },
 
   /**
    * Generate shot sequence for a scene
+   * UPGRADED: Uses dialogue coverage patterns and genre-appropriate camera movements
    * IMPORTANT: Minimax only supports 6s or 10s video clips
+   *
+   * @param {string} sceneType - Scene type
+   * @param {number} shotCount - Number of shots
+   * @param {number} sceneDuration - Total scene duration
+   * @param {number} clipDuration - Clip duration (6 or 10)
+   * @param {object} options - { dialogueLines, characterCount, genre, characters }
    */
-  generateShotSequence(sceneType, shotCount, sceneDuration, clipDuration = 10) {
-    const pattern = this.scenePatterns[sceneType];
-    const recommendedShots = pattern.recommendedShots;
+  generateShotSequence(sceneType, shotCount, sceneDuration, clipDuration = 10, options = {}) {
+    const pattern = this.scenePatterns[sceneType] || this.scenePatterns['dialogue'];
+    const { dialogueLines = 0, characterCount = 2, genre = 'drama', characters = [] } = options;
     const sequence = [];
 
     // MINIMAX CONSTRAINT: Each shot must be exactly 6s or 10s
-    // The clipDuration parameter should be 6 or 10 - DEFAULT TO 10s
     const validClipDuration = clipDuration === 6 ? 6 : 10;
 
-    for (let i = 0; i < shotCount; i++) {
-      // Cycle through recommended shots
-      const shotTypeKey = recommendedShots[i % recommendedShots.length];
-      const shotType = this.shotTypes[shotTypeKey];
+    // Get genre profile for style guidance
+    const genreProfile = GENRE_CINEMATOGRAPHY_PROFILES[genre] || GENRE_CINEMATOGRAPHY_PROFILES['drama'];
 
-      // FIXED: Shot duration is ALWAYS the Minimax clip duration (6s or 10s)
-      const shotDuration = validClipDuration;
+    // Get character action guidelines for this scene type
+    const actionGuidelines = CHARACTER_ACTION_GUIDELINES[sceneType] || CHARACTER_ACTION_GUIDELINES['dialogue'];
 
-      // Determine camera movement based on shot type and position
-      const isLastShot = (i === shotCount - 1);
-      let cameraMovement = 'static';
-      if (i === 0) cameraMovement = 'slow_push'; // Opening shot
-      else if (isLastShot) cameraMovement = 'slow_pull'; // Closing shot
-      else if (pattern.pacing === 'fast') cameraMovement = 'tracking';
-      else if (shotTypeKey.includes('closeup')) cameraMovement = 'static';
+    // For dialogue scenes, use professional coverage pattern
+    if (sceneType === 'dialogue' && pattern.useShotReverseShot) {
+      const coveragePattern = this.getDialogueCoveragePattern(characterCount, dialogueLines);
+      const patternShots = coveragePattern.pattern;
 
-      sequence.push({
-        shotIndex: i + 1,
-        shotType: shotTypeKey,
-        shotTypeName: shotType.name,
-        duration: shotDuration, // ALWAYS 6 or 10 seconds
-        cameraMovement: cameraMovement,
-        promptPrefix: shotType.promptPrefix,
-        purpose: shotType.useCases[0],
-        transition: isLastShot ? 'cut' : 'cut'
-      });
+      for (let i = 0; i < shotCount; i++) {
+        // Cycle through the coverage pattern
+        const patternShot = patternShots[i % patternShots.length];
+        const shotTypeKey = this.mapCoverageShotType(patternShot.shotType);
+        const shotType = this.shotTypes[shotTypeKey] || this.shotTypes['medium'];
+
+        // Assign character for shot/reverse shot
+        let assignedCharacter = null;
+        if (patternShot.shotType.includes('_A') && characters[0]) {
+          assignedCharacter = characters[0];
+        } else if (patternShot.shotType.includes('_B') && characters[1]) {
+          assignedCharacter = characters[1];
+        }
+
+        sequence.push({
+          shotIndex: i + 1,
+          shotType: shotTypeKey,
+          shotTypeName: shotType?.name || patternShot.shotType,
+          duration: validClipDuration,
+          cameraMovement: patternShot.cameraMovement || 'static',
+          promptPrefix: shotType?.promptPrefix || `[${patternShot.shotType}]`,
+          purpose: patternShot.purpose,
+          transition: 'cut',
+          // NEW: Professional coverage metadata
+          coverageRole: patternShot.purpose,
+          assignedCharacter: assignedCharacter,
+          characterAction: actionGuidelines.promptModifier,
+          genreStyle: genreProfile.name
+        });
+      }
+    } else {
+      // Non-dialogue scenes: use standard pattern cycling
+      const recommendedShots = pattern.recommendedShots;
+
+      for (let i = 0; i < shotCount; i++) {
+        const shotTypeKey = recommendedShots[i % recommendedShots.length];
+        const shotType = this.shotTypes[shotTypeKey] || this.shotTypes['medium'];
+        const isLastShot = (i === shotCount - 1);
+
+        // Get appropriate camera movement
+        const cameraMovement = this.getCameraMovementForScene(sceneType, i, shotCount, shotTypeKey);
+
+        sequence.push({
+          shotIndex: i + 1,
+          shotType: shotTypeKey,
+          shotTypeName: shotType?.name || shotTypeKey,
+          duration: validClipDuration,
+          cameraMovement: cameraMovement,
+          promptPrefix: shotType?.promptPrefix || `[${shotTypeKey}]`,
+          purpose: shotType?.useCases?.[0] || 'scene coverage',
+          transition: isLastShot ? 'cut' : 'cut',
+          characterAction: actionGuidelines.promptModifier,
+          genreStyle: genreProfile.name
+        });
+      }
     }
 
     // Log the Hollywood math
-    console.log(`[HollywoodDecomposition] Scene: ${sceneDuration}s → ${shotCount} shots × ${validClipDuration}s = ${shotCount * validClipDuration}s total`);
+    console.log(`[HollywoodDecomposition] ${sceneType} scene (${genre}): ${sceneDuration}s → ${shotCount} shots × ${validClipDuration}s = ${shotCount * validClipDuration}s total`);
 
     return sequence;
+  },
+
+  /**
+   * Map coverage pattern shot types to actual shot type keys
+   */
+  mapCoverageShotType(coverageShotType) {
+    const mapping = {
+      'establishing_wide': 'establishing_wide',
+      'two_shot': 'medium',
+      'over_shoulder_A': 'over_shoulder',
+      'over_shoulder_B': 'over_shoulder',
+      'over_shoulder': 'over_shoulder',
+      'closeup_A': 'closeup',
+      'closeup_B': 'closeup',
+      'closeup': 'closeup',
+      'medium_A': 'medium',
+      'medium_B': 'medium',
+      'medium': 'medium',
+      'medium_wide': 'medium_wide',
+      'extreme_closeup': 'extreme_closeup',
+      'reaction': 'reaction',
+      'group_medium': 'medium',
+      'reaction_group': 'reaction',
+      'single_medium': 'medium',
+      'single_closeup': 'closeup',
+      'wide': 'wide'
+    };
+    return mapping[coverageShotType] || 'medium';
+  },
+
+  /**
+   * Calculate dynamic scene duration based on content
+   * UPGRADED: Duration is based on dialogue lines, narration length, and action complexity
+   *
+   * @param {object} scene - Scene object with dialogue, narration, sceneAction
+   * @param {string} genre - Genre for pacing reference
+   * @returns {number} Calculated scene duration in seconds
+   */
+  calculateSceneDuration(scene, genre = 'drama') {
+    const genreProfile = GENRE_CINEMATOGRAPHY_PROFILES[genre] || GENRE_CINEMATOGRAPHY_PROFILES['drama'];
+    let baseDuration = 0;
+
+    // Dialogue-based calculation (~150 words per minute speaking, ~2.5 words/sec)
+    if (scene.dialogue && Array.isArray(scene.dialogue) && scene.dialogue.length > 0) {
+      scene.dialogue.forEach(line => {
+        const text = line.text || line.line || '';
+        const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
+        const speakingTime = wordCount / 2.5; // ~2.5 words per second
+        const reactionPause = 1.5; // Time between dialogue lines
+        baseDuration += speakingTime + reactionPause;
+      });
+    }
+
+    // Narration/voiceover calculation (~140 words per minute, slightly slower)
+    if (scene.narration) {
+      const wordCount = scene.narration.split(/\s+/).filter(w => w.length > 0).length;
+      baseDuration += wordCount / 2.3; // Slightly slower for narration
+    }
+
+    // Action complexity estimation
+    if (scene.sceneAction) {
+      const actionDesc = scene.sceneAction.toLowerCase();
+      let actionMultiplier = 1.0;
+
+      // Complex action keywords add time
+      if (actionDesc.match(/fight|battle|chase|escape|run|sprint/)) {
+        actionMultiplier = 1.5;
+      } else if (actionDesc.match(/walk|move|approach|enter|exit/)) {
+        actionMultiplier = 1.2;
+      } else if (actionDesc.match(/stand|sit|look|gaze|contemplate/)) {
+        actionMultiplier = 0.8;
+      }
+
+      // Minimum action time
+      const actionTime = Math.max(5, baseDuration * (actionMultiplier - 1));
+      baseDuration += actionTime * 0.3; // Add 30% of estimated action time
+    }
+
+    // Scene type modifiers
+    const sceneType = this.analyzeSceneType(scene.visualPrompt || scene.sceneDescription || '');
+    const pattern = this.scenePatterns[sceneType] || this.scenePatterns['dialogue'];
+    baseDuration *= pattern.shotDurationMultiplier || 1.0;
+
+    // Genre pacing adjustment
+    const genrePacingMultiplier = {
+      'action': 0.8,     // Faster pacing
+      'thriller': 0.9,
+      'drama': 1.0,
+      'horror': 1.1,     // Slower for dread
+      'romance': 1.0,
+      'comedy': 0.9,
+      'fantasy': 1.1,    // Epic pacing
+      'scifi': 1.0
+    };
+    baseDuration *= genrePacingMultiplier[genre] || 1.0;
+
+    // Minimum and maximum constraints
+    // Scenes should be at least 8 seconds, max 60 seconds
+    const minDuration = 8;
+    const maxDuration = 60;
+
+    const finalDuration = Math.max(minDuration, Math.min(maxDuration, Math.round(baseDuration)));
+
+    console.log(`[calculateSceneDuration] ${sceneType} scene: ${finalDuration}s (base: ${Math.round(baseDuration)}s, genre: ${genre})`);
+
+    return finalDuration;
+  },
+
+  /**
+   * Count dialogue lines in a scene
+   */
+  countDialogueLines(scene) {
+    if (scene.dialogue && Array.isArray(scene.dialogue)) {
+      return scene.dialogue.length;
+    }
+    return 0;
+  },
+
+  /**
+   * Extract unique characters from dialogue
+   */
+  extractDialogueCharacters(scene) {
+    if (!scene.dialogue || !Array.isArray(scene.dialogue)) {
+      return [];
+    }
+    const characters = new Set();
+    scene.dialogue.forEach(line => {
+      if (line.character) {
+        characters.add(line.character);
+      }
+    });
+    return Array.from(characters);
   },
 
   /**
@@ -53783,8 +54365,12 @@ async function generateCreativeImageInternal(uid, requestData) {
   }
 }
 
-// Export the shot decomposition engine
+// Export the shot decomposition engine and cinematography profiles
 exports.SHOT_DECOMPOSITION_ENGINE = SHOT_DECOMPOSITION_ENGINE;
+exports.GENRE_CINEMATOGRAPHY_PROFILES = GENRE_CINEMATOGRAPHY_PROFILES;
+exports.DIALOGUE_COVERAGE_PATTERNS = DIALOGUE_COVERAGE_PATTERNS;
+exports.CAMERA_MOVEMENT_RULES = CAMERA_MOVEMENT_RULES;
+exports.CHARACTER_ACTION_GUIDELINES = CHARACTER_ACTION_GUIDELINES;
 
 // =============================================================================
 // PHASE 12B: SHOT VIDEO GENERATION & ASSEMBLY
@@ -55056,14 +55642,43 @@ Return JSON:
           console.log(`[creationWizardBatchDecomposeScenes] Scene ${i + 1} cross-scene: continuing from "${previousSceneEndState?.substring(0, 50)}..."`);
         }
 
-        // Calculate shot count using Hollywood formula: ceil(sceneDuration / clipDuration)
-        const hollywoodShotCount = Math.ceil(sceneDuration / clipDuration);
-        const actualShotCount = Math.min(Math.max(targetShotCount || hollywoodShotCount, 2), 10);
+        // UPGRADED: Calculate shot count using dialogue lines and genre
+        const dialogueLines = SHOT_DECOMPOSITION_ENGINE.countDialogueLines(scene);
+        const dialogueCharacters = SHOT_DECOMPOSITION_ENGINE.extractDialogueCharacters(scene);
+        const genre = globalVisualProfile?.genre || scene.genre || 'drama';
 
-        // Generate sequence with EXACT Minimax clip duration
-        const baseSequence = SHOT_DECOMPOSITION_ENGINE.generateShotSequence(sceneType, actualShotCount, sceneDuration, clipDuration);
+        // Use enhanced shot count calculation
+        const calculatedShotCount = SHOT_DECOMPOSITION_ENGINE.calculateShotCount(
+          sceneDuration,
+          sceneType,
+          {
+            dialogueLines,
+            genre,
+            characterCount: dialogueCharacters.length || 2
+          }
+        );
+        const actualShotCount = Math.min(Math.max(targetShotCount || calculatedShotCount, 2), 12);
 
-        // Build prompt with global consistency requirements
+        // Generate sequence with EXACT Minimax clip duration - UPGRADED with options
+        const baseSequence = SHOT_DECOMPOSITION_ENGINE.generateShotSequence(
+          sceneType,
+          actualShotCount,
+          sceneDuration,
+          clipDuration,
+          {
+            dialogueLines,
+            characterCount: dialogueCharacters.length || 2,
+            genre,
+            characters: dialogueCharacters
+          }
+        );
+
+        // Get character action guidelines for this scene type
+        const actionGuidelines = CHARACTER_ACTION_GUIDELINES[sceneType] || CHARACTER_ACTION_GUIDELINES['dialogue'];
+        const cameraRules = CAMERA_MOVEMENT_RULES[sceneType] || CAMERA_MOVEMENT_RULES['dialogue'];
+        const genreProfile = GENRE_CINEMATOGRAPHY_PROFILES[genre] || GENRE_CINEMATOGRAPHY_PROFILES['drama'];
+
+        // Build prompt with global consistency requirements - UPGRADED with action guidelines
         const systemPrompt = `You are a Hollywood cinematographer decomposing Scene ${i + 1} of ${scenes.length} into shots.
 
 CRITICAL: This scene is part of a LARGER VIDEO. ALL shots must match the global visual style.
@@ -55076,11 +55691,28 @@ CONSISTENCY RULES:
 ${globalVisualProfile.consistencyRules?.map((r, idx) => `${idx + 1}. ${r}`).join('\n') || 'Maintain visual consistency across all shots'}
 ` : ''}
 
+GENRE: ${genreProfile.name}
+- Average shot length: ${genreProfile.avgShotLength} seconds
+- Preferred camera movements: ${genreProfile.preferredMovements.join(', ')}
+- Lighting style: ${genreProfile.lightingStyle}
+
+CHARACTER ACTION GUIDELINES (CRITICAL FOR ${sceneType.toUpperCase()} SCENES):
+${actionGuidelines.promptModifier}
+- Intensity level: ${actionGuidelines.intensityLevel}
+- Allowed actions: ${actionGuidelines.allowed.slice(0, 5).join(', ')}
+${actionGuidelines.forbidden.length > 0 ? `- AVOID: ${actionGuidelines.forbidden.join(', ')}` : ''}
+
+CAMERA MOVEMENT RULES:
+- Allowed: ${cameraRules.allowed.join(', ')}
+- Default: ${cameraRules.movementDescription}
+${cameraRules.maxMovingShots ? `- Maximum moving shots: ${cameraRules.maxMovingShots} per scene` : ''}
+
 Output JSON with shots array containing detailed prompts that EXPLICITLY include:
 1. The global color palette
 2. The lighting style
 3. The atmosphere/mood
-4. Camera language
+4. Camera language (MUST follow camera movement rules above)
+5. Character action (MUST be subtle and natural for dialogue/emotional scenes)
 
 Each shot prompt must be 150+ words and include these visual DNA elements.`;
 
