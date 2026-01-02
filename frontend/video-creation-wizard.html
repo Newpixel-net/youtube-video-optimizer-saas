@@ -10050,6 +10050,10 @@
                 });
             }
 
+            // Check for previously generated dialogue audio (stored on shot)
+            const generatedAudio = shot?.generatedDialogueAudio;
+            const hasGeneratedAudio = generatedAudio?.audioUrl;
+
             state.storyboard.videoModelSelector = {
                 open: true,
                 sceneId: sceneId,
@@ -10060,12 +10064,15 @@
                 hasNarration: hasNarration,  // Pass to UI for info display
                 speakingCharacters: uniqueCharacters,  // List of characters needing audio
                 multitalk: {
-                    // Legacy single audio (backward compatible)
+                    // Priority: 1) Generated dialogue audio, 2) Pre-config, 3) null
                     audioFile: preConfig?.multitalk?.audioFile || null,
-                    audioUrl: preConfig?.multitalk?.audioUrl || null,
-                    audioFileName: preConfig?.multitalk?.audioFileName || null,
-                    audioUploadStatus: preConfig?.multitalk?.audioUrl ? 'ready' : 'idle',
-                    audioDuration: preConfig?.multitalk?.audioDuration || null,
+                    audioUrl: hasGeneratedAudio ? generatedAudio.audioUrl : (preConfig?.multitalk?.audioUrl || null),
+                    audioFileName: hasGeneratedAudio ? `Generated (${generatedAudio.voiceCount || 'multi'} voices)` : (preConfig?.multitalk?.audioFileName || null),
+                    audioUploadStatus: hasGeneratedAudio ? 'ready' : (preConfig?.multitalk?.audioUrl ? 'ready' : 'idle'),
+                    audioDuration: hasGeneratedAudio ? generatedAudio.audioDuration : (preConfig?.multitalk?.audioDuration || null),
+                    // Track dialogue audio generation status
+                    dialogueAudioStatus: hasGeneratedAudio ? 'ready' : 'idle',
+                    dialogueAudioSeed: generatedAudio?.seed || null,
                     // NEW: Per-character audio slots
                     characterAudios: characterAudios
                 }
@@ -10335,10 +10342,27 @@
 
             // Build dialogue lines with voice assignments
             const dialogueLines = shot.dialogue.map(d => {
-                // Get the voice for this character
+                // Get the voice for this character - check multiple sources
                 const charVoice = getCharacterVoice(d.character);
                 const voiceProfile = charVoice?.voiceProfile || CHARACTER_VOICE_PROFILES[charVoice?.voiceProfileId];
-                const elevenLabsVoice = voiceProfile?.elevenLabsVoice || 'Roger';
+
+                // Priority for voice selection:
+                // 1. ElevenLabs voice from voice profile
+                // 2. Legacy voice from dialogue data (convert to ElevenLabs)
+                // 3. Legacy voice from voice assignment (convert to ElevenLabs)
+                // 4. Default to Roger
+                let elevenLabsVoice = 'Roger';
+                if (voiceProfile?.elevenLabsVoice) {
+                    elevenLabsVoice = voiceProfile.elevenLabsVoice;
+                } else if (d.voice) {
+                    // Convert old OpenAI voice name to ElevenLabs
+                    elevenLabsVoice = toElevenLabsVoice(d.voice);
+                } else if (charVoice?.voiceProfileId) {
+                    // Try to get voice from character assignment
+                    elevenLabsVoice = toElevenLabsVoice(charVoice.voiceProfileId);
+                }
+
+                console.log(`[DialogueAudio] ${d.character}: using voice ${elevenLabsVoice} (from: ${d.voice || charVoice?.voiceProfileId || 'default'})`);
 
                 return {
                     character: d.character,
@@ -10836,7 +10860,15 @@
                             shotDialogue.forEach(d => {
                                 const charVoice = getCharacterVoice(d.character);
                                 const voiceProfile = charVoice?.voiceProfile || CHARACTER_VOICE_PROFILES[charVoice?.voiceProfileId];
-                                const voiceName = voiceProfile?.elevenLabsVoice || 'Roger';
+                                // Use toElevenLabsVoice helper to handle legacy OpenAI voice names
+                                let voiceName = 'Roger';
+                                if (voiceProfile?.elevenLabsVoice) {
+                                    voiceName = voiceProfile.elevenLabsVoice;
+                                } else if (d.voice) {
+                                    voiceName = toElevenLabsVoice(d.voice);
+                                } else if (charVoice?.voiceProfileId) {
+                                    voiceName = toElevenLabsVoice(charVoice.voiceProfileId);
+                                }
                                 const truncatedLine = d.line.length > 35 ? d.line.substring(0, 35) + '...' : d.line;
                                 html += '<div style="font-size: 0.4rem; margin-bottom: 0.15rem; padding: 0.15rem; background: rgba(0,0,0,0.2); border-radius: 0.15rem;">';
                                 html += '<span style="color: #c4b5fd; font-weight: 500;">' + d.character.split(' ')[0] + '</span>';
@@ -19526,6 +19558,50 @@
             male: ['Roger', 'Charlie', 'George', 'Callum', 'Liam', 'Will', 'Eric', 'Chris', 'Brian', 'Daniel', 'Bill'],
             female: ['Aria', 'Sarah', 'Laura', 'River', 'Charlotte', 'Alice', 'Matilda', 'Jessica', 'Lily']
         };
+
+        // Map old OpenAI TTS voices to FAL ElevenLabs voices
+        // Used for backward compatibility with projects created before ElevenLabs integration
+        const OPENAI_TO_ELEVENLABS_VOICE_MAP = {
+            // OpenAI male voices -> ElevenLabs male voices
+            'adam': 'Roger',      // Deep, warm male
+            'onyx': 'George',     // Deeper male
+            'echo': 'Daniel',     // Standard male
+            'fable': 'Liam',      // Younger male
+            // OpenAI female voices -> ElevenLabs female voices
+            'nova': 'Aria',       // Warm female
+            'shimmer': 'Sarah',   // Bright female
+            'alloy': 'Charlotte', // Neutral female
+            'bella': 'Jessica',   // Expressive female
+            'rachel': 'Laura',    // Professional female
+            'domi': 'River',      // Energetic female
+            'elli': 'Alice',      // Soft female
+            'josh': 'Brian',      // Masculine
+            'arnold': 'Will',     // Strong male
+            'sam': 'Chris',       // Casual male
+            'antoni': 'Eric',     // Friendly male
+            // Direct pass-through for already-valid ElevenLabs voices
+            'Roger': 'Roger', 'Charlie': 'Charlie', 'George': 'George', 'Callum': 'Callum',
+            'Liam': 'Liam', 'Will': 'Will', 'Eric': 'Eric', 'Chris': 'Chris', 'Brian': 'Brian',
+            'Daniel': 'Daniel', 'Bill': 'Bill', 'Aria': 'Aria', 'Sarah': 'Sarah', 'Laura': 'Laura',
+            'River': 'River', 'Charlotte': 'Charlotte', 'Alice': 'Alice', 'Matilda': 'Matilda',
+            'Jessica': 'Jessica', 'Lily': 'Lily'
+        };
+
+        // Helper function to convert any voice name to ElevenLabs voice
+        function toElevenLabsVoice(voiceName) {
+            if (!voiceName) return 'Roger';
+            const normalized = voiceName.toLowerCase();
+            // Check direct mapping
+            if (OPENAI_TO_ELEVENLABS_VOICE_MAP[normalized]) {
+                return OPENAI_TO_ELEVENLABS_VOICE_MAP[normalized];
+            }
+            // Check if already a valid ElevenLabs voice (case-insensitive)
+            const allVoices = [...FAL_ELEVENLABS_VOICES.male, ...FAL_ELEVENLABS_VOICES.female];
+            const match = allVoices.find(v => v.toLowerCase() === normalized);
+            if (match) return match;
+            // Default fallback
+            return 'Roger';
+        }
 
         function setCharacterVoice(characterName, voiceProfileId) {
             // Set voice profile for a specific character
