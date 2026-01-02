@@ -58090,6 +58090,58 @@ exports.creationWizardGenerateMultitalkVideo = functions
     }
 
     try {
+      // Helper function to make a Firebase Storage file public and return its public URL
+      // This ensures files uploaded from frontend are accessible from RunPod
+      const makeFilePublicAndGetUrl = async (url) => {
+        if (!url) return url;
+
+        // Already a public GCS URL - return as-is
+        if (url.includes('storage.googleapis.com/') && !url.includes('firebasestorage.')) {
+          return url;
+        }
+
+        // Extract file path from Firebase Storage URL
+        // From: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH%2Ffile.ext?alt=media&token=...
+        const firebaseMatch = url.match(/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/);
+        if (firebaseMatch) {
+          const bucket = firebaseMatch[1];
+          const encodedPath = firebaseMatch[2];
+          const decodedPath = decodeURIComponent(encodedPath);
+
+          try {
+            // Make the file public
+            const file = admin.storage().bucket(bucket).file(decodedPath);
+            await file.makePublic();
+            console.log('[creationWizardGenerateMultitalkVideo] Made file public:', decodedPath);
+          } catch (publicError) {
+            // File might already be public or we don't have permission - continue anyway
+            console.log('[creationWizardGenerateMultitalkVideo] makePublic note:', publicError.message);
+          }
+
+          // Return public URL format
+          const publicUrl = `https://storage.googleapis.com/${bucket}/${decodedPath}`;
+          console.log('[creationWizardGenerateMultitalkVideo] Converted to public URL:', {
+            original: url.substring(0, 80) + '...',
+            public: publicUrl
+          });
+          return publicUrl;
+        }
+
+        // Return as-is for other URL types (R2, external, etc.)
+        return url;
+      };
+
+      // Convert input URLs to publicly accessible format (and make files public if needed)
+      const publicImageUrl = await makeFilePublicAndGetUrl(imageUrl);
+      const publicAudioUrl = await makeFilePublicAndGetUrl(effectiveAudioUrl);
+
+      console.log('[creationWizardGenerateMultitalkVideo] URL processing complete:', {
+        originalImageUrl: imageUrl?.substring(0, 60) + '...',
+        publicImageUrl: publicImageUrl?.substring(0, 60) + '...',
+        originalAudioUrl: effectiveAudioUrl?.substring(0, 60) + '...',
+        publicAudioUrl: publicAudioUrl?.substring(0, 60) + '...'
+      });
+
       // Generate seed
       const seed = Math.floor(Math.random() * 999999999999);
 
@@ -58189,9 +58241,9 @@ Tone: Natural, expressive.`;
       // Build RunPod input for Multitalk
       // IMPORTANT: Parameter names must match the Multitalk API exactly
       const runpodInput = {
-        // Core required parameters
-        image_url: imageUrl,
-        audio_url: effectiveAudioUrl,  // Use effective URL (may be from characterAudioData)
+        // Core required parameters - use public URLs for RunPod access
+        image_url: publicImageUrl,
+        audio_url: publicAudioUrl,
         video_upload_url: uploadUrl,   // Handler expects video_upload_url
 
         // Audio timing (format: "M:SS")
@@ -58222,8 +58274,10 @@ Tone: Natural, expressive.`;
       };
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
-        imageUrl: imageUrl.substring(0, 50) + '...',
-        audioUrl: effectiveAudioUrl.substring(0, 50) + '...',
+        originalImageUrl: imageUrl.substring(0, 60) + '...',
+        publicImageUrl: publicImageUrl.substring(0, 60) + '...',
+        originalAudioUrl: effectiveAudioUrl.substring(0, 60) + '...',
+        publicAudioUrl: publicAudioUrl.substring(0, 60) + '...',
         uploadUrl: uploadUrl.substring(0, 80) + '...',
         audioCropEnd: runpodInput.audio_crop_end_time,
         numFrames: runpodInput.num_frames,
@@ -58315,10 +58369,27 @@ exports.creationWizardCheckMultitalkStatus = functions.https.onCall(async (data,
     let errorMsg = null;
 
     if (result.status === 'COMPLETED') {
-      mappedStatus = 'COMPLETED';
-      // Video URL should be in the payload or we constructed it earlier
-      if (result.output?.payload?.videoUrl) {
-        videoUrl = result.output.payload.videoUrl;
+      // Check if the handler returned an error status in output
+      // RunPod marks job as COMPLETED even when handler returns {status: 500, message: "error"}
+      if (result.output?.status === 500 || result.output?.status === 400) {
+        mappedStatus = 'FAILED';
+        errorMsg = result.output?.message || 'Multitalk worker returned an error';
+        console.error('[creationWizardCheckMultitalkStatus] Worker error:', {
+          status: result.output?.status,
+          message: result.output?.message
+        });
+      } else if (result.output?.status === 200) {
+        // Explicit success from handler
+        mappedStatus = 'COMPLETED';
+        if (result.output?.payload?.videoUrl) {
+          videoUrl = result.output.payload.videoUrl;
+        }
+      } else {
+        // Legacy handling - assume success if no explicit status
+        mappedStatus = 'COMPLETED';
+        if (result.output?.payload?.videoUrl) {
+          videoUrl = result.output.payload.videoUrl;
+        }
       }
     } else if (result.status === 'FAILED') {
       mappedStatus = 'FAILED';
