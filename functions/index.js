@@ -34507,12 +34507,15 @@ const NANOBANANA_PROMPT_BUILDER = {
  * MINIMAX_PROMPT_OPTIMIZER (Fix 4)
  * Optimizes video prompts for Minimax's AI video generation capabilities
  * Adds motion quality keywords and cinematic descriptors that Minimax responds well to
+ *
+ * ENHANCED: Added background character animation keywords to prevent frozen extras
  */
 const MINIMAX_PROMPT_OPTIMIZER = {
   // Quality keywords that improve Minimax output
   qualityKeywords: [
     'cinematic', 'photorealistic', 'high production value',
-    'professional cinematography', 'smooth fluid motion'
+    'professional cinematography', 'smooth fluid motion',
+    'live-action film quality', 'real actors on location'
   ],
 
   // Motion descriptors for realistic animation
@@ -34521,14 +34524,34 @@ const MINIMAX_PROMPT_OPTIMIZER = {
     'seamless continuous action', 'organic flow'
   ],
 
+  // CRITICAL FIX: Keywords for animating ALL characters including background extras
+  backgroundAnimationKeywords: [
+    'ALL characters in scene are moving naturally',
+    'background people walking and moving realistically',
+    'extras and bystanders showing natural motion',
+    'living breathing environment with active crowd',
+    'dynamic scene with multiple moving subjects',
+    'every person in frame has natural subtle movement'
+  ],
+
+  // Environment animation keywords
+  environmentAnimationKeywords: [
+    'environmental elements in motion',
+    'wind moving through scene affecting hair and clothes',
+    'subtle ambient motion throughout frame',
+    'living dynamic environment',
+    'atmospheric movement like dust particles and light shifts'
+  ],
+
   /**
    * Enhance a video prompt for Minimax
    * @param {string} prompt - Original video prompt
    * @param {string} cameraMovement - Camera movement type
    * @param {boolean} isImageToVideo - Whether this is I2V (more subtle motion needed)
+   * @param {boolean} hasMultipleCharacters - Whether scene has background characters/extras
    * @returns {string} Enhanced prompt
    */
-  enhance(prompt, cameraMovement = null, isImageToVideo = false) {
+  enhance(prompt, cameraMovement = null, isImageToVideo = false, hasMultipleCharacters = false) {
     if (!prompt || prompt.trim().length === 0) {
       return prompt;
     }
@@ -34542,27 +34565,62 @@ const MINIMAX_PROMPT_OPTIMIZER = {
 
       if (!hasQuality) {
         // Add quality prefix for I2V - emphasize continuity from first frame
-        enhanced = `Cinematic, photorealistic video with smooth fluid motion. ${enhanced}`;
+        enhanced = `Cinematic, photorealistic live-action video with smooth fluid motion. ${enhanced}`;
+      }
+
+      // CRITICAL FIX: Add background character animation for I2V
+      // Check if prompt mentions multiple people or crowd scenarios
+      const hasMultiplePeople = hasMultipleCharacters ||
+        /crowd|people|extras|background|bystanders|group|others|everyone|all characters/i.test(enhanced);
+
+      if (hasMultiplePeople) {
+        enhanced += '. IMPORTANT: ALL people in the scene must have natural movement - background characters walk, gesture, and move realistically. No frozen or static extras. Every visible person shows lifelike motion.';
       }
 
       // Add motion continuity suffix if not present
       if (!/continuous|seamless|natural.*motion/i.test(enhanced)) {
         enhanced += '. Natural lifelike movement, seamless animation, professional cinematography quality.';
       }
+
+      // Add environment animation cues
+      enhanced += ' Subtle environmental motion: wind in hair, fabric movement, atmospheric particles.';
     } else {
       // Text-to-video: can be more dynamic
       const hasQuality = /cinematic|photorealistic|realistic/i.test(enhanced);
 
       if (!hasQuality) {
-        enhanced = `Cinematic, high production value, photorealistic. ${enhanced}`;
+        enhanced = `Cinematic, high production value, photorealistic live-action film quality. ${enhanced}`;
+      }
+
+      // CRITICAL FIX: Add background animation for T2V as well
+      const hasMultiplePeople = hasMultipleCharacters ||
+        /crowd|people|extras|background|bystanders|group|others|everyone|all characters/i.test(enhanced);
+
+      if (hasMultiplePeople) {
+        enhanced += '. ALL characters in scene move naturally - no frozen extras. Background people walk, talk, and gesture realistically. Living dynamic scene with active crowd.';
       }
 
       if (!/smooth|fluid|natural.*motion/i.test(enhanced)) {
-        enhanced += '. Smooth fluid motion, realistic physics, professional quality animation.';
+        enhanced += '. Smooth fluid motion, realistic physics, professional quality animation with natural motion throughout.';
       }
     }
 
     return enhanced;
+  },
+
+  /**
+   * Add specific multi-character animation instructions
+   * Call this when scene explicitly has multiple characters
+   * @param {string} prompt - Video prompt
+   * @param {number} characterCount - Number of characters in scene
+   * @returns {string} Enhanced prompt with multi-character animation
+   */
+  enhanceMultiCharacterMotion(prompt, characterCount = 2) {
+    if (characterCount <= 1) return prompt;
+
+    const multiCharInstructions = `CRITICAL ANIMATION REQUIREMENT: This scene has ${characterCount} characters - ALL must show natural movement. Each character has independent motion. Background characters walk, gesture, breathe, and show subtle idle animations. No static or frozen figures anywhere in frame.`;
+
+    return `${prompt} ${multiCharInstructions}`;
   },
 
   /**
@@ -34599,7 +34657,9 @@ exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data,
     duration = '10s',  // Default to 10s for richer action sequences
     resolution = '768p',
     cameraMovements = [],
-    promptOptimizer = true
+    promptOptimizer = true,
+    // ENHANCED: Character count for multi-character animation
+    characterCount = 0
   } = data;
 
   if (!prompt || prompt.trim().length < 5) {
@@ -34640,8 +34700,18 @@ exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data,
     // Determine if this is image-to-video
     const isImageToVideo = imageUrl && modelConfig.inputTypes.includes('image');
 
+    // ENHANCED: Detect multi-character scenes for proper animation
+    const hasMultipleCharacters = characterCount > 1 ||
+      /crowd|people|extras|background.*character|bystander|group|others.*in.*scene/i.test(prompt);
+
     // ENHANCED: Use MINIMAX_PROMPT_OPTIMIZER for better video quality (Fix 4)
-    let enhancedPrompt = MINIMAX_PROMPT_OPTIMIZER.enhance(prompt, cameraMovements[0], isImageToVideo);
+    // Now passes hasMultipleCharacters to ensure all characters animate
+    let enhancedPrompt = MINIMAX_PROMPT_OPTIMIZER.enhance(prompt, cameraMovements[0], isImageToVideo, hasMultipleCharacters);
+
+    // ENHANCED: Apply multi-character animation enhancement if applicable
+    if (characterCount > 1) {
+      enhancedPrompt = MINIMAX_PROMPT_OPTIMIZER.enhanceMultiCharacterMotion(enhancedPrompt, characterCount);
+    }
 
     // Add camera movements using optimizer's formatter
     const cameraPrefix = MINIMAX_PROMPT_OPTIMIZER.formatCameraMovements(cameraMovements);
@@ -34649,7 +34719,7 @@ exports.creationWizardGenerateMinimaxVideo = functions.https.onCall(async (data,
       enhancedPrompt = `${cameraPrefix} ${enhancedPrompt}`;
     }
 
-    console.log(`[creationWizardGenerateMinimaxVideo] Enhanced prompt (${isImageToVideo ? 'I2V' : 'T2V'}): ${enhancedPrompt.substring(0, 100)}...`);
+    console.log(`[creationWizardGenerateMinimaxVideo] Enhanced prompt (${isImageToVideo ? 'I2V' : 'T2V'}, ${characterCount} chars): ${enhancedPrompt.substring(0, 100)}...`);
 
     // Determine API endpoint
     const apiEndpoint = 'https://api.minimax.io/v1/video_generation';
@@ -39533,73 +39603,90 @@ const VISUAL_STYLE_DNA = {
 
   // ========================================
   // CINEMATIC - Hollywood film look
+  // ENHANCED: Stronger photorealistic emphasis for live-action Marvel quality
   // ========================================
   cinematic: {
     id: 'cinematic',
     name: 'Cinematic',
-    description: 'Hollywood blockbuster look, dramatic but grounded in reality',
+    description: 'Hollywood blockbuster look, dramatic but grounded in reality - like Marvel live-action films',
     icon: '🎬',
 
-    promptPrefix: 'Cinematic film still, real human being, actual person, Hollywood production quality, dramatic cinematography, professional movie lighting, genuine actors,',
+    // CRITICAL FIX: Added explicit photorealistic keywords to prevent CGI rendering
+    // Must emphasize REAL human beings, NOT 3D characters
+    promptPrefix: 'PHOTOREALISTIC cinematic film still, shot on 35mm film, REAL HUMAN BEING photographed on set, actual living person NOT CGI, Hollywood live-action blockbuster quality like Marvel movies, genuine professional actors with real skin, dramatic cinematography, shot on location with professional movie lighting, Kodak Vision3 film stock aesthetic,',
 
     cameraLanguage: {
-      primary: 'Shot on ARRI Alexa 65 with Panavision anamorphic lenses',
+      primary: 'Shot on ARRI Alexa 65 with Panavision anamorphic lenses, 35mm film grain',
       alternatives: [
         'RED V-Raptor with Cooke Anamorphic/i',
         'Sony Venice with Hawk V-Lite anamorphics',
         'ARRI Alexa Mini LF with vintage Kowa anamorphics'
       ],
-      sensorDescription: 'large format sensor, anamorphic lens characteristics',
+      sensorDescription: 'large format sensor, anamorphic lens characteristics, authentic film grain texture',
       shutterLanguage: 'cinematic motion blur, 24fps aesthetic'
     },
 
     lightingStyle: {
       approach: 'Dramatic three-point lighting with motivated sources',
-      keywords: ['key light with character', 'atmospheric fill', 'rim light separation', 'practical motivation', 'volumetric atmosphere'],
-      avoid: ['flat lighting', 'amateur on-camera flash', 'unmotivated colors']
+      keywords: ['key light with character', 'atmospheric fill', 'rim light separation', 'practical motivation', 'volumetric atmosphere', 'natural skin-friendly lighting'],
+      avoid: ['flat lighting', 'amateur on-camera flash', 'unmotivated colors', 'CGI lighting']
     },
 
     textureKeywords: [
-      'cinematic skin rendering',
-      'movie-quality costumes and props',
-      'high-budget production design',
+      'natural human skin with visible pores and texture',
+      'real fabric weave and wrinkles',
+      'movie-quality costumes and props with authentic wear',
+      'high-budget production design with real materials',
       'atmospheric depth and haze',
-      'anamorphic lens characteristics like oval bokeh and subtle flares'
+      'anamorphic lens characteristics like oval bokeh and subtle flares',
+      'authentic film grain texture'
     ],
 
+    // CRITICAL FIX: Expanded and strengthened negative keywords
     negativeKeywords: [
-      'amateur', 'low budget', 'TV movie quality', 'soap opera',
+      // Anti-CGI (highest priority)
+      '3D render', '3D model', '3D animated', '3D character', 'CGI', 'CGI character', 'CGI skin',
+      'computer generated', 'computer graphics', 'digital character', 'rendered character',
+      'Unreal Engine', 'Unity', 'video game', 'game engine', 'game render',
+      'Pixar', 'Disney animation', 'DreamWorks', 'animated movie', 'animation style',
+      // Anti-stylized
+      'cartoon', 'anime', 'illustration', 'digital art', 'concept art', 'stylized',
+      'painted', 'artistic render', 'fantasy art',
+      // Anti-fake skin
+      'synthetic skin', 'plastic skin', 'waxy skin', 'porcelain skin', 'smooth skin',
+      'doll-like', 'mannequin', 'rubber skin', 'artificial skin', 'fake skin',
+      'airbrushed skin', 'perfect skin', 'flawless skin',
+      // Anti-low quality
+      'amateur', 'low budget', 'TV movie quality', 'soap opera', 'made for TV',
       'video look', 'digital harshness', 'flat lighting',
-      'cartoon', 'anime', 'illustration', '3D animated', '3D render', 'CGI character',
-      'computer generated', 'Unreal Engine', 'video game', 'Pixar', 'Disney animation',
-      'stylized', 'synthetic skin', 'plastic skin', 'waxy skin',
       'oversaturated', 'instagram filter', 'mobile phone quality',
-      'stock footage', 'corporate video'
+      'stock footage', 'corporate video', 'stock photo'
     ],
 
-    referenceFilms: ['Blade Runner 2049', 'Dune', 'Mad Max Fury Road', 'Arrival', 'Interstellar'],
+    referenceFilms: ['Blade Runner 2049', 'Dune', 'Mad Max Fury Road', 'Arrival', 'Interstellar', 'The Avengers', 'Black Panther', 'Top Gun Maverick'],
 
     colorGrading: {
-      approach: 'Stylized but grounded color grading',
-      lut: 'Custom film LUT with teal/orange split-toning option',
+      approach: 'Stylized but grounded color grading with authentic film look',
+      lut: 'Custom film LUT with teal/orange split-toning option, Kodak film emulation',
       saturation: 'Controlled saturation with specific color emphasis',
       contrast: 'Rich contrast with preserved details',
       highlights: 'Blooming highlights when motivated',
       shadows: 'Deep shadows with detail'
     },
 
+    // CRITICAL FIX: Stronger emphasis on real human skin
     skinRendering: {
-      texture: 'real human skin with natural texture, visible pores, refined but authentic',
-      subsurface: 'natural subsurface scattering like real skin',
-      color: 'real human skin tones, natural undertones, authentic complexion',
-      avoid: '3D rendered skin, plastic skin, waxy skin, synthetic skin, CGI skin, porcelain doll, airbrushed'
+      texture: 'REAL human skin photographed on camera, natural visible pores, fine lines, skin texture like Hollywood actors, refined but authentically imperfect',
+      subsurface: 'natural subsurface scattering exactly like photographed human skin',
+      color: 'real human skin tones from actual ethnicity, natural undertones, blood vessel visibility in thin areas, authentic complexion variations',
+      avoid: '3D rendered skin, CGI skin, plastic skin, waxy skin, synthetic skin, porcelain doll skin, airbrushed, smooth perfect skin, video game character skin'
     },
 
     technicalSpecs: {
-      resolution: '6K cinematic quality',
-      sharpness: 'Cinema sharpness, slight softness acceptable for mood',
-      noise: 'Clean with optional stylistic grain',
-      dof: 'Shallow cinematic depth of field'
+      resolution: '6K cinematic quality with authentic 35mm film grain',
+      sharpness: 'Cinema sharpness, slight organic softness like real film',
+      noise: 'Authentic film grain texture (not digital noise)',
+      dof: 'Shallow cinematic depth of field with natural bokeh'
     }
   },
 
@@ -57425,7 +57512,9 @@ exports.creationWizardGenerateShotVideo = functions
     characterReference = null,          // Character portrait URL from Character Bible
     primaryCharacterName = null,        // Name of primary character for logging
     // NEW: Style enforcement
-    styleSettings = null                // { style: 'photorealistic', colorGrade: '...', etc. }
+    styleSettings = null,               // { style: 'photorealistic', colorGrade: '...', etc. }
+    // ENHANCED: Character count for multi-character animation
+    characterCount = 0                  // Number of characters in this shot
   } = data;
 
   if (!imageUrl) {
@@ -57464,25 +57553,41 @@ exports.creationWizardGenerateShotVideo = functions
     // ==========================================
     // STYLE ENFORCEMENT
     // ==========================================
-    // If style is photorealistic, enforce it strongly in the prompt
+    // If style is photorealistic or cinematic, enforce real human live-action look
     if (styleSettings?.style) {
-      const isPhotorealistic = styleSettings.style.toLowerCase().includes('photorealistic') ||
-                               styleSettings.style.toLowerCase().includes('realistic') ||
-                               styleSettings.style.toLowerCase().includes('live-action');
+      const styleLower = styleSettings.style.toLowerCase();
+
+      // ENHANCED: Cinematic should also be photorealistic live-action (like Marvel movies)
+      const isPhotorealistic = styleLower.includes('photorealistic') ||
+                               styleLower.includes('realistic') ||
+                               styleLower.includes('live-action') ||
+                               styleLower === 'cinematic';  // CRITICAL: Cinematic = live-action
 
       if (isPhotorealistic) {
-        // Prepend strong style enforcement for photorealistic content
-        videoPrompt = `[STYLE: Photorealistic, live-action cinematography, real human faces and bodies, NOT animated, NOT cartoon, NOT CGI characters] ${videoPrompt}`;
-        console.log(`[creationWizardGenerateShotVideo] Style Enforcement: PHOTOREALISTIC`);
+        // Prepend strong style enforcement for photorealistic/cinematic content
+        // ENHANCED: Stronger anti-CGI keywords
+        videoPrompt = `[STYLE: PHOTOREALISTIC live-action film, REAL HUMAN actors photographed on set, 35mm film aesthetic, NOT 3D animated, NOT CGI characters, NOT cartoon, NOT video game graphics, actual people with real skin texture] ${videoPrompt}`;
+        console.log(`[creationWizardGenerateShotVideo] Style Enforcement: PHOTOREALISTIC/CINEMATIC (live-action)`);
       } else if (styleSettings.style) {
         videoPrompt = `[STYLE: ${styleSettings.style}] ${videoPrompt}`;
         console.log(`[creationWizardGenerateShotVideo] Style Enforcement: ${styleSettings.style}`);
       }
     }
 
+    // ENHANCED: Detect multi-character scenes for proper animation
+    const hasMultipleCharacters = characterCount > 1 ||
+      /crowd|people|extras|background.*character|bystander|group|others.*in.*scene/i.test(videoPrompt);
+
     // ENHANCED: Apply MINIMAX_PROMPT_OPTIMIZER for better video quality (Fix 4)
     // This is I2V (image-to-video) since we have imageUrl
-    videoPrompt = MINIMAX_PROMPT_OPTIMIZER.enhance(videoPrompt, cameraMovement, true);
+    // Now passes hasMultipleCharacters to ensure all characters animate
+    videoPrompt = MINIMAX_PROMPT_OPTIMIZER.enhance(videoPrompt, cameraMovement, true, hasMultipleCharacters);
+
+    // ENHANCED: Apply multi-character animation enhancement if applicable
+    if (characterCount > 1) {
+      videoPrompt = MINIMAX_PROMPT_OPTIMIZER.enhanceMultiCharacterMotion(videoPrompt, characterCount);
+      console.log(`[creationWizardGenerateShotVideo] Applied multi-character animation for ${characterCount} characters`);
+    }
 
     // Map shot camera movement to Minimax format
     const cameraMovementMap = {
