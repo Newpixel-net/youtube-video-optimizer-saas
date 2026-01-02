@@ -53043,6 +53043,1186 @@ const SCENE_DURATION_VALIDATION_SYSTEM = {
   }
 };
 
+/**
+ * AUDIO_POST_PRODUCTION_SYSTEM
+ *
+ * Professional audio post-production for dialogue scenes.
+ * Handles audio normalization, ducking, crossfades, and mixing.
+ * Ensures broadcast-quality audio levels and smooth transitions.
+ */
+const AUDIO_POST_PRODUCTION_SYSTEM = {
+  // Industry-standard audio levels (in dB)
+  levels: {
+    dialogue: {
+      target: -14,        // Target LUFS for dialogue
+      peak: -3,           // Maximum peak level
+      floor: -40,         // Noise floor
+      headroom: 6         // Headroom below peak
+    },
+    music: {
+      underDialogue: -24, // Music level when dialogue plays
+      solo: -18,          // Music level when no dialogue
+      transition: -21     // Music during scene transitions
+    },
+    sfx: {
+      subtle: -20,        // Subtle sound effects
+      normal: -14,        // Normal sound effects
+      impactful: -8       // High-impact sound effects
+    },
+    ambience: {
+      background: -30,    // Constant background ambience
+      featured: -18       // Featured ambience moments
+    }
+  },
+
+  // Crossfade profiles for different transition types
+  crossfadeProfiles: {
+    'hard_cut': {
+      duration: 0,
+      curve: 'none',
+      description: 'Immediate audio cut'
+    },
+    'soft_cut': {
+      duration: 0.1,
+      curve: 'linear',
+      description: 'Very brief crossfade to avoid pop'
+    },
+    'dialogue_transition': {
+      duration: 0.3,
+      curve: 'ease_out',
+      description: 'Smooth transition between speakers'
+    },
+    'scene_transition': {
+      duration: 1.0,
+      curve: 'ease_in_out',
+      description: 'Gradual scene-to-scene audio blend'
+    },
+    'music_bridge': {
+      duration: 2.0,
+      curve: 'ease_in',
+      description: 'Long crossfade for music continuity'
+    },
+    'emotional_beat': {
+      duration: 0.5,
+      curve: 'ease_out',
+      description: 'Pause with gentle fade for emotional weight'
+    }
+  },
+
+  // Ducking profiles for music under dialogue
+  duckingProfiles: {
+    'aggressive': {
+      reduction: -12,     // dB reduction
+      attackTime: 0.1,    // seconds
+      releaseTime: 0.5,
+      threshold: -30,     // dialogue level to trigger ducking
+      description: 'Strong ducking for clarity'
+    },
+    'moderate': {
+      reduction: -8,
+      attackTime: 0.15,
+      releaseTime: 0.8,
+      threshold: -35,
+      description: 'Balanced ducking for music presence'
+    },
+    'gentle': {
+      reduction: -4,
+      attackTime: 0.2,
+      releaseTime: 1.0,
+      threshold: -40,
+      description: 'Subtle ducking for ambient music'
+    },
+    'none': {
+      reduction: 0,
+      attackTime: 0,
+      releaseTime: 0,
+      threshold: 0,
+      description: 'No ducking applied'
+    }
+  },
+
+  // Room tone profiles for natural sound
+  roomToneProfiles: {
+    'interior_quiet': {
+      noiseFloor: -50,
+      characteristics: 'subtle HVAC hum, slight room reverb',
+      recommended: ['dialogue', 'intimate']
+    },
+    'interior_busy': {
+      noiseFloor: -35,
+      characteristics: 'background chatter, activity sounds',
+      recommended: ['action', 'crowd']
+    },
+    'exterior_urban': {
+      noiseFloor: -30,
+      characteristics: 'traffic, city ambience, distant sounds',
+      recommended: ['action', 'thriller']
+    },
+    'exterior_nature': {
+      noiseFloor: -40,
+      characteristics: 'wind, birds, natural sounds',
+      recommended: ['drama', 'romance']
+    },
+    'studio_clean': {
+      noiseFloor: -60,
+      characteristics: 'minimal noise, controlled environment',
+      recommended: ['narration', 'voiceover']
+    }
+  },
+
+  /**
+   * Calculate audio mix settings for a scene
+   */
+  calculateSceneMix(scene, genre = 'drama') {
+    const hasDialogue = scene.dialogue && scene.dialogue.length > 0;
+    const hasNarration = !!scene.narration;
+    const hasMusic = scene.musicTrack || scene.backgroundMusic;
+
+    // Determine ducking profile based on content
+    let duckingProfile = 'moderate';
+    if (hasDialogue && scene.dialogue.some(d => d.emotion?.includes('whisper'))) {
+      duckingProfile = 'aggressive';
+    } else if (genre === 'action' || genre === 'thriller') {
+      duckingProfile = 'moderate';
+    } else if (genre === 'horror') {
+      duckingProfile = 'gentle';
+    }
+
+    // Calculate dialogue segments with timing
+    const dialogueSegments = [];
+    if (hasDialogue) {
+      let currentTime = 0;
+      scene.dialogue.forEach((line, idx) => {
+        const wordCount = (line.line || line.text || '').split(/\s+/).length;
+        const duration = wordCount / 2.5;
+
+        dialogueSegments.push({
+          index: idx,
+          character: line.character,
+          startTime: currentTime,
+          endTime: currentTime + duration,
+          duration,
+          emotion: line.emotion,
+          delivery: line.delivery,
+          processing: this.getDialogueProcessing(line)
+        });
+
+        currentTime += duration + 0.8;
+      });
+    }
+
+    const roomTone = this.recommendRoomTone(scene);
+
+    return {
+      hasDialogue,
+      hasNarration,
+      hasMusic,
+      dialogueSegments,
+      duckingProfile: this.duckingProfiles[duckingProfile],
+      roomTone: this.roomToneProfiles[roomTone],
+      levels: {
+        dialogue: this.levels.dialogue.target,
+        music: hasDialogue ? this.levels.music.underDialogue : this.levels.music.solo,
+        ambience: this.levels.ambience.background
+      },
+      totalDialogueDuration: dialogueSegments.reduce((sum, s) => sum + s.duration, 0),
+      recommendations: this.generateMixRecommendations(scene, genre, dialogueSegments)
+    };
+  },
+
+  /**
+   * Get audio processing recommendations for a dialogue line
+   */
+  getDialogueProcessing(dialogueLine) {
+    const delivery = dialogueLine.delivery || 'spoken_normal';
+    const emotion = dialogueLine.emotion || 'neutral';
+
+    const processing = {
+      compression: 'moderate',
+      eq: 'presence_boost',
+      reverb: 'none',
+      deEss: true,
+      normalize: true
+    };
+
+    if (delivery.includes('whispered')) {
+      processing.compression = 'heavy';
+      processing.eq = 'high_boost';
+      processing.gainBoost = 6;
+    } else if (delivery.includes('shouted')) {
+      processing.compression = 'limiting';
+      processing.eq = 'de_harsh';
+      processing.gainBoost = -3;
+    } else if (delivery.includes('trembling') || delivery.includes('breaking')) {
+      processing.compression = 'gentle';
+      processing.reverb = 'subtle';
+    }
+
+    if (emotion.includes('angry') || emotion.includes('intense')) {
+      processing.eq = 'presence_boost';
+      processing.compression = 'moderate';
+    } else if (emotion.includes('sad') || emotion.includes('grief')) {
+      processing.reverb = 'subtle';
+      processing.compression = 'gentle';
+    }
+
+    return processing;
+  },
+
+  /**
+   * Recommend room tone based on scene context
+   */
+  recommendRoomTone(scene) {
+    const visualPrompt = (scene.visualPrompt || scene.sceneDescription || '').toLowerCase();
+
+    if (visualPrompt.match(/office|room|house|apartment|indoor/)) {
+      return 'interior_quiet';
+    } else if (visualPrompt.match(/bar|restaurant|party|crowd/)) {
+      return 'interior_busy';
+    } else if (visualPrompt.match(/city|street|urban|traffic/)) {
+      return 'exterior_urban';
+    } else if (visualPrompt.match(/forest|beach|mountain|nature|garden/)) {
+      return 'exterior_nature';
+    }
+
+    return 'studio_clean';
+  },
+
+  /**
+   * Generate mix recommendations for the scene
+   */
+  generateMixRecommendations(scene, genre, dialogueSegments) {
+    const recommendations = [];
+
+    if (dialogueSegments.length > 1) {
+      for (let i = 1; i < dialogueSegments.length; i++) {
+        const gap = dialogueSegments[i].startTime - dialogueSegments[i - 1].endTime;
+        if (gap < 0.3) {
+          recommendations.push({
+            type: 'tight_dialogue',
+            severity: 'warning',
+            message: `Lines ${i} and ${i + 1} have minimal gap (${gap.toFixed(1)}s)`
+          });
+        }
+      }
+    }
+
+    const emotionalPeaks = dialogueSegments.filter(s =>
+      s.emotion?.match(/shock|revelation|grief|rage|terror/)
+    );
+    if (emotionalPeaks.length > 0) {
+      recommendations.push({
+        type: 'emotional_peaks',
+        severity: 'info',
+        message: `${emotionalPeaks.length} emotional peak(s) - consider music swell or silence`,
+        segments: emotionalPeaks.map(p => p.index)
+      });
+    }
+
+    if (genre === 'horror' && scene.sceneType === 'revelation') {
+      recommendations.push({
+        type: 'horror_reveal',
+        severity: 'suggestion',
+        message: 'Consider dropping music to silence before revelation'
+      });
+    }
+
+    return recommendations;
+  },
+
+  /**
+   * Calculate crossfade settings between two shots/scenes
+   */
+  calculateCrossfade(outgoing, incoming, transitionType = 'cut') {
+    const transitionToAudio = {
+      'cut': 'soft_cut',
+      'hard-cut': 'hard_cut',
+      'dissolve': 'scene_transition',
+      'fade': 'scene_transition',
+      'wipe': 'dialogue_transition',
+      'match-cut': 'soft_cut',
+      'j-cut': 'dialogue_transition',
+      'l-cut': 'dialogue_transition'
+    };
+
+    const audioTransition = transitionToAudio[transitionType] || 'soft_cut';
+    const profile = this.crossfadeProfiles[audioTransition];
+
+    let adjustedDuration = profile.duration;
+    if (outgoing?.emotion?.includes('shock') || incoming?.emotion?.includes('shock')) {
+      adjustedDuration = 0;
+    } else if (outgoing?.emotion?.includes('grief') || incoming?.emotion?.includes('grief')) {
+      adjustedDuration *= 1.5;
+    }
+
+    return {
+      profile: audioTransition,
+      duration: adjustedDuration,
+      curve: profile.curve,
+      outgoingFade: {
+        startLevel: 1.0,
+        endLevel: 0,
+        startTime: -adjustedDuration,
+        endTime: 0
+      },
+      incomingFade: {
+        startLevel: 0,
+        endLevel: 1.0,
+        startTime: 0,
+        endTime: adjustedDuration
+      }
+    };
+  },
+
+  /**
+   * Generate audio timeline for a scene with all elements
+   */
+  generateAudioTimeline(scene, sceneDuration) {
+    const mix = this.calculateSceneMix(scene);
+
+    return {
+      duration: sceneDuration,
+      tracks: {
+        dialogue: {
+          segments: mix.dialogueSegments,
+          level: mix.levels.dialogue,
+          processing: 'broadcast_standard'
+        },
+        music: {
+          level: mix.levels.music,
+          ducking: mix.duckingProfile,
+          duckingTriggers: mix.dialogueSegments.map(s => ({
+            startTime: s.startTime - 0.1,
+            endTime: s.endTime + 0.3,
+            reduction: mix.duckingProfile.reduction
+          }))
+        },
+        ambience: {
+          level: mix.levels.ambience,
+          roomTone: mix.roomTone,
+          continuous: true
+        }
+      },
+      masterBus: {
+        targetLoudness: -14,
+        truePeak: -1,
+        limiter: true
+      },
+      recommendations: mix.recommendations
+    };
+  }
+};
+
+/**
+ * COLOR_CONSISTENCY_SYSTEM
+ *
+ * Ensures visual color consistency across all shots and scenes.
+ * Defines color palettes, grading profiles, and continuity rules.
+ * Maps genre/mood to appropriate color treatments.
+ */
+const COLOR_CONSISTENCY_SYSTEM = {
+  // Base color palette definitions
+  palettes: {
+    'warm_golden': {
+      primary: '#D4A574',
+      secondary: '#8B7355',
+      accent: '#FFD700',
+      shadows: '#3D2914',
+      highlights: '#FFF8DC',
+      midtones: '#C4A67C',
+      description: 'Warm, inviting, nostalgic',
+      genres: ['drama', 'romance', 'period']
+    },
+    'cool_blue': {
+      primary: '#4A90A4',
+      secondary: '#2C3E50',
+      accent: '#00CED1',
+      shadows: '#1A1A2E',
+      highlights: '#E8F4F8',
+      midtones: '#5D8AA8',
+      description: 'Cold, clinical, mysterious',
+      genres: ['thriller', 'scifi', 'noir']
+    },
+    'teal_orange': {
+      primary: '#FF8C42',
+      secondary: '#2E8B8B',
+      accent: '#FFB347',
+      shadows: '#1A4040',
+      highlights: '#FFE4B5',
+      midtones: '#5F9EA0',
+      description: 'Cinematic blockbuster look',
+      genres: ['action', 'adventure', 'blockbuster']
+    },
+    'desaturated_noir': {
+      primary: '#4A4A4A',
+      secondary: '#2A2A2A',
+      accent: '#8B0000',
+      shadows: '#0D0D0D',
+      highlights: '#D3D3D3',
+      midtones: '#696969',
+      description: 'High contrast, low saturation',
+      genres: ['noir', 'thriller', 'crime']
+    },
+    'neon_cyberpunk': {
+      primary: '#FF00FF',
+      secondary: '#00FFFF',
+      accent: '#FF1493',
+      shadows: '#0D0221',
+      highlights: '#E0E0FF',
+      midtones: '#4B0082',
+      description: 'Vibrant neon, high contrast',
+      genres: ['scifi', 'cyberpunk', 'action']
+    },
+    'natural_earth': {
+      primary: '#6B8E23',
+      secondary: '#8B4513',
+      accent: '#DAA520',
+      shadows: '#2F4F4F',
+      highlights: '#F5F5DC',
+      midtones: '#556B2F',
+      description: 'Organic, grounded, realistic',
+      genres: ['drama', 'documentary', 'nature']
+    },
+    'horror_cold': {
+      primary: '#2F4F4F',
+      secondary: '#1C1C1C',
+      accent: '#8B0000',
+      shadows: '#000000',
+      highlights: '#C0C0C0',
+      midtones: '#363636',
+      description: 'Desaturated, high contrast, cold',
+      genres: ['horror', 'thriller', 'supernatural']
+    },
+    'fantasy_rich': {
+      primary: '#8B008B',
+      secondary: '#006400',
+      accent: '#FFD700',
+      shadows: '#1A0A1A',
+      highlights: '#FFFACD',
+      midtones: '#9370DB',
+      description: 'Rich, saturated, magical',
+      genres: ['fantasy', 'adventure', 'epic']
+    }
+  },
+
+  // Color grading profiles with LUT-like parameters
+  gradingProfiles: {
+    'cinematic_standard': {
+      contrast: 1.1,
+      saturation: 0.9,
+      highlights: { temperature: 5500, tint: 0 },
+      shadows: { temperature: 4500, tint: -5 },
+      lift: { r: 0, g: 0, b: 0.02 },
+      gamma: { r: 1.0, g: 1.0, b: 1.0 },
+      gain: { r: 1.0, g: 0.98, b: 0.95 },
+      description: 'Standard cinematic color grade'
+    },
+    'warm_vintage': {
+      contrast: 1.05,
+      saturation: 0.85,
+      highlights: { temperature: 6000, tint: 5 },
+      shadows: { temperature: 4000, tint: 10 },
+      lift: { r: 0.03, g: 0.02, b: 0 },
+      gamma: { r: 1.02, g: 1.0, b: 0.98 },
+      gain: { r: 1.05, g: 1.0, b: 0.9 },
+      description: 'Warm nostalgic film look'
+    },
+    'cold_thriller': {
+      contrast: 1.2,
+      saturation: 0.75,
+      highlights: { temperature: 5000, tint: -10 },
+      shadows: { temperature: 5500, tint: 5 },
+      lift: { r: 0, g: 0, b: 0.05 },
+      gamma: { r: 0.98, g: 1.0, b: 1.02 },
+      gain: { r: 0.95, g: 0.98, b: 1.05 },
+      description: 'Cold tense atmosphere'
+    },
+    'high_contrast_noir': {
+      contrast: 1.4,
+      saturation: 0.5,
+      highlights: { temperature: 5500, tint: 0 },
+      shadows: { temperature: 5500, tint: 0 },
+      lift: { r: 0, g: 0, b: 0 },
+      gamma: { r: 1.0, g: 1.0, b: 1.0 },
+      gain: { r: 1.0, g: 1.0, b: 1.0 },
+      crushBlacks: 0.1,
+      description: 'Classic noir high contrast'
+    },
+    'blockbuster_teal_orange': {
+      contrast: 1.15,
+      saturation: 1.1,
+      highlights: { temperature: 6500, tint: 10 },
+      shadows: { temperature: 4500, tint: -15 },
+      lift: { r: 0, g: 0.02, b: 0.04 },
+      gamma: { r: 1.0, g: 1.0, b: 1.0 },
+      gain: { r: 1.1, g: 1.0, b: 0.9 },
+      description: 'Hollywood blockbuster look'
+    },
+    'natural_documentary': {
+      contrast: 1.0,
+      saturation: 1.0,
+      highlights: { temperature: 5600, tint: 0 },
+      shadows: { temperature: 5600, tint: 0 },
+      lift: { r: 0, g: 0, b: 0 },
+      gamma: { r: 1.0, g: 1.0, b: 1.0 },
+      gain: { r: 1.0, g: 1.0, b: 1.0 },
+      description: 'Neutral realistic look'
+    }
+  },
+
+  // Lighting continuity rules
+  lightingContinuity: {
+    'day_exterior': {
+      keyLight: 'sun_overhead',
+      fillRatio: '1:2',
+      colorTemp: 5600,
+      direction: 'top_side',
+      shadows: 'hard_defined',
+      matchPoints: ['sky_exposure', 'shadow_density', 'highlight_clip']
+    },
+    'golden_hour': {
+      keyLight: 'low_sun',
+      fillRatio: '1:3',
+      colorTemp: 3500,
+      direction: 'side_low',
+      shadows: 'long_warm',
+      matchPoints: ['sun_position', 'orange_intensity', 'lens_flare']
+    },
+    'night_exterior': {
+      keyLight: 'practical_streetlight',
+      fillRatio: '1:8',
+      colorTemp: 4500,
+      direction: 'top_harsh',
+      shadows: 'deep_dark',
+      matchPoints: ['light_pools', 'shadow_depth', 'practical_sources']
+    },
+    'interior_natural': {
+      keyLight: 'window_soft',
+      fillRatio: '1:3',
+      colorTemp: 5000,
+      direction: 'side_soft',
+      shadows: 'soft_gradual',
+      matchPoints: ['window_exposure', 'room_ambient', 'practical_lamps']
+    },
+    'interior_artificial': {
+      keyLight: 'overhead_practical',
+      fillRatio: '1:4',
+      colorTemp: 3200,
+      direction: 'top_center',
+      shadows: 'medium_defined',
+      matchPoints: ['lamp_intensity', 'ceiling_bounce', 'color_cast']
+    }
+  },
+
+  /**
+   * Get recommended palette for genre and mood
+   */
+  getRecommendedPalette(genre, mood = 'neutral') {
+    // Genre to palette mapping
+    const genreMapping = {
+      'action': 'teal_orange',
+      'thriller': 'cool_blue',
+      'horror': 'horror_cold',
+      'drama': 'natural_earth',
+      'romance': 'warm_golden',
+      'comedy': 'natural_earth',
+      'scifi': 'neon_cyberpunk',
+      'fantasy': 'fantasy_rich',
+      'noir': 'desaturated_noir',
+      'documentary': 'natural_earth'
+    };
+
+    // Mood overrides
+    const moodOverrides = {
+      'tense': 'cool_blue',
+      'romantic': 'warm_golden',
+      'dark': 'horror_cold',
+      'epic': 'fantasy_rich',
+      'gritty': 'desaturated_noir'
+    };
+
+    const basePalette = genreMapping[genre] || 'natural_earth';
+    const palette = moodOverrides[mood] || basePalette;
+
+    return {
+      paletteName: palette,
+      palette: this.palettes[palette],
+      genre,
+      mood
+    };
+  },
+
+  /**
+   * Get grading profile for scene type and genre
+   */
+  getGradingProfile(genre, sceneType = 'dialogue') {
+    const profileMapping = {
+      'action': 'blockbuster_teal_orange',
+      'thriller': 'cold_thriller',
+      'horror': 'high_contrast_noir',
+      'drama': 'cinematic_standard',
+      'romance': 'warm_vintage',
+      'comedy': 'natural_documentary',
+      'scifi': 'cold_thriller',
+      'fantasy': 'cinematic_standard',
+      'noir': 'high_contrast_noir',
+      'documentary': 'natural_documentary'
+    };
+
+    const profileName = profileMapping[genre] || 'cinematic_standard';
+
+    return {
+      profileName,
+      profile: this.gradingProfiles[profileName],
+      genre,
+      sceneType
+    };
+  },
+
+  /**
+   * Generate color consistency anchors for a scene
+   */
+  generateColorAnchors(scene, genre = 'drama') {
+    const paletteRec = this.getRecommendedPalette(genre, scene.mood);
+    const gradingRec = this.getGradingProfile(genre, scene.sceneType);
+
+    // Analyze scene for lighting context
+    const visualPrompt = (scene.visualPrompt || '').toLowerCase();
+    let lightingContext = 'interior_natural';
+
+    if (visualPrompt.match(/sunset|golden hour|dawn/)) {
+      lightingContext = 'golden_hour';
+    } else if (visualPrompt.match(/night|dark|moonlight/)) {
+      lightingContext = 'night_exterior';
+    } else if (visualPrompt.match(/outdoor|exterior|street|park/)) {
+      lightingContext = 'day_exterior';
+    } else if (visualPrompt.match(/office|lamp|fluorescent|artificial/)) {
+      lightingContext = 'interior_artificial';
+    }
+
+    const lighting = this.lightingContinuity[lightingContext];
+
+    return {
+      palette: paletteRec,
+      grading: gradingRec,
+      lighting: {
+        context: lightingContext,
+        ...lighting
+      },
+      promptModifiers: this.generatePromptModifiers(paletteRec.palette, gradingRec.profile, lighting),
+      consistencyChecklist: [
+        `Color temperature: ${lighting.colorTemp}K`,
+        `Key light direction: ${lighting.direction}`,
+        `Shadow character: ${lighting.shadows}`,
+        `Palette: ${paletteRec.paletteName}`,
+        `Grade: ${gradingRec.profileName}`
+      ]
+    };
+  },
+
+  /**
+   * Generate prompt modifiers for image/video generation
+   */
+  generatePromptModifiers(palette, grading, lighting) {
+    const modifiers = [];
+
+    // Color palette modifiers
+    modifiers.push(`Color palette: ${palette.description}`);
+    modifiers.push(`Primary color: ${palette.primary}, accent: ${palette.accent}`);
+
+    // Lighting modifiers
+    modifiers.push(`Lighting: ${lighting.keyLight}, ${lighting.direction}`);
+    modifiers.push(`Shadow style: ${lighting.shadows}`);
+
+    // Grading modifiers
+    if (grading.contrast > 1.1) {
+      modifiers.push('High contrast');
+    }
+    if (grading.saturation < 0.9) {
+      modifiers.push('Desaturated, muted colors');
+    } else if (grading.saturation > 1.0) {
+      modifiers.push('Rich, saturated colors');
+    }
+
+    return modifiers.join('. ') + '.';
+  },
+
+  /**
+   * Validate color consistency between two shots
+   */
+  validateShotConsistency(shot1, shot2) {
+    const issues = [];
+
+    // Check if both have color anchors
+    if (!shot1.colorAnchors || !shot2.colorAnchors) {
+      return { isConsistent: true, issues: [], message: 'No color anchors to compare' };
+    }
+
+    const anchors1 = shot1.colorAnchors;
+    const anchors2 = shot2.colorAnchors;
+
+    // Check palette consistency
+    if (anchors1.palette?.paletteName !== anchors2.palette?.paletteName) {
+      issues.push({
+        type: 'palette_mismatch',
+        severity: 'warning',
+        message: `Palette changed from ${anchors1.palette?.paletteName} to ${anchors2.palette?.paletteName}`
+      });
+    }
+
+    // Check lighting consistency
+    if (anchors1.lighting?.context !== anchors2.lighting?.context) {
+      issues.push({
+        type: 'lighting_change',
+        severity: 'info',
+        message: `Lighting context changed from ${anchors1.lighting?.context} to ${anchors2.lighting?.context}`
+      });
+    }
+
+    // Check grading consistency
+    if (anchors1.grading?.profileName !== anchors2.grading?.profileName) {
+      issues.push({
+        type: 'grading_mismatch',
+        severity: 'warning',
+        message: `Grading profile changed from ${anchors1.grading?.profileName} to ${anchors2.grading?.profileName}`
+      });
+    }
+
+    return {
+      isConsistent: issues.filter(i => i.severity === 'warning').length === 0,
+      issues,
+      message: issues.length === 0
+        ? 'Color consistency maintained'
+        : `${issues.length} consistency issue(s) detected`
+    };
+  },
+
+  /**
+   * Generate scene-wide color guidelines
+   */
+  generateSceneColorGuide(scenes, genre = 'drama') {
+    const baseAnchors = this.generateColorAnchors({ visualPrompt: '', mood: 'neutral' }, genre);
+
+    return {
+      globalPalette: baseAnchors.palette,
+      globalGrading: baseAnchors.grading,
+      sceneOverrides: scenes.map((scene, idx) => {
+        const sceneAnchors = this.generateColorAnchors(scene, genre);
+        return {
+          sceneIndex: idx,
+          lighting: sceneAnchors.lighting,
+          deviations: this.calculateDeviations(baseAnchors, sceneAnchors)
+        };
+      }),
+      consistencyRules: [
+        'Maintain consistent color temperature within scenes',
+        'Use palette accent colors sparingly for emphasis',
+        'Match shadow density across all shots',
+        'Keep highlight exposure consistent',
+        'Preserve skin tone accuracy across lighting changes'
+      ]
+    };
+  },
+
+  /**
+   * Calculate deviations from base anchors
+   */
+  calculateDeviations(baseAnchors, sceneAnchors) {
+    const deviations = [];
+
+    if (baseAnchors.lighting?.context !== sceneAnchors.lighting?.context) {
+      deviations.push({
+        type: 'lighting',
+        from: baseAnchors.lighting?.context,
+        to: sceneAnchors.lighting?.context,
+        justified: true // Lighting changes are usually justified by story
+      });
+    }
+
+    return deviations;
+  }
+};
+
+/**
+ * CHARACTER_FACE_ANCHORING_SYSTEM
+ *
+ * Manages character face consistency across all shots and scenes.
+ * Handles reference image selection, face position tracking, and
+ * consistency validation for AI video generation.
+ */
+const CHARACTER_FACE_ANCHORING_SYSTEM = {
+  // Face visibility requirements per shot type
+  visibilityRequirements: {
+    'extreme_closeup': {
+      minFaceSize: 0.4,      // 40% of frame
+      requiredFeatures: ['eyes', 'nose', 'mouth'],
+      focusPoint: 'eyes',
+      description: 'Full face detail required'
+    },
+    'closeup': {
+      minFaceSize: 0.25,
+      requiredFeatures: ['eyes', 'nose', 'mouth'],
+      focusPoint: 'face_center',
+      description: 'Clear face visibility'
+    },
+    'medium_closeup': {
+      minFaceSize: 0.15,
+      requiredFeatures: ['face'],
+      focusPoint: 'upper_body',
+      description: 'Face clearly identifiable'
+    },
+    'medium': {
+      minFaceSize: 0.08,
+      requiredFeatures: ['face', 'body_posture'],
+      focusPoint: 'torso',
+      description: 'Face recognizable'
+    },
+    'medium_wide': {
+      minFaceSize: 0.05,
+      requiredFeatures: ['silhouette', 'clothing'],
+      focusPoint: 'full_body',
+      description: 'Character identifiable by shape/clothing'
+    },
+    'wide': {
+      minFaceSize: 0.03,
+      requiredFeatures: ['silhouette'],
+      focusPoint: 'environment',
+      description: 'Character recognizable by context'
+    },
+    'establishing_wide': {
+      minFaceSize: 0.01,
+      requiredFeatures: ['presence'],
+      focusPoint: 'scene',
+      description: 'Character present in scene'
+    }
+  },
+
+  // Reference image quality requirements
+  referenceRequirements: {
+    minimum: {
+      resolution: { width: 512, height: 512 },
+      faceSize: 0.2,         // 20% of image
+      lighting: 'neutral',
+      angle: 'front_facing',
+      expression: 'neutral'
+    },
+    recommended: {
+      resolution: { width: 1024, height: 1024 },
+      faceSize: 0.4,
+      lighting: 'studio_soft',
+      angle: 'front_facing',
+      expression: 'neutral',
+      variants: ['front', 'quarter_left', 'quarter_right', 'profile']
+    },
+    optimal: {
+      resolution: { width: 2048, height: 2048 },
+      faceSize: 0.5,
+      lighting: 'multiple_setups',
+      variants: ['front', 'quarter_left', 'quarter_right', 'profile', 'up', 'down'],
+      expressions: ['neutral', 'happy', 'serious', 'surprised', 'angry']
+    }
+  },
+
+  // Face position tracking across shots
+  positionTracking: {
+    'entering_frame': {
+      startPosition: 'off_screen',
+      endPosition: 'in_frame',
+      motionType: 'walk_in',
+      continuityNote: 'Next shot should show character in established position'
+    },
+    'exiting_frame': {
+      startPosition: 'in_frame',
+      endPosition: 'off_screen',
+      motionType: 'walk_out',
+      continuityNote: 'Next shot should acknowledge character absence or new location'
+    },
+    'static': {
+      startPosition: 'in_frame',
+      endPosition: 'in_frame',
+      motionType: 'minimal',
+      continuityNote: 'Maintain consistent position in consecutive shots'
+    },
+    'moving': {
+      startPosition: 'position_a',
+      endPosition: 'position_b',
+      motionType: 'action',
+      continuityNote: 'Track movement direction for continuity'
+    }
+  },
+
+  /**
+   * Generate character anchor data for a shot
+   */
+  generateCharacterAnchor(character, shotType, sceneContext = {}) {
+    const visibility = this.visibilityRequirements[shotType] || this.visibilityRequirements['medium'];
+
+    // Determine best reference image angle based on shot
+    const recommendedAngle = this.getRecommendedAngle(shotType, sceneContext.cameraPosition);
+
+    // Build face anchoring data
+    return {
+      characterId: character.id || character.name,
+      characterName: character.name,
+      shotType,
+      visibility: {
+        requirement: visibility,
+        expectedFaceSize: visibility.minFaceSize,
+        focusPoint: visibility.focusPoint
+      },
+      reference: {
+        recommendedAngle,
+        requiredFeatures: visibility.requiredFeatures,
+        matchCriteria: this.getMatchCriteria(character, shotType)
+      },
+      promptGuidance: this.generateFacePromptGuidance(character, shotType, visibility),
+      continuity: {
+        previousShotPosition: sceneContext.previousPosition || null,
+        expectedPosition: sceneContext.expectedPosition || 'center_frame',
+        trackingId: `${character.name}_${Date.now()}`
+      }
+    };
+  },
+
+  /**
+   * Get recommended reference angle for shot type
+   */
+  getRecommendedAngle(shotType, cameraPosition = 'front') {
+    const angleMapping = {
+      'extreme_closeup': 'front_facing',
+      'closeup': 'front_facing',
+      'medium_closeup': 'quarter_turn',
+      'medium': 'quarter_turn',
+      'over_shoulder': 'back_quarter',
+      'medium_wide': 'any',
+      'wide': 'any',
+      'establishing_wide': 'any'
+    };
+
+    const baseAngle = angleMapping[shotType] || 'front_facing';
+
+    // Adjust for camera position
+    if (cameraPosition === 'left') {
+      return baseAngle === 'quarter_turn' ? 'quarter_right' : baseAngle;
+    } else if (cameraPosition === 'right') {
+      return baseAngle === 'quarter_turn' ? 'quarter_left' : baseAngle;
+    }
+
+    return baseAngle;
+  },
+
+  /**
+   * Get match criteria for face consistency
+   */
+  getMatchCriteria(character, shotType) {
+    const baseCriteria = {
+      faceShape: 'strict',
+      skinTone: 'strict',
+      hairStyle: 'strict',
+      hairColor: 'strict'
+    };
+
+    // Adjust strictness based on shot type
+    if (shotType === 'wide' || shotType === 'establishing_wide') {
+      return {
+        ...baseCriteria,
+        faceShape: 'loose',
+        skinTone: 'moderate'
+      };
+    }
+
+    if (shotType === 'extreme_closeup' || shotType === 'closeup') {
+      return {
+        ...baseCriteria,
+        eyeColor: 'strict',
+        facialFeatures: 'strict',
+        skinTexture: 'moderate'
+      };
+    }
+
+    return baseCriteria;
+  },
+
+  /**
+   * Generate face-specific prompt guidance
+   */
+  generateFacePromptGuidance(character, shotType, visibility) {
+    const guidance = [];
+
+    // Base character description (minimal for video - S2V handles faces)
+    if (shotType === 'extreme_closeup' || shotType === 'closeup') {
+      guidance.push(`Focus on ${character.name}'s face, maintaining exact likeness`);
+      guidance.push('Preserve all facial features accurately');
+      if (character.distinctiveFeatures) {
+        guidance.push(`Key features: ${character.distinctiveFeatures}`);
+      }
+    } else if (shotType === 'medium' || shotType === 'medium_closeup') {
+      guidance.push(`${character.name} clearly visible in frame`);
+      guidance.push('Face identifiable but not primary focus');
+    } else {
+      guidance.push(`${character.name} present in scene`);
+      guidance.push('Identifiable by silhouette and clothing');
+    }
+
+    // Expression guidance
+    if (character.currentEmotion) {
+      guidance.push(`Expression: ${character.currentEmotion}`);
+    }
+
+    return {
+      textGuidance: guidance.join('. ') + '.',
+      technicalNotes: [
+        `Min face size: ${visibility.minFaceSize * 100}% of frame`,
+        `Required features: ${visibility.requiredFeatures.join(', ')}`,
+        `Focus point: ${visibility.focusPoint}`
+      ]
+    };
+  },
+
+  /**
+   * Validate character continuity between shots
+   */
+  validateContinuity(shot1Anchor, shot2Anchor) {
+    const issues = [];
+
+    if (!shot1Anchor || !shot2Anchor) {
+      return { isValid: true, issues: [], message: 'No anchors to compare' };
+    }
+
+    // Check character identity
+    if (shot1Anchor.characterId !== shot2Anchor.characterId) {
+      return { isValid: true, issues: [], message: 'Different characters' };
+    }
+
+    // Check position continuity
+    if (shot1Anchor.continuity?.expectedPosition &&
+        shot2Anchor.continuity?.previousShotPosition) {
+      const expectedPos = shot1Anchor.continuity.expectedPosition;
+      const actualPrevPos = shot2Anchor.continuity.previousShotPosition;
+
+      if (expectedPos !== actualPrevPos) {
+        issues.push({
+          type: 'position_jump',
+          severity: 'warning',
+          message: `Character position jumped from ${expectedPos} to ${actualPrevPos}`
+        });
+      }
+    }
+
+    // Check face visibility degradation
+    const vis1 = shot1Anchor.visibility?.expectedFaceSize || 0;
+    const vis2 = shot2Anchor.visibility?.expectedFaceSize || 0;
+
+    if (vis2 > vis1 * 3) {
+      issues.push({
+        type: 'scale_jump',
+        severity: 'info',
+        message: `Large scale change: ${vis1 * 100}% to ${vis2 * 100}% face size`
+      });
+    }
+
+    return {
+      isValid: issues.filter(i => i.severity === 'error').length === 0,
+      issues,
+      message: issues.length === 0
+        ? 'Character continuity maintained'
+        : `${issues.length} continuity note(s)`
+    };
+  },
+
+  /**
+   * Generate subject reference configuration for S2V-01
+   */
+  generateSubjectReference(character, referenceImageUrl) {
+    if (!referenceImageUrl) {
+      return null;
+    }
+
+    return {
+      type: 'character',
+      id: character.id || character.name,
+      name: character.name,
+      imageUrl: referenceImageUrl,
+      matchingCriteria: {
+        faceMatch: 'strict',
+        bodyMatch: 'moderate',
+        clothingMatch: 'scene_specific'
+      },
+      priority: 'high',
+      notes: 'Use subject_reference for face consistency in S2V-01'
+    };
+  },
+
+  /**
+   * Build character tracking state for a scene
+   */
+  buildSceneCharacterTracking(scene, characters) {
+    const tracking = {
+      sceneId: scene.id,
+      characters: {},
+      interactions: [],
+      eyelines: []
+    };
+
+    characters.forEach(char => {
+      tracking.characters[char.name] = {
+        entryShot: null,
+        exitShot: null,
+        peakVisibilityShot: null,
+        shotsAppearing: [],
+        dominantPosition: 'center'
+      };
+    });
+
+    // Analyze dialogue for character interactions
+    if (scene.dialogue) {
+      const speakers = [...new Set(scene.dialogue.map(d => d.character))];
+      if (speakers.length === 2) {
+        tracking.interactions.push({
+          type: 'dialogue_exchange',
+          participants: speakers,
+          shotCoverage: 'shot_reverse_shot'
+        });
+        tracking.eyelines.push({
+          from: speakers[0],
+          to: speakers[1],
+          type: 'conversation'
+        });
+      } else if (speakers.length > 2) {
+        tracking.interactions.push({
+          type: 'group_discussion',
+          participants: speakers,
+          shotCoverage: 'rotating_coverage'
+        });
+      }
+    }
+
+    return tracking;
+  },
+
+  /**
+   * Get character reference priority for shot
+   */
+  getReferencePriority(shotType, characterRole) {
+    // Lead characters always get high priority in close shots
+    if (characterRole === 'lead' && (shotType === 'closeup' || shotType === 'extreme_closeup')) {
+      return 'critical';
+    }
+
+    // Supporting characters in medium shots
+    if (shotType === 'medium' || shotType === 'medium_closeup') {
+      return characterRole === 'lead' ? 'high' : 'medium';
+    }
+
+    // Wide shots are less critical for face matching
+    if (shotType === 'wide' || shotType === 'establishing_wide') {
+      return 'low';
+    }
+
+    return 'medium';
+  }
+};
+
 const SHOT_DECOMPOSITION_ENGINE = {
   // Shot type library with cinematographic purpose
   shotTypes: {
@@ -55281,6 +56461,9 @@ exports.CHARACTER_ACTION_GUIDELINES = CHARACTER_ACTION_GUIDELINES;
 exports.DIALOGUE_PERFORMANCE_PROFILES = DIALOGUE_PERFORMANCE_PROFILES;
 exports.SHOT_EMOTIONAL_ARC_SYSTEM = SHOT_EMOTIONAL_ARC_SYSTEM;
 exports.SCENE_DURATION_VALIDATION_SYSTEM = SCENE_DURATION_VALIDATION_SYSTEM;
+exports.AUDIO_POST_PRODUCTION_SYSTEM = AUDIO_POST_PRODUCTION_SYSTEM;
+exports.COLOR_CONSISTENCY_SYSTEM = COLOR_CONSISTENCY_SYSTEM;
+exports.CHARACTER_FACE_ANCHORING_SYSTEM = CHARACTER_FACE_ANCHORING_SYSTEM;
 
 // =============================================================================
 // PHASE 12B: SHOT VIDEO GENERATION & ASSEMBLY
