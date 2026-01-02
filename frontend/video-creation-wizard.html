@@ -10346,23 +10346,22 @@
                 const charVoice = getCharacterVoice(d.character);
                 const voiceProfile = charVoice?.voiceProfile || CHARACTER_VOICE_PROFILES[charVoice?.voiceProfileId];
 
-                // Priority for voice selection:
-                // 1. ElevenLabs voice from voice profile
-                // 2. Legacy voice from dialogue data (convert to ElevenLabs)
-                // 3. Legacy voice from voice assignment (convert to ElevenLabs)
-                // 4. Default to Roger
+                // ALWAYS run through toElevenLabsVoice() to ensure proper mapping
+                // Even if elevenLabsVoice is set, it might contain old OpenAI names
                 let elevenLabsVoice = 'Roger';
+
+                // Priority: voiceProfile.elevenLabsVoice > d.voice > charVoice.voiceProfileId > default
                 if (voiceProfile?.elevenLabsVoice) {
-                    elevenLabsVoice = voiceProfile.elevenLabsVoice;
+                    // Map it - might be an old OpenAI name like 'rachel' instead of 'Laura'
+                    elevenLabsVoice = toElevenLabsVoice(voiceProfile.elevenLabsVoice);
                 } else if (d.voice) {
-                    // Convert old OpenAI voice name to ElevenLabs
+                    // d.voice can be string or object - toElevenLabsVoice handles both
                     elevenLabsVoice = toElevenLabsVoice(d.voice);
                 } else if (charVoice?.voiceProfileId) {
-                    // Try to get voice from character assignment
                     elevenLabsVoice = toElevenLabsVoice(charVoice.voiceProfileId);
                 }
 
-                console.log(`[DialogueAudio] ${d.character}: using voice ${elevenLabsVoice} (from: ${d.voice || charVoice?.voiceProfileId || 'default'})`);
+                console.log(`[DialogueAudio] ${d.character}: using voice ${elevenLabsVoice} (source: ${voiceProfile?.elevenLabsVoice ? 'voiceProfile' : d.voice ? 'd.voice' : charVoice?.voiceProfileId ? 'charVoice' : 'default'})`);
 
                 return {
                     character: d.character,
@@ -10886,10 +10885,10 @@
                             shotDialogue.forEach(d => {
                                 const charVoice = getCharacterVoice(d.character);
                                 const voiceProfile = charVoice?.voiceProfile || CHARACTER_VOICE_PROFILES[charVoice?.voiceProfileId];
-                                // Use toElevenLabsVoice helper to handle legacy OpenAI voice names
+                                // ALWAYS use toElevenLabsVoice - even elevenLabsVoice might have old names
                                 let voiceName = 'Roger';
                                 if (voiceProfile?.elevenLabsVoice) {
-                                    voiceName = voiceProfile.elevenLabsVoice;
+                                    voiceName = toElevenLabsVoice(voiceProfile.elevenLabsVoice);
                                 } else if (d.voice) {
                                     voiceName = toElevenLabsVoice(d.voice);
                                 } else if (charVoice?.voiceProfileId) {
