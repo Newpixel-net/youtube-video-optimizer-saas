@@ -46164,13 +46164,15 @@ const CHARACTER_VOICE_ENGINE = {
         text: d.line,  // Use 'text' property to match validation expectations
         emotion: d.emotion,
         delivery: d.delivery,
-        voiceId: d.voice.elevenLabsVoice,
-        voiceProfileId: d.voice.voiceProfileId,
+        // Voice properties - 'voice' is required by frontend validation
+        voice: d.voice?.elevenLabsVoice || 'adam',  // Frontend validation checks this
+        voiceId: d.voice?.elevenLabsVoice || 'adam',
+        voiceProfileId: d.voice?.voiceProfileId || 'narrator_dramatic',
         startTimeInShot: d.startTimeInShot || 0,
         durationInShot: d.durationInShot || 2
       })),
       totalLines: enhancedDialogue.length,
-      uniqueVoices: [...new Set(enhancedDialogue.map(d => d.voice.voiceProfileId))].length,
+      uniqueVoices: [...new Set(enhancedDialogue.map(d => d.voice?.voiceProfileId || 'default'))].length,
       estimatedDuration: shot.dialogueDuration || 5
     };
   }
