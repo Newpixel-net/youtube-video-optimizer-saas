@@ -9178,23 +9178,26 @@
 
                                                     <!-- PHASE 4: Audio Type Indicator Badge (Enhanced) -->
                                                     <!-- Uses backend shot.audioType: 'dialogue', 'voiceover', 'music_only', 'sfx', 'internal_monologue' -->
+                                                    <!-- Uses backend shot.requiresLipSync to determine if Multitalk is needed -->
                                                     ${(() => {
                                                         const backendAudioType = shot.audioType || 'music_only';
                                                         const hasDialogue = shot.hasDialogue && shot.dialogue?.length > 0;
+                                                        const hasNarration = shot.hasNarration || false;  // New: narrator voiceover flag
                                                         const isMultiVoice = shot.isMultiVoice || (shot.uniqueVoiceCount && shot.uniqueVoiceCount > 1);
                                                         const hasTTS = shot.ttsConfig && shot.ttsConfig.lines?.length > 0;
-                                                        const needsLipSync = hasDialogue && backendAudioType === 'dialogue';
+                                                        // Use backend requiresLipSync flag - only true for character dialogue, NOT narrator
+                                                        const needsLipSync = shot.requiresLipSync || false;
 
                                                         // Determine display type based on backend audioType + dialogue info
                                                         let displayType = 'music';
-                                                        if (backendAudioType === 'voiceover') {
-                                                            displayType = 'narrator';
+                                                        if (backendAudioType === 'voiceover' || hasNarration) {
+                                                            displayType = 'narrator';  // Narrator voiceover - no lip-sync
                                                         } else if (backendAudioType === 'internal_monologue') {
                                                             displayType = 'internal';
                                                         } else if (backendAudioType === 'sfx') {
                                                             displayType = 'sfx';
-                                                        } else if (hasDialogue) {
-                                                            displayType = isMultiVoice ? 'multi-voice' : 'character';
+                                                        } else if (hasDialogue && !hasNarration) {
+                                                            displayType = isMultiVoice ? 'multi-voice' : 'character';  // Character dialogue - needs lip-sync
                                                         }
 
                                                         const audioConfig = {
@@ -10013,18 +10016,26 @@
             const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
             const shot = decomposed?.shots?.[shotIndex];
             const hasDialogue = shot?.hasDialogue || false;
+            const requiresLipSync = shot?.requiresLipSync || false;  // Only character dialogue needs lip-sync
+            const hasNarration = shot?.hasNarration || false;  // Narrator voiceover - no lip-sync
             // Default: 10s for dialogue shots, 5s for non-dialogue shots
             const defaultDuration = hasDialogue ? '10s' : '5s';
 
             // Check if shot has pre-configured model settings
             const preConfig = shot?.preConfiguredModel;
 
+            // Default model: Multitalk only for character dialogue (requiresLipSync)
+            // Narrator voiceover should use Minimax (audio added in post-production)
+            const defaultModel = requiresLipSync ? 'multitalk' : 'minimax';
+
             state.storyboard.videoModelSelector = {
                 open: true,
                 sceneId: sceneId,
                 shotIndex: shotIndex,
-                selectedModel: preConfig?.model || 'minimax',
+                selectedModel: preConfig?.model || defaultModel,
                 selectedDuration: preConfig?.duration || defaultDuration,
+                requiresLipSync: requiresLipSync,  // Pass to UI for conditional rendering
+                hasNarration: hasNarration,  // Pass to UI for info display
                 multitalk: preConfig?.multitalk ? {
                     audioFile: null,
                     audioUrl: preConfig.multitalk.audioUrl,
@@ -10456,7 +10467,7 @@
             const selector = state.storyboard.videoModelSelector;
             if (!selector.open) return '';
 
-            const { sceneId, shotIndex, selectedModel, multitalk } = selector;
+            const { sceneId, shotIndex, selectedModel, multitalk, requiresLipSync, hasNarration } = selector;
             const isMinimaxSelected = selectedModel === 'minimax';
             const isMultitalkSelected = selectedModel === 'multitalk';
 
@@ -10473,6 +10484,30 @@
                         <div style="font-size: 0.6rem; font-weight: 600; color: white;">🎬 Video Model</div>
                         <button onclick="closeVideoModelSelector()" style="background: none; border: none; color: rgba(255,255,255,0.5); cursor: pointer; font-size: 0.85rem; line-height: 1; padding: 0;">×</button>
                     </div>
+
+                    <!-- Narrator Info Banner (when narrator voiceover, no lip-sync needed) -->
+                    ${hasNarration ? `
+                        <div style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 0.25rem; padding: 0.25rem; margin-bottom: 0.4rem;">
+                            <div style="font-size: 0.45rem; color: #22c55e; text-align: center;">
+                                🎙️ Narrator Voiceover - No lip-sync needed
+                            </div>
+                            <div style="font-size: 0.4rem; color: rgba(255,255,255,0.5); text-align: center; margin-top: 0.1rem;">
+                                Use Minimax, add narration in post
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <!-- Lip-Sync Required Banner (when character dialogue) -->
+                    ${requiresLipSync ? `
+                        <div style="background: rgba(236, 72, 153, 0.15); border: 1px solid rgba(236, 72, 153, 0.3); border-radius: 0.25rem; padding: 0.25rem; margin-bottom: 0.4rem;">
+                            <div style="font-size: 0.45rem; color: #ec4899; text-align: center;">
+                                👄 Character Dialogue - Lip-sync required
+                            </div>
+                            <div style="font-size: 0.4rem; color: rgba(255,255,255,0.5); text-align: center; margin-top: 0.1rem;">
+                                Use Multitalk for lip-sync video
+                            </div>
+                        </div>
+                    ` : ''}
 
                     <!-- Model Options - Horizontal layout -->
                     <div style="display: flex; gap: 0.25rem; margin-bottom: 0.4rem;">
