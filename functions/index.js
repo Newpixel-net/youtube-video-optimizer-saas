@@ -24,6 +24,10 @@ const { GoogleGenAI } = require('@google/genai');
 const { fal } = require('@fal-ai/client');
 const sharp = require('sharp');
 
+// Cloudflare R2 (S3-compatible) for Multitalk video uploads
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+
 // ==============================================
 // IMAGE DIMENSION ENFORCEMENT
 // Ensures consistent exact pixel dimensions for all aspect ratios
@@ -58089,18 +58093,37 @@ exports.creationWizardGenerateMultitalkVideo = functions
       // Generate seed
       const seed = Math.floor(Math.random() * 999999999999);
 
-      // Generate unique filename for video output
-      const fileName = `creation-projects/${projectId || uid}/multitalk-videos/scene_${sceneId}_shot_${shotIndex}_${Date.now()}_${seed}.mp4`;
+      // Generate unique filename for video output (R2 uses flat structure)
+      const r2FileName = `multitalk_${projectId || uid}_scene${sceneId}_shot${shotIndex}_${Date.now()}_${seed}.mp4`;
 
-      // Create signed URL for upload
-      // NOTE: Not specifying contentType so the Multitalk worker can upload with any content-type
-      const bucket = admin.storage().bucket();
-      const file = bucket.file(fileName);
-      const [uploadUrl] = await file.getSignedUrl({
-        version: 'v4',
-        action: 'write',
-        expires: Date.now() + 60 * 60 * 1000, // 60 minutes (longer expiry)
+      // Create Cloudflare R2 presigned URL for upload
+      // R2 works with the Multitalk worker (Firebase Storage doesn't)
+      const r2Config = functions.config().r2;
+      if (!r2Config?.account_id || !r2Config?.access_key_id || !r2Config?.access_key_secret) {
+        throw new functions.https.HttpsError('failed-precondition', 'Cloudflare R2 not configured');
+      }
+
+      const r2Client = new S3Client({
+        region: 'auto',
+        endpoint: `https://${r2Config.account_id}.r2.cloudflarestorage.com`,
+        credentials: {
+          accessKeyId: r2Config.access_key_id,
+          secretAccessKey: r2Config.access_key_secret,
+        },
       });
+
+      const putCommand = new PutObjectCommand({
+        Bucket: r2Config.bucket_name || 'multitalk-videos',
+        Key: r2FileName,
+        ContentType: 'application/octet-stream',
+      });
+
+      const uploadUrl = await getSignedUrl(r2Client, putCommand, { expiresIn: 3600 });
+
+      // Public URL for accessing the video after upload
+      const publicVideoUrl = `https://pub-45d8d7703ee841ac947bf4df52b73f44.r2.dev/${r2FileName}`;
+
+      console.log('[creationWizardGenerateMultitalkVideo] Using R2 upload URL for:', r2FileName);
 
       // Map aspect ratio to Multitalk format
       const aspectRatioMap = {
@@ -58169,7 +58192,7 @@ Tone: Natural, expressive.`;
         // Core required parameters
         image_url: imageUrl,
         audio_url: effectiveAudioUrl,  // Use effective URL (may be from characterAudioData)
-        output_url: uploadUrl,   // Same parameter name as creationWizardAnimateScene
+        video_upload_url: uploadUrl,   // Handler expects video_upload_url
 
         // Audio timing (format: "M:SS")
         audio_crop_start_time: '0:00',
@@ -58182,7 +58205,7 @@ Tone: Natural, expressive.`;
         // Video settings
         aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
         scale_to_length: 1280,    // 720p resolution (1280x720 for 16:9)
-        scale_to_side: 'longest',  // Scale longest side to target length
+        scale_to_side: 'None',  // Must be "None" string to match workflow
         fps: fps,
         num_frames: numFrames,
 
@@ -58228,10 +58251,6 @@ Tone: Natural, expressive.`;
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod job started:', { jobId, status });
 
-      // Generate public URL
-      const encodedFileName = encodeURIComponent(fileName);
-      const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedFileName}?alt=media`;
-
       // Log usage
       await db.collection('apiUsage').add({
         userId: uid,
@@ -58250,8 +58269,8 @@ Tone: Natural, expressive.`;
         status,
         sceneId,
         shotIndex,
-        videoUrl: publicUrl,
-        fileName,
+        videoUrl: publicVideoUrl,  // R2 public URL
+        fileName: r2FileName,
         checkEndpoint: `https://api.runpod.ai/v2/mekewddvpqb0b4/status/${jobId}`
       };
 
