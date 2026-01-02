@@ -10021,12 +10021,34 @@
             // Default: 10s for dialogue shots, 5s for non-dialogue shots
             const defaultDuration = hasDialogue ? '10s' : '5s';
 
+            // Get unique speaking characters from dialogue
+            const speakingCharacters = shot?.speakingCharacters || [];
+            const uniqueCharacters = [...new Set(speakingCharacters)];
+
             // Check if shot has pre-configured model settings
             const preConfig = shot?.preConfiguredModel;
 
             // Default model: Multitalk only for character dialogue (requiresLipSync)
             // Narrator voiceover should use Minimax (audio added in post-production)
             const defaultModel = requiresLipSync ? 'multitalk' : 'minimax';
+
+            // Initialize character audio slots
+            let characterAudios = {};
+            if (preConfig?.multitalk?.characterAudios) {
+                // Load from pre-config
+                characterAudios = preConfig.multitalk.characterAudios;
+            } else if (uniqueCharacters.length > 0) {
+                // Initialize empty slots for each character
+                uniqueCharacters.forEach(char => {
+                    characterAudios[char] = {
+                        audioFile: null,
+                        audioUrl: null,
+                        audioFileName: null,
+                        audioUploadStatus: 'idle',
+                        audioDuration: null
+                    };
+                });
+            }
 
             state.storyboard.videoModelSelector = {
                 open: true,
@@ -10036,18 +10058,16 @@
                 selectedDuration: preConfig?.duration || defaultDuration,
                 requiresLipSync: requiresLipSync,  // Pass to UI for conditional rendering
                 hasNarration: hasNarration,  // Pass to UI for info display
-                multitalk: preConfig?.multitalk ? {
-                    audioFile: null,
-                    audioUrl: preConfig.multitalk.audioUrl,
-                    audioFileName: preConfig.multitalk.audioFileName,
-                    audioUploadStatus: preConfig.multitalk.audioUrl ? 'ready' : 'idle',
-                    audioDuration: preConfig.multitalk.audioDuration
-                } : {
-                    audioFile: null,
-                    audioUrl: null,
-                    audioFileName: null,
-                    audioUploadStatus: 'idle',
-                    audioDuration: null
+                speakingCharacters: uniqueCharacters,  // List of characters needing audio
+                multitalk: {
+                    // Legacy single audio (backward compatible)
+                    audioFile: preConfig?.multitalk?.audioFile || null,
+                    audioUrl: preConfig?.multitalk?.audioUrl || null,
+                    audioFileName: preConfig?.multitalk?.audioFileName || null,
+                    audioUploadStatus: preConfig?.multitalk?.audioUrl ? 'ready' : 'idle',
+                    audioDuration: preConfig?.multitalk?.audioDuration || null,
+                    // NEW: Per-character audio slots
+                    characterAudios: characterAudios
                 }
             };
             render();
@@ -10165,6 +10185,71 @@
         /**
          * Handle audio file selection for Multitalk
          */
+        /**
+         * Handle audio file selection for a specific character
+         * @param {Event} event - File input change event
+         * @param {string} characterName - Name of the character this audio is for
+         */
+        async function handleMultitalkAudioSelectForCharacter(event, characterName) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            if (!file.type.startsWith('audio/')) {
+                showToast('Please select an audio file (MP3, WAV, etc.)', 'error');
+                return;
+            }
+
+            // Validate file size (max 50MB)
+            if (file.size > 50 * 1024 * 1024) {
+                showToast('Audio file too large. Max 50MB.', 'error');
+                return;
+            }
+
+            // Initialize character audio slot if needed
+            if (!state.storyboard.videoModelSelector.multitalk.characterAudios[characterName]) {
+                state.storyboard.videoModelSelector.multitalk.characterAudios[characterName] = {};
+            }
+
+            const charAudio = state.storyboard.videoModelSelector.multitalk.characterAudios[characterName];
+            charAudio.audioFile = file;
+            charAudio.audioFileName = file.name;
+            charAudio.audioUploadStatus = 'uploading';
+            render();
+            renderShotDecompositionModal();
+
+            try {
+                // Get audio duration
+                const audioDuration = await getAudioDuration(file);
+                charAudio.audioDuration = audioDuration;
+
+                // Upload to Firebase Storage
+                const { sceneId, shotIndex } = state.storyboard.videoModelSelector;
+                const projectId = state.project.id || firebase.auth().currentUser?.uid || 'temp';
+                const safeCharName = characterName.replace(/[^a-zA-Z0-9]/g, '_');
+                const fileName = `creation-projects/${projectId}/multitalk-audio/scene_${sceneId}_shot_${shotIndex}_${safeCharName}_${Date.now()}.${file.name.split('.').pop()}`;
+
+                const storageRef = firebase.storage().ref(fileName);
+                const uploadTask = await storageRef.put(file);
+                const audioUrl = await uploadTask.ref.getDownloadURL();
+
+                charAudio.audioUrl = audioUrl;
+                charAudio.audioUploadStatus = 'ready';
+
+                showToast(`${characterName} audio uploaded: ${audioDuration.toFixed(1)}s`, 'success');
+            } catch (error) {
+                console.error('Audio upload error:', error);
+                charAudio.audioUploadStatus = 'error';
+                showToast('Failed to upload audio: ' + error.message, 'error');
+            }
+
+            render();
+            renderShotDecompositionModal();
+        }
+
+        /**
+         * Handle legacy single audio file selection (backward compatible)
+         */
         async function handleMultitalkAudioSelect(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -10235,7 +10320,7 @@
          * Generate video with selected model
          */
         async function generateVideoWithSelectedModel() {
-            const { sceneId, shotIndex, selectedModel, selectedDuration, multitalk } = state.storyboard.videoModelSelector;
+            const { sceneId, shotIndex, selectedModel, selectedDuration, multitalk, speakingCharacters } = state.storyboard.videoModelSelector;
 
             if (selectedModel === 'minimax') {
                 // Use existing Minimax generation with selected duration
@@ -10244,14 +10329,46 @@
                 const durationNum = selectedDuration ? parseInt(selectedDuration) : null;
                 generateSingleShotVideo(sceneId, shotIndex, durationNum);
             } else if (selectedModel === 'multitalk') {
-                // Validate audio is uploaded
-                if (!multitalk.audioUrl) {
-                    showToast('Please upload a voiceover audio file first', 'error');
-                    return;
-                }
+                const characters = speakingCharacters || [];
+                const characterAudios = multitalk.characterAudios || {};
 
-                closeVideoModelSelector();
-                generateMultitalkVideo(sceneId, shotIndex, multitalk.audioUrl, multitalk.audioDuration);
+                // Check if multi-character or single audio mode
+                if (characters.length > 1) {
+                    // Multi-character: validate all character audios are uploaded
+                    const missingAudios = characters.filter(charName => {
+                        const charAudio = characterAudios[charName];
+                        return !charAudio || charAudio.audioUploadStatus !== 'ready' || !charAudio.audioUrl;
+                    });
+
+                    if (missingAudios.length > 0) {
+                        showToast('Please upload audio for all characters: ' + missingAudios.join(', '), 'error');
+                        return;
+                    }
+
+                    // Build character audio data object
+                    const characterAudioData = {};
+                    let totalDuration = 0;
+                    characters.forEach(charName => {
+                        const charAudio = characterAudios[charName];
+                        characterAudioData[charName] = {
+                            audioUrl: charAudio.audioUrl,
+                            audioDuration: charAudio.audioDuration || 5
+                        };
+                        totalDuration = Math.max(totalDuration, charAudio.audioDuration || 5);
+                    });
+
+                    closeVideoModelSelector();
+                    generateMultitalkVideo(sceneId, shotIndex, null, totalDuration, characterAudioData);
+                } else {
+                    // Single character or no characters: use legacy single upload
+                    if (!multitalk.audioUrl) {
+                        showToast('Please upload a voiceover audio file first', 'error');
+                        return;
+                    }
+
+                    closeVideoModelSelector();
+                    generateMultitalkVideo(sceneId, shotIndex, multitalk.audioUrl, multitalk.audioDuration, null);
+                }
             }
         }
 
@@ -10289,8 +10406,13 @@
 
         /**
          * Generate video with Multitalk (RunPod)
+         * @param {number} sceneId - Scene ID
+         * @param {number} shotIndex - Shot index
+         * @param {string|null} audioUrl - Single audio URL (legacy mode)
+         * @param {number} audioDuration - Audio duration in seconds
+         * @param {Object|null} characterAudioData - Per-character audio data { charName: { audioUrl, audioDuration } }
          */
-        async function generateMultitalkVideo(sceneId, shotIndex, audioUrl, audioDuration) {
+        async function generateMultitalkVideo(sceneId, shotIndex, audioUrl, audioDuration, characterAudioData = null) {
             const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
             if (!decomposed || !decomposed.shots[shotIndex]) {
                 showToast('Shot not found', 'error');
@@ -10317,11 +10439,12 @@
 
             shot.videoStatus = 'generating';
             shot.videoModel = 'multitalk';
-            shot.videoModelReason = 'Multitalk with voiceover';
+            shot.videoModelReason = characterAudioData ? 'Multitalk with multi-character audio' : 'Multitalk with voiceover';
             render();
             renderShotDecompositionModal();
 
-            showToast('🎤 Multitalk: Starting video with voiceover...', 'info');
+            const characterCount = characterAudioData ? Object.keys(characterAudioData).length : 1;
+            showToast(`🎤 Multitalk: Starting video with ${characterCount} voice track(s)...`, 'info');
 
             try {
                 const generateVideoFn = functions.httpsCallable('creationWizardGenerateMultitalkVideo', { timeout: 300000 });
@@ -10348,7 +10471,7 @@
                     shotId: shot.id,
                     shotIndex,
                     imageUrl: shot.imageUrl,
-                    audioUrl: audioUrl,
+                    audioUrl: audioUrl,  // Single audio (null if multi-character)
                     audioDuration: audioDuration || 10,
                     prompt: videoPromptToUse,
                     aspectRatio: state.platform.aspectRatio || '16:9',
@@ -10357,7 +10480,9 @@
                     voiceRequirements: shot.voiceRequirements || null,
                     characterVoices: state.animation?.characterVoices || {},
                     // Also pass raw dialogue for fallback
-                    dialogue: shot.dialogue || []
+                    dialogue: shot.dialogue || [],
+                    // NEW: Per-character audio data for multi-voice shots
+                    characterAudioData: characterAudioData
                 });
 
                 if (result.data.success) {
@@ -10477,6 +10602,22 @@
             const hasImage = shot?.status === 'ready' && shot?.imageUrl;
             const isWaitingForFrame = !hasImage && shotIndex > 0;
 
+            // Check if all required audios are ready for Multitalk
+            const speakingCharacters = selector.speakingCharacters || [];
+            const characterAudios = multitalk.characterAudios || {};
+            let isMultitalkAudioReady = false;
+
+            if (speakingCharacters.length > 1) {
+                // Multi-character: all characters must have audio uploaded
+                isMultitalkAudioReady = speakingCharacters.every(charName => {
+                    const charAudio = characterAudios[charName];
+                    return charAudio && charAudio.audioUploadStatus === 'ready' && charAudio.audioUrl;
+                });
+            } else {
+                // Single character or no characters: use legacy single upload
+                isMultitalkAudioReady = !!multitalk.audioUrl;
+            }
+
             return `
                 <div style="position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); width: 180px; background: rgba(20, 20, 35, 0.98); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 0.5rem; padding: 0.5rem; z-index: 100; box-shadow: 0 -4px 20px rgba(0,0,0,0.5);">
                     <!-- Header -->
@@ -10557,34 +10698,74 @@
                     })() : ''}
 
                     <!-- Multitalk Audio Upload (shown when Multitalk selected) -->
-                    ${isMultitalkSelected ? `
-                        <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">
-                            ${multitalk.audioUploadStatus === 'ready' ? `
-                                <!-- Audio Uploaded -->
-                                <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <span style="font-size: 0.6rem;">✓</span>
-                                    <div style="flex: 1; overflow: hidden;">
-                                        <div style="font-size: 0.5rem; color: #10b981; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">${multitalk.audioFileName}</div>
-                                        <div style="font-size: 0.45rem; color: rgba(255,255,255,0.5);">${multitalk.audioDuration ? multitalk.audioDuration.toFixed(1) + 's' : ''}</div>
-                                    </div>
-                                    <button onclick="document.getElementById('multitalk-audio-input').click()" style="padding: 0.1rem 0.25rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.15rem; color: white; cursor: pointer; font-size: 0.45rem;">Change</button>
-                                </div>
-                            ` : multitalk.audioUploadStatus === 'uploading' ? `
-                                <!-- Uploading -->
-                                <div style="text-align: center; padding: 0.25rem;">
-                                    <div class="animate-spin" style="display: inline-block; width: 12px; height: 12px; border: 1.5px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%;"></div>
-                                    <div style="font-size: 0.45rem; color: rgba(255,255,255,0.6); margin-top: 0.15rem;">Uploading...</div>
-                                </div>
-                            ` : `
-                                <!-- Upload Button -->
-                                <label style="display: flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.3rem; background: rgba(139, 92, 246, 0.2); border: 1px dashed rgba(139, 92, 246, 0.5); border-radius: 0.2rem; cursor: pointer;">
-                                    <span style="font-size: 0.6rem;">📁</span>
-                                    <span style="font-size: 0.5rem; color: #a78bfa;">Select MP3/WAV</span>
-                                    <input type="file" id="multitalk-audio-input" accept="audio/*" onchange="handleMultitalkAudioSelect(event)" style="display: none;">
-                                </label>
-                            `}
-                        </div>
-                    ` : ''}
+                    ${isMultitalkSelected ? (() => {
+                        const characters = selector.speakingCharacters || [];
+                        const characterAudios = multitalk.characterAudios || {};
+
+                        // If multiple characters, show per-character upload slots
+                        if (characters.length > 1) {
+                            let html = '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">';
+                            html += '<div style="font-size: 0.45rem; color: rgba(255,255,255,0.6); margin-bottom: 0.3rem;">🎤 Audio per character:</div>';
+
+                            characters.forEach((charName, idx) => {
+                                const charAudio = characterAudios[charName] || {};
+                                const inputId = 'multitalk-audio-' + idx;
+                                const safeCharName = charName.replace(/'/g, "\\'");
+
+                                html += '<div style="display: flex; align-items: center; gap: 0.2rem; margin-bottom: 0.2rem; padding: 0.2rem; background: rgba(0,0,0,0.2); border-radius: 0.2rem;">';
+                                html += '<div style="font-size: 0.45rem; color: #c4b5fd; min-width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + charName + '">' + charName.split(' ')[0] + '</div>';
+
+                                if (charAudio.audioUploadStatus === 'ready') {
+                                    html += '<div style="flex: 1; overflow: hidden;">';
+                                    html += '<div style="font-size: 0.4rem; color: #10b981; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">✓ ' + (charAudio.audioDuration ? charAudio.audioDuration.toFixed(1) + 's' : 'Ready') + '</div>';
+                                    html += '</div>';
+                                    html += '<button onclick="document.getElementById(\'' + inputId + '\').click()" style="padding: 0.1rem 0.2rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.15rem; color: white; cursor: pointer; font-size: 0.4rem;">↻</button>';
+                                } else if (charAudio.audioUploadStatus === 'uploading') {
+                                    html += '<div style="flex: 1; font-size: 0.4rem; color: rgba(255,255,255,0.5);">Uploading...</div>';
+                                } else {
+                                    html += '<label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.15rem; padding: 0.15rem; background: rgba(139, 92, 246, 0.2); border: 1px dashed rgba(139, 92, 246, 0.4); border-radius: 0.15rem; cursor: pointer;">';
+                                    html += '<span style="font-size: 0.4rem; color: #a78bfa;">Select MP3</span>';
+                                    html += '</label>';
+                                }
+
+                                html += '<input type="file" id="' + inputId + '" accept="audio/*" onchange="handleMultitalkAudioSelectForCharacter(event, \'' + safeCharName + '\')" style="display: none;">';
+                                html += '</div>';
+                            });
+
+                            html += '</div>';
+                            return html;
+                        } else {
+                            // Single character or no characters - show legacy single upload
+                            if (multitalk.audioUploadStatus === 'ready') {
+                                return '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">' +
+                                    '<div style="display: flex; align-items: center; gap: 0.25rem;">' +
+                                        '<span style="font-size: 0.6rem;">✓</span>' +
+                                        '<div style="flex: 1; overflow: hidden;">' +
+                                            '<div style="font-size: 0.5rem; color: #10b981; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;">' + multitalk.audioFileName + '</div>' +
+                                            '<div style="font-size: 0.45rem; color: rgba(255,255,255,0.5);">' + (multitalk.audioDuration ? multitalk.audioDuration.toFixed(1) + 's' : '') + '</div>' +
+                                        '</div>' +
+                                        '<button onclick="document.getElementById(\'multitalk-audio-input\').click()" style="padding: 0.1rem 0.25rem; background: rgba(255,255,255,0.1); border: none; border-radius: 0.15rem; color: white; cursor: pointer; font-size: 0.45rem;">Change</button>' +
+                                    '</div>' +
+                                    '<input type="file" id="multitalk-audio-input" accept="audio/*" onchange="handleMultitalkAudioSelect(event)" style="display: none;">' +
+                                '</div>';
+                            } else if (multitalk.audioUploadStatus === 'uploading') {
+                                return '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">' +
+                                    '<div style="text-align: center; padding: 0.25rem;">' +
+                                        '<div class="animate-spin" style="display: inline-block; width: 12px; height: 12px; border: 1.5px solid rgba(139, 92, 246, 0.2); border-top-color: #8b5cf6; border-radius: 50%;"></div>' +
+                                        '<div style="font-size: 0.45rem; color: rgba(255,255,255,0.6); margin-top: 0.15rem;">Uploading...</div>' +
+                                    '</div>' +
+                                '</div>';
+                            } else {
+                                return '<div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 0.3rem; padding: 0.35rem; margin-bottom: 0.35rem;">' +
+                                    '<label style="display: flex; align-items: center; justify-content: center; gap: 0.25rem; padding: 0.3rem; background: rgba(139, 92, 246, 0.2); border: 1px dashed rgba(139, 92, 246, 0.5); border-radius: 0.2rem; cursor: pointer;">' +
+                                        '<span style="font-size: 0.6rem;">📁</span>' +
+                                        '<span style="font-size: 0.5rem; color: #a78bfa;">Select MP3/WAV</span>' +
+                                        '<input type="file" id="multitalk-audio-input" accept="audio/*" onchange="handleMultitalkAudioSelect(event)" style="display: none;">' +
+                                    '</label>' +
+                                '</div>';
+                            }
+                        }
+                    })() : ''}
 
                     <!-- Generate or Save Button -->
                     ${isWaitingForFrame ? `
@@ -10597,8 +10778,8 @@
                         </div>
                     ` : `
                         <button onclick="generateVideoWithSelectedModel()"
-                                ${isMultitalkSelected && !multitalk.audioUrl ? 'disabled' : ''}
-                                style="width: 100%; padding: 0.35rem; border-radius: 0.3rem; border: none; background: ${isMultitalkSelected && !multitalk.audioUrl ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #06b6d4)'}; color: ${isMultitalkSelected && !multitalk.audioUrl ? 'rgba(255,255,255,0.4)' : 'white'}; font-size: 0.55rem; font-weight: 600; cursor: ${isMultitalkSelected && !multitalk.audioUrl ? 'not-allowed' : 'pointer'};">
+                                ${isMultitalkSelected && !isMultitalkAudioReady ? 'disabled' : ''}
+                                style="width: 100%; padding: 0.35rem; border-radius: 0.3rem; border: none; background: ${isMultitalkSelected && !isMultitalkAudioReady ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #8b5cf6, #06b6d4)'}; color: ${isMultitalkSelected && !isMultitalkAudioReady ? 'rgba(255,255,255,0.4)' : 'white'}; font-size: 0.55rem; font-weight: 600; cursor: ${isMultitalkSelected && !isMultitalkAudioReady ? 'not-allowed' : 'pointer'};">
                             ${isMinimaxSelected ? '🎬 Generate' : '🎤 Generate'}
                         </button>
                     `}
