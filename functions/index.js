@@ -33804,7 +33804,9 @@ exports.creationWizardGenerateDialogueAudio = functions
     console.log(`[creationWizardGenerateDialogueAudio] FAL API response:`, JSON.stringify(result, null, 2));
 
     // Handle different response formats from FAL
-    const audioUrl = result.audio?.url || result.output?.audio?.url || (typeof result.audio === 'string' ? result.audio : null);
+    // FAL wraps the response in a 'data' property when using fal.subscribe()
+    const audioUrl = result.data?.audio?.url || result.audio?.url || result.output?.audio?.url || (typeof result.audio === 'string' ? result.audio : null);
+    const seedValue = result.data?.seed || result.seed;
 
     if (!audioUrl) {
       console.error('[creationWizardGenerateDialogueAudio] No audio URL in response. Full result:', JSON.stringify(result));
@@ -33830,7 +33832,7 @@ exports.creationWizardGenerateDialogueAudio = functions
           shotId: shotId || '',
           voiceCount: String(inputs.length),
           generator: 'fal-elevenlabs-dialogue',
-          seed: String(result.seed || 0)
+          seed: String(seedValue || 0)
         }
       }
     });
@@ -33865,7 +33867,7 @@ exports.creationWizardGenerateDialogueAudio = functions
       audioUrl: publicUrl,
       audioDuration: estimatedDuration,
       fileName,
-      seed: result.seed,
+      seed: seedValue,
       voiceCount: inputs.length,
       characterCount: totalText.length,
       dialogueSummary: inputs.map(i => ({ voice: i.voice, textLength: i.text.length }))
