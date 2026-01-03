@@ -58273,10 +58273,10 @@ Tone: Natural, expressive.`;
         positive_prompt: positivePrompt,
         negative_prompt: negativePrompt,
 
-        // Video settings
+        // Video settings - Force 1280x720 for faster generation
         aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
-        scale_to_length: 1280,    // Match working example (1280)
-        scale_to_side: 'None',  // Must be "None" string to match workflow
+        scale_to_length: 1280,    // Target dimension
+        scale_to_side: 'longest', // Scale longest side to 1280 (results in 1280x720 for 16:9)
         fps: fps,
         num_frames: numFrames,
 
