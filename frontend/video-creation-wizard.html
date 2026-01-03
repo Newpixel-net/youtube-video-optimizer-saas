@@ -10676,8 +10676,8 @@
 
                     showToast('🎤 Multitalk video started! Polling...', 'success');
 
-                    // Start polling for Multitalk - pass the expected video URL
-                    startMultitalkVideoPolling(sceneId, shotIndex, result.data.jobId, result.data.videoUrl);
+                    // Start polling for Multitalk - pass the video key for presigned URL generation
+                    startMultitalkVideoPolling(sceneId, shotIndex, result.data.jobId, result.data.fileName);
                 } else {
                     throw new Error(result.data.message || 'Failed to start Multitalk video');
                 }
@@ -10697,7 +10697,7 @@
         /**
          * Poll for Multitalk video completion
          */
-        function startMultitalkVideoPolling(sceneId, shotIndex, jobId, expectedVideoUrl) {
+        function startMultitalkVideoPolling(sceneId, shotIndex, jobId, videoKey) {
             const decomposed = state.storyboard.multiShotMode.decomposedScenes[sceneId];
             if (!decomposed || !decomposed.shots[shotIndex]) return;
 
@@ -10724,13 +10724,12 @@
 
                 try {
                     const checkStatusFn = functions.httpsCallable('creationWizardCheckMultitalkStatus');
-                    const result = await checkStatusFn({ jobId });
+                    const result = await checkStatusFn({ jobId, videoKey });
 
                     if (result.data.status === 'COMPLETED') {
                         clearInterval(pollInterval);
-                        // Use the expected video URL (worker uploaded to our signed URL)
-                        // Add cache buster to ensure fresh video is loaded
-                        shot.videoUrl = expectedVideoUrl + (expectedVideoUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+                        // Use the presigned URL from the backend for video playback
+                        shot.videoUrl = result.data.videoUrl;
                         shot.videoStatus = 'ready';
                         shot.videoError = null;
                         shot.pendingVideoUrl = null;

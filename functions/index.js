@@ -58339,7 +58339,7 @@ Tone: Natural, expressive.`;
  */
 exports.creationWizardCheckMultitalkStatus = functions.https.onCall(async (data, context) => {
   await verifyAuth(context);
-  const { jobId } = data;
+  const { jobId, videoKey } = data;  // videoKey is the R2 file key from generate function
 
   if (!jobId) {
     throw new functions.https.HttpsError('invalid-argument', 'Job ID is required');
@@ -58380,14 +58380,50 @@ exports.creationWizardCheckMultitalkStatus = functions.https.onCall(async (data,
       } else if (result.output?.status === 200) {
         // Explicit success from handler
         mappedStatus = 'COMPLETED';
-        if (result.output?.payload?.videoUrl) {
-          videoUrl = result.output.payload.videoUrl;
+
+        // Generate presigned GET URL for video playback (no public access needed)
+        if (videoKey) {
+          const r2Config = functions.config().r2;
+          if (r2Config?.account_id && r2Config?.access_key_id && r2Config?.access_key_secret) {
+            const r2Client = new S3Client({
+              region: 'auto',
+              endpoint: `https://${r2Config.account_id}.r2.cloudflarestorage.com`,
+              credentials: {
+                accessKeyId: r2Config.access_key_id,
+                secretAccessKey: r2Config.access_key_secret,
+              },
+            });
+            const bucketName = r2Config.bucket_name || 'multitalk-videos';
+            videoUrl = await getSignedUrl(r2Client, new GetObjectCommand({
+              Bucket: bucketName,
+              Key: videoKey,
+            }), { expiresIn: 3600 });  // 1 hour expiry
+            console.log('[creationWizardCheckMultitalkStatus] Generated presigned video URL');
+          }
         }
       } else {
         // Legacy handling - assume success if no explicit status
         mappedStatus = 'COMPLETED';
-        if (result.output?.payload?.videoUrl) {
-          videoUrl = result.output.payload.videoUrl;
+
+        // Generate presigned GET URL for video playback
+        if (videoKey) {
+          const r2Config = functions.config().r2;
+          if (r2Config?.account_id && r2Config?.access_key_id && r2Config?.access_key_secret) {
+            const r2Client = new S3Client({
+              region: 'auto',
+              endpoint: `https://${r2Config.account_id}.r2.cloudflarestorage.com`,
+              credentials: {
+                accessKeyId: r2Config.access_key_id,
+                secretAccessKey: r2Config.access_key_secret,
+              },
+            });
+            const bucketName = r2Config.bucket_name || 'multitalk-videos';
+            videoUrl = await getSignedUrl(r2Client, new GetObjectCommand({
+              Bucket: bucketName,
+              Key: videoKey,
+            }), { expiresIn: 3600 });
+            console.log('[creationWizardCheckMultitalkStatus] Generated presigned video URL');
+          }
         }
       }
     } else if (result.status === 'FAILED') {
