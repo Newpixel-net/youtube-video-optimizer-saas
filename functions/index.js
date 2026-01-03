@@ -58137,7 +58137,8 @@ exports.creationWizardGenerateMultitalkVideo = functions
             expires: Date.now() + 60 * 60 * 1000, // 60 minutes
           });
 
-          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} signed URL generated:`, signedUrl.substring(0, 100) + '...');
+          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} signed URL generated (length=${signedUrl.length}):`, signedUrl.substring(0, 100) + '...');
+          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} URL has signature:`, signedUrl.includes('X-Goog-Signature'));
           return signedUrl;
 
         } catch (conversionError) {
@@ -58264,9 +58265,15 @@ Tone: Natural, expressive.`;
         scheduler: 'lcm'
       };
 
+      // Log FULL URLs for debugging (remove this after fixing)
+      console.log('[creationWizardGenerateMultitalkVideo] FULL image URL:', accessibleImageUrl);
+      console.log('[creationWizardGenerateMultitalkVideo] FULL audio URL:', accessibleAudioUrl);
+
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
-        imageUrl: accessibleImageUrl.substring(0, 100) + '...',
-        audioUrl: accessibleAudioUrl.substring(0, 100) + '...',
+        imageUrlLength: accessibleImageUrl.length,
+        audioUrlLength: accessibleAudioUrl.length,
+        imageHasSignature: accessibleImageUrl.includes('X-Goog-Signature'),
+        audioHasSignature: accessibleAudioUrl.includes('X-Goog-Signature'),
         videoUploadUrl: uploadUrl.substring(0, 80) + '...',
         audioCropEnd: runpodInput.audio_crop_end_time,
         numFrames: runpodInput.num_frames,
