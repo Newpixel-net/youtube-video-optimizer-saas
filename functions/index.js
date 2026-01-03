@@ -58236,7 +58236,7 @@ Tone: Natural, expressive.`;
         // Core required parameters - use signed Firebase Storage URLs
         image_url: accessibleImageUrl,
         audio_url: accessibleAudioUrl,
-        video_upload_url: uploadUrl,   // Handler expects video_upload_url (signed write URL)
+        video_upload_url: "",   // Empty like working example - handler returns video differently
 
         // Audio timing (format: "M:SS")
         audio_crop_start_time: '0:00',
@@ -58248,7 +58248,7 @@ Tone: Natural, expressive.`;
 
         // Video settings
         aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
-        scale_to_length: 1024,    // Match working Python test (1024, not 1280)
+        scale_to_length: 1280,    // Match working example (1280)
         scale_to_side: 'None',  // Must be "None" string to match workflow
         fps: fps,
         num_frames: numFrames,
