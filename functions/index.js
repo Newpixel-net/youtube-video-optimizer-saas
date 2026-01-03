@@ -28527,7 +28527,12 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
       const estimatedNarrationDuration = hasNarration ? Math.ceil(wordCount / 2.5) : 0; // ~2.5 words per second
 
       // Get visual prompt (new field) or fall back to visual (legacy) or narration (very old)
-      const visualPrompt = scene.visualPrompt || scene.visual || '';
+      // DEFENSIVE: Ensure visualPrompt is always a string (AI may return object in rare cases)
+      let visualPrompt = scene.visualPrompt || scene.visual || '';
+      if (typeof visualPrompt !== 'string') {
+        console.warn(`[creationWizardGenerateScript] Scene ${scene.id || index + 1}: visualPrompt is not a string, converting...`);
+        visualPrompt = typeof visualPrompt === 'object' ? (visualPrompt.prompt || visualPrompt.description || JSON.stringify(visualPrompt)) : String(visualPrompt || '');
+      }
 
       // Extract camera movements from visual description if not provided
       let cameraMovements = scene.cameraMovement || [];
