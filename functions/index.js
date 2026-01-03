@@ -23909,16 +23909,27 @@ exports.creationWizardDeleteProject = functions.https.onCall(async (data, contex
  */
 exports.creationWizardImproveIdea = functions.https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
-  const { rawInput, productionType, productionSubType, currentStyleReference } = data;
+  const {
+    rawInput,
+    productionType,
+    productionSubType,
+    currentStyleReference,
+    existingCharacters  // NEW: Accept existing characters to preserve their names
+  } = data;
 
   if (!rawInput || rawInput.trim().length < 10) {
     throw new functions.https.HttpsError('invalid-argument', 'Please provide a concept description (at least 10 characters)');
   }
 
+  // Check if we have existing characters to preserve
+  const hasExistingCharacters = existingCharacters && Array.isArray(existingCharacters) && existingCharacters.length > 0;
+
   console.log('[creationWizardImproveIdea] Improving idea:', {
     rawInput: rawInput.substring(0, 100),
     productionType,
     productionSubType,
+    hasExistingCharacters,
+    existingCharacterNames: hasExistingCharacters ? existingCharacters.map(c => c.name).join(', ') : 'none',
     uid
   });
 
@@ -23956,6 +23967,22 @@ SUPPORTING: mentor, trickster, loyal_friend, love_interest, rival, innocent
 ANTAGONISTS: mastermind, force_of_nature, fallen_hero, mirror_villain, system, inner_demon
 ENSEMBLE: leader, specialist, heart, wildcard, skeptic, newbie`;
 
+  // Build existing characters section if we have them
+  const existingCharactersSection = hasExistingCharacters ? `
+⚠️ CRITICAL: EXISTING CHARACTERS TO PRESERVE
+The user has ALREADY selected these characters. You MUST keep their EXACT NAMES and enhance their details:
+${existingCharacters.map((c, i) => `
+CHARACTER ${i + 1} (KEEP THIS NAME): "${c.name}"
+- Current archetype: ${c.archetype || 'to be enhanced'}
+- Current role: ${c.role || 'to be defined'}
+- Current flaw: ${c.flaw || 'to be developed'}
+- Current arc: ${c.arc || 'to be defined'}
+`).join('')}
+
+YOU MUST USE THESE EXACT NAMES in your output. DO NOT create new characters with different names.
+Enhance their descriptions, add depth, but PRESERVE THE NAMES EXACTLY.
+` : '';
+
   const prompt = `You are a GENIUS Hollywood creative director with 30+ years of experience developing blockbuster concepts.
 You understand that great stories come in MANY forms - not just the hero's journey.
 
@@ -23964,7 +23991,7 @@ USER'S ROUGH IDEA:
 
 PRODUCTION TYPE: ${productionType || 'Video Content'} ${productionSubType ? `(${productionSubType})` : ''}
 ${currentStyleReference ? `CURRENT STYLE REFERENCE: ${currentStyleReference}` : ''}
-
+${existingCharactersSection}
 ${NARRATIVE_STRUCTURES_REF}
 
 ${STORY_ENGINES_REF}
@@ -23973,6 +24000,7 @@ ${CHARACTER_ARCHETYPES_REF}
 
 YOUR TASK:
 Transform this rough idea into a BRILLIANT, detailed concept with a COMPLETE PRODUCTION BIBLE foundation.
+${hasExistingCharacters ? '⚠️ REMEMBER: You MUST preserve the existing character names listed above!' : ''}
 
 CRITICAL ANALYSIS:
 1. What NARRATIVE STRUCTURE fits this idea best? (NOT always hero's journey!)
@@ -23985,7 +24013,7 @@ CRITICAL ANALYSIS:
 RULES FOR IMPROVEMENT:
 - EXPAND terse descriptions into vivid, evocative prose
 - CHOOSE the narrative structure that BEST serves this story (ensembles, dual protagonists, mysteries, etc.)
-- CREATE multiple characters with clear archetypes, flaws, and arcs
+${hasExistingCharacters ? '- PRESERVE existing character names EXACTLY - only enhance their details' : '- CREATE multiple characters with clear archetypes, flaws, and arcs'}
 - DEFINE character RELATIONSHIPS and tensions
 - ESTABLISH world rules that affect the story
 - Include specific visual and audio style guidelines
@@ -26865,11 +26893,27 @@ ${ANTI_GENERIC_RULES.slice(0, 6).map(r => `- ${r}`).join('\n')}`;
       // Extract selected concept data
       const selectedConcept = conceptEnrichment.selectedConcept || null;
 
-      // Check for pre-defined characters - prefer selectedConcept.characters, then improvedData.characters
+      // === CHARACTER CONSISTENCY FIX ===
+      // CRITICAL: Always prioritize selectedConcept.characters (user's chosen characters)
+      // Only use conceptEnrichment.characters (from improveIdea) if selectedConcept has NO characters
       const conceptCharacters = selectedConcept?.characters || [];
       const improvedCharacters = conceptEnrichment.characters || [];
+
+      // Log character sources for debugging
+      console.log('[creationWizardGenerateScript] Character sources:', {
+        selectedConceptCharacters: conceptCharacters.length,
+        selectedConceptNames: conceptCharacters.map(c => c.name).join(', ') || 'none',
+        improvedCharacters: improvedCharacters.length,
+        improvedNames: improvedCharacters.map(c => c.name || c.archetype).join(', ') || 'none'
+      });
+
+      // STRICT PRIORITY: User's selected concept characters ALWAYS win
       const allCharacters = conceptCharacters.length > 0 ? conceptCharacters : improvedCharacters;
+      const characterSource = conceptCharacters.length > 0 ? 'selectedConcept' : 'improvedData';
       const hasPreDefinedCharacters = allCharacters.length > 0;
+
+      console.log('[creationWizardGenerateScript] Using characters from:', characterSource,
+        '| Names:', allCharacters.map(c => c.name || c.archetype).join(', '));
 
       // Build character bible section
       let characterBible = '';
