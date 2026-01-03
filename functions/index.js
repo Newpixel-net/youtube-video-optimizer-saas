@@ -58263,7 +58263,7 @@ Tone: Natural, expressive.`;
         // Core required parameters - use signed Firebase Storage URLs
         image_url: accessibleImageUrl,
         audio_url: accessibleAudioUrl,
-        video_upload_url: "",   // Empty like working example - handler returns video differently
+        video_upload_url: uploadUrl,   // Signed URL for handler to upload generated video
 
         // Audio timing (format: "M:SS")
         audio_crop_start_time: '0:00',
