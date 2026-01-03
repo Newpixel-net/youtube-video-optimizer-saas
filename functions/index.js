@@ -58104,13 +58104,16 @@ exports.creationWizardGenerateMultitalkVideo = functions
         // From: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH%2Ffile.ext?alt=media&token=...
         const firebaseMatch = url.match(/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/);
         if (firebaseMatch) {
-          const bucket = firebaseMatch[1];
+          const bucketName = firebaseMatch[1];
           const encodedPath = firebaseMatch[2];
           const decodedPath = decodeURIComponent(encodedPath);
 
+          // Get default bucket (handles all Firebase bucket name formats)
+          const defaultBucket = admin.storage().bucket();
+
           try {
-            // Make the file public
-            const file = admin.storage().bucket(bucket).file(decodedPath);
+            // Make the file public using default bucket
+            const file = defaultBucket.file(decodedPath);
             await file.makePublic();
             console.log('[creationWizardGenerateMultitalkVideo] Made file public:', decodedPath);
           } catch (publicError) {
@@ -58118,8 +58121,8 @@ exports.creationWizardGenerateMultitalkVideo = functions
             console.log('[creationWizardGenerateMultitalkVideo] makePublic note:', publicError.message);
           }
 
-          // Return public URL format
-          const publicUrl = `https://storage.googleapis.com/${bucket}/${decodedPath}`;
+          // Return public URL format using the bucket name from URL
+          const publicUrl = `https://storage.googleapis.com/${bucketName}/${decodedPath}`;
           console.log('[creationWizardGenerateMultitalkVideo] Converted to public URL:', {
             original: url.substring(0, 80) + '...',
             public: publicUrl
