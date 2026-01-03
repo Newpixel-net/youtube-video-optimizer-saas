@@ -6678,7 +6678,10 @@
                 }
                 // Fallback: infer from visual description
                 else if (scene.visual || scene.visualPrompt) {
-                    locationName = inferLocationFromVisual(scene.visual || scene.visualPrompt);
+                    // Ensure we pass a string to inferLocationFromVisual
+                    const visualText = scene.visual || scene.visualPrompt;
+                    const visualString = typeof visualText === 'string' ? visualText : '';
+                    locationName = inferLocationFromVisual(visualString);
                 }
 
                 if (locationName && locationName !== 'unknown') {
@@ -6725,7 +6728,8 @@
 
         // Infer location name from visual description (client-side version)
         function inferLocationFromVisual(visual) {
-            if (!visual) return 'unknown';
+            // Defensive check: ensure visual is a string
+            if (!visual || typeof visual !== 'string') return 'unknown';
             const v = visual.toLowerCase();
 
             const patterns = [
@@ -17095,7 +17099,11 @@
                 prompt = chainData.imagePrompt.prompt;
             } else {
                 // Fallback to stored prompt or scene visual
-                prompt = storyboardScene.prompt || scene.visual || '';
+                prompt = storyboardScene.prompt || scene.visual || scene.visualPrompt || '';
+            }
+            // Defensive check: ensure prompt is always a string
+            if (typeof prompt !== 'string') {
+                prompt = typeof prompt === 'object' ? JSON.stringify(prompt) : String(prompt || '');
             }
 
             let cardContent = '';
