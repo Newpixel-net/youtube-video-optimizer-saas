@@ -4601,11 +4601,21 @@
 
             try {
                 const improveIdea = firebase.functions().httpsCallable('creationWizardImproveIdea');
+
+                // Get existing characters from selected concept to preserve their names
+                const selectedConceptCharacters = state.concept.refinedConcept?.characters || [];
+
+                console.log('[improveConceptIdea] Passing existing characters:', {
+                    count: selectedConceptCharacters.length,
+                    names: selectedConceptCharacters.map(c => c.name).join(', ') || 'none'
+                });
+
                 const result = await improveIdea({
                     rawInput: rawInput,
                     productionType: state.production.typeConfig?.name || state.production.type,
                     productionSubType: state.production.subTypeConfig?.name || state.production.subType,
-                    currentStyleReference: state.concept.styleReference
+                    currentStyleReference: state.concept.styleReference,
+                    existingCharacters: selectedConceptCharacters  // Preserve character names from selected concept
                 });
 
                 if (result.data.success) {
