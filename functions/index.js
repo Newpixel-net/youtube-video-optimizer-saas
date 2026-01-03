@@ -58098,24 +58098,13 @@ exports.creationWizardGenerateMultitalkVideo = functions
 
       const bucket = admin.storage().bucket();
 
-      // Helper: Convert any Firebase URL to public format accessible from RunPod
-      // Token-based URLs (firebasestorage.googleapis.com?token=...) don't work from server environments
-      // We need to re-upload and make public to get storage.googleapis.com URLs
-      const ensurePublicUrl = async (url, fileType) => {
+      // Helper: Convert any Firebase URL to a signed URL accessible from RunPod
+      // Token-based URLs (firebasestorage.googleapis.com?token=...) don't work reliably from server environments
+      // We re-upload and generate signed URLs which always work
+      const ensureAccessibleUrl = async (url, fileType) => {
         if (!url) return url;
 
-        // Already a public GCS URL (storage.googleapis.com without token) - return as-is
-        if (url.includes('storage.googleapis.com/') && !url.includes('firebasestorage.') && !url.includes('token=')) {
-          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} already public:`, url.substring(0, 80));
-          return url;
-        }
-
-        // For any Firebase URL (token-based or otherwise), convert to public:
-        // 1. Download the file
-        // 2. Re-upload to a public location
-        // 3. Make it public
-        // 4. Return the public URL
-        console.log(`[creationWizardGenerateMultitalkVideo] Converting ${fileType} to public URL...`);
+        console.log(`[creationWizardGenerateMultitalkVideo] Converting ${fileType} to accessible URL...`);
 
         try {
           // Download the file
@@ -58133,19 +58122,23 @@ exports.creationWizardGenerateMultitalkVideo = functions
             contentType = ext === 'webp' ? 'image/webp' : 'image/png';
           }
 
-          // Upload to a location covered by storage rules (creation-projects has public read)
-          const publicPath = `creation-projects/${uid}/multitalk-temp/${timestamp}_${fileType}.${ext}`;
-          const file = bucket.file(publicPath);
+          // Upload to temp location
+          const tempPath = `creation-projects/${uid}/multitalk-temp/${timestamp}_${fileType}.${ext}`;
+          const file = bucket.file(tempPath);
 
           await file.save(buffer, {
             metadata: { contentType }
           });
 
-          await file.makePublic();
+          // Generate signed read URL (works without special IAM permissions)
+          const [signedUrl] = await file.getSignedUrl({
+            version: 'v4',
+            action: 'read',
+            expires: Date.now() + 60 * 60 * 1000, // 60 minutes
+          });
 
-          const publicUrl = `https://storage.googleapis.com/${bucket.name}/${publicPath}`;
-          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} converted to public:`, publicUrl);
-          return publicUrl;
+          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} signed URL generated:`, signedUrl.substring(0, 100) + '...');
+          return signedUrl;
 
         } catch (conversionError) {
           console.error(`[creationWizardGenerateMultitalkVideo] Failed to convert ${fileType}:`, conversionError.message);
@@ -58153,9 +58146,9 @@ exports.creationWizardGenerateMultitalkVideo = functions
         }
       };
 
-      // Ensure both image and audio are publicly accessible from RunPod
-      const publicImageUrl = await ensurePublicUrl(imageUrl, 'image');
-      const publicAudioUrl = await ensurePublicUrl(effectiveAudioUrl, 'audio');
+      // Ensure both image and audio are accessible from RunPod via signed URLs
+      const accessibleImageUrl = await ensureAccessibleUrl(imageUrl, 'image');
+      const accessibleAudioUrl = await ensureAccessibleUrl(effectiveAudioUrl, 'audio');
 
       // Generate unique filename for video output in Firebase Storage
       const videoFileName = `creation-projects/${projectId || uid}/multitalk-videos/scene_${sceneId}_shot_${shotIndex}_${timestamp}_${seed}.mp4`;
@@ -58170,8 +58163,8 @@ exports.creationWizardGenerateMultitalkVideo = functions
       });
 
       console.log('[creationWizardGenerateMultitalkVideo] Firebase URLs ready:', {
-        imageUrl: publicImageUrl.substring(0, 80),
-        audioUrl: publicAudioUrl.substring(0, 80),
+        imageUrl: accessibleImageUrl.substring(0, 100) + '...',
+        audioUrl: accessibleAudioUrl.substring(0, 100) + '...',
         videoUploadUrl: uploadUrl.substring(0, 80) + '...'
       });
 
@@ -58239,9 +58232,9 @@ Tone: Natural, expressive.`;
       // Build RunPod input for Multitalk
       // IMPORTANT: Parameter names must match the Multitalk API exactly
       const runpodInput = {
-        // Core required parameters - use public Firebase Storage URLs
-        image_url: publicImageUrl,
-        audio_url: publicAudioUrl,
+        // Core required parameters - use signed Firebase Storage URLs
+        image_url: accessibleImageUrl,
+        audio_url: accessibleAudioUrl,
         video_upload_url: uploadUrl,   // Handler expects video_upload_url (signed write URL)
 
         // Audio timing (format: "M:SS")
@@ -58272,8 +58265,8 @@ Tone: Natural, expressive.`;
       };
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
-        imageUrl: publicImageUrl,
-        audioUrl: publicAudioUrl,
+        imageUrl: accessibleImageUrl.substring(0, 100) + '...',
+        audioUrl: accessibleAudioUrl.substring(0, 100) + '...',
         videoUploadUrl: uploadUrl.substring(0, 80) + '...',
         audioCropEnd: runpodInput.audio_crop_end_time,
         numFrames: runpodInput.num_frames,
