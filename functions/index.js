@@ -23907,7 +23907,9 @@ exports.creationWizardDeleteProject = functions.https.onCall(async (data, contex
  * - worldBuilding: World rules for fantasy/scifi concepts
  * - characters: Suggested original character archetypes
  */
-exports.creationWizardImproveIdea = functions.https.onCall(async (data, context) => {
+exports.creationWizardImproveIdea = functions
+  .runWith({ timeoutSeconds: 120, memory: '512MB' }) // GPT-4o can take 30-60s for complex prompts
+  .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   const {
     rawInput,
@@ -24202,7 +24204,9 @@ CRITICAL:
  * Returns:
  * - ideas: Array of 3 unique concept options with titles, loglines, unique elements
  */
-exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, context) => {
+exports.creationWizardGenerateConcepts = functions
+  .runWith({ timeoutSeconds: 180, memory: '512MB' }) // GPT-4o with complex prompts needs time
+  .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   const { rawInput, styleReference, avoidElements, production, enrichment } = data;
 
