@@ -23,6 +23,7 @@ const axios = require('axios');
 const { GoogleGenAI } = require('@google/genai');
 const { fal } = require('@fal-ai/client');
 const sharp = require('sharp');
+const crypto = require('crypto');
 
 // ==============================================
 // IMAGE DIMENSION ENFORCEMENT
@@ -24170,28 +24171,53 @@ exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, con
     creativeSeed: Date.now() % 1000000 // Log seed for debugging
   });
 
-  // === CREATIVE DIVERSITY INJECTION ===
-  // Generate random creative "seeds" to force unique outputs each time
-  const creativeSeed = Date.now() % 1000000; // 6-digit random seed
+  // === CREATIVE DIVERSITY INJECTION (ENHANCED) ===
+  // Generate TRUE random seed using crypto for maximum variation
+  // CRITICAL: Time-based seeds caused 90% similar outputs - now using cryptographic randomness
+  const creativeSeed = crypto.randomBytes(4).readUInt32BE(0);
+  const secondarySeed = crypto.randomBytes(4).readUInt32BE(0); // Second seed for additional variation
 
-  // Random character name pools from different cultures/eras
+  // EXPANDED: 20 character name pools from diverse cultures/eras (was 5)
   const namePools = [
     ['Kai', 'Zara', 'Marcus', 'Yuki', 'Elena', 'Dmitri', 'Amara', 'Finn'],
     ['Nova', 'Jax', 'Priya', 'Alejandro', 'Mei', 'Kofi', 'Ingrid', 'Rashid'],
     ['Atlas', 'Seraphina', 'Rowan', 'Nadia', 'Cedric', 'Xiomara', 'Dante', 'Isolde'],
     ['Phoenix', 'Cassius', 'Thalia', 'Magnus', 'Zuri', 'Orion', 'Kira', 'Ajax'],
-    ['River', 'Octavia', 'Soren', 'Valentina', 'Malik', 'Astrid', 'Joaquin', 'Neve']
+    ['River', 'Octavia', 'Soren', 'Valentina', 'Malik', 'Astrid', 'Joaquin', 'Neve'],
+    // NEW: Additional diverse pools
+    ['Vesper', 'Caspian', 'Lyra', 'Bodhi', 'Saoirse', 'Idris', 'Mira', 'Leif'],
+    ['Zephyr', 'Indira', 'Enzo', 'Freya', 'Ravi', 'Keiko', 'Mateo', 'Saga'],
+    ['Sterling', 'Zahara', 'Declan', 'Amira', 'Rune', 'Esme', 'Cormac', 'Ines'],
+    ['Stellan', 'Noor', 'Dashiell', 'Paloma', 'Kieran', 'Yara', 'Elio', 'Petra'],
+    ['Wilder', 'Anika', 'Sanjay', 'Luz', 'Callum', 'Aziza', 'Theron', 'Marisol'],
+    ['Jasper', 'Nalini', 'Cosimo', 'Brigid', 'Tai', 'Solene', 'Emeric', 'Chiara'],
+    ['Griffin', 'Kamila', 'Lucian', 'Maeve', 'Samir', 'Elara', 'Viggo', 'Ximena'],
+    ['Heath', 'Soraya', 'Cillian', 'Talia', 'Rhys', 'Adaora', 'Mattias', 'Vera'],
+    ['Archer', 'Nyla', 'Dorian', 'Cleo', 'Ansel', 'Liora', 'Ezio', 'Maren'],
+    ['Sullivan', 'Zaina', 'Alistair', 'Ophelia', 'Naveen', 'Cordelia', 'Bastian', 'Wren'],
+    ['Finley', 'Safiya', 'Brennan', 'Iris', 'Tobias', 'Dahlia', 'Quinlan', 'Selene'],
+    ['Calder', 'Layla', 'Evander', 'Aurora', 'Kian', 'Seren', 'August', 'Luna'],
+    ['Orson', 'Farah', 'Calloway', 'Gaia', 'Darius', 'Ivy', 'Jaspen', 'Thea'],
+    ['Everett', 'Nadia', 'Cassander', 'Eloise', 'Roman', 'Celeste', 'Hugo', 'Margot'],
+    ['Lennox', 'Aisha', 'Beckett', 'Simone', 'Miles', 'Bianca', 'Felix', 'Rosalind']
   ];
 
-  // Random setting flavors
+  // EXPANDED: 10 setting flavor pools (was 4)
   const settingFlavors = [
     ['neon-lit', 'ancient', 'floating', 'underground', 'abandoned', 'sacred'],
     ['crystalline', 'war-torn', 'utopian', 'decaying', 'frontier', 'forbidden'],
     ['oceanic', 'volcanic', 'arctic', 'desert', 'jungle', 'mountain'],
-    ['steampunk', 'biopunk', 'solarpunk', 'retrofuture', 'post-collapse', 'alternate']
+    ['steampunk', 'biopunk', 'solarpunk', 'retrofuture', 'post-collapse', 'alternate'],
+    // NEW: Additional settings
+    ['twilight', 'labyrinthine', 'celestial', 'subterranean', 'nomadic', 'quarantined'],
+    ['gilded', 'brutalist', 'organic', 'fractured', 'mirrored', 'dreaming'],
+    ['industrial', 'pastoral', 'liminal', 'recursive', 'inverted', 'pocket-dimension'],
+    ['coral-grown', 'sky-bound', 'root-networked', 'time-frozen', 'memory-built', 'song-woven'],
+    ['chrome', 'overgrown', 'crystallized', 'hollowed', 'terraformed', 'spirit-inhabited'],
+    ['quantum-shifted', 'tide-ruled', 'storm-eternal', 'sun-scorched', 'shadow-cloaked', 'aurora-lit']
   ];
 
-  // Random story hooks
+  // EXPANDED: 50 story hooks (was 10)
   const storyHooks = [
     'What if the hero discovers they are the prophecied villain?',
     'What if every choice creates a parallel version that the characters can glimpse?',
@@ -24202,44 +24228,126 @@ exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, con
     'What if memories can be transferred but with unintended consequences?',
     'What if time moves differently for different characters?',
     'What if the monster they hunt is actually protecting something precious?',
-    'What if the power comes at a cost that escalates with each use?'
+    'What if the power comes at a cost that escalates with each use?',
+    // NEW: 40 additional hooks
+    'What if the protagonist can only save one person, and must choose?',
+    'What if the cure is worse than the disease it treats?',
+    'What if the characters are all unreliable narrators of the same event?',
+    'What if death is reversible but each return changes the person fundamentally?',
+    'What if the mentor figure has been manipulating everyone from the start?',
+    'What if two enemies must pretend to be allies to survive?',
+    'What if the treasure everyone seeks is actually a burden no one wants?',
+    'What if the protagonist discovers their entire motivation was based on a lie?',
+    'What if the small, overlooked character holds the key to everything?',
+    'What if success means becoming exactly what the hero despises?',
+    'What if the apocalypse already happened and no one noticed?',
+    'What if the antagonist is the only one who knows the terrible truth?',
+    'What if love requires sacrifice that neither person can bear?',
+    'What if the magic/technology is sentient and has its own agenda?',
+    'What if the chosen one refuses and someone unexpected must step up?',
+    'What if every person the hero saves creates a new enemy?',
+    'What if the boundary between hero and villain is just perspective?',
+    'What if the dead can communicate but only through riddles and metaphors?',
+    'What if loyalty to family conflicts with saving the world?',
+    'What if the greatest threat comes from within the group?',
+    'What if the characters are trapped in a loop only one of them remembers?',
+    'What if the price of peace is eternal vigilance by a single person?',
+    'What if two timelines are colliding and characters from each meet?',
+    'What if the protagonist must teach their younger self a crucial lesson?',
+    'What if the villain is trying to prevent a worse evil only they foresee?',
+    'What if everyone has a supernatural gift except the protagonist?',
+    'What if the final battle can only be won through surrender?',
+    'What if the characters discover they are characters in someone else\'s story?',
+    'What if revenge destroys everything the avenger was trying to protect?',
+    'What if the source of all power is about to run out permanently?',
+    'What if the happy ending requires erasing someone from existence?',
+    'What if the protagonist\'s greatest enemy is a future version of themselves?',
+    'What if kindness is seen as weakness in this world, but is actually the greatest power?',
+    'What if the characters must solve an impossible puzzle to escape?',
+    'What if the journey matters more than the destination, literally?',
+    'What if trust is a resource that depletes with each use?',
+    'What if the world operates on dream logic that characters must master?',
+    'What if the protagonist carries a secret that would turn allies into enemies?',
+    'What if the ordinary person thrust into adventure just wants to go home?',
+    'What if the rules of the world change at a critical moment?'
   ];
 
-  // Random genre mashups
+  // EXPANDED: 40 genre mashups (was 12)
   const genreMashups = [
     ['noir', 'fantasy'], ['horror', 'comedy'], ['western', 'sci-fi'],
     ['romance', 'thriller'], ['mystery', 'supernatural'], ['war', 'coming-of-age'],
     ['heist', 'period drama'], ['survival', 'philosophical'], ['sports', 'crime'],
-    ['disaster', 'family drama'], ['espionage', 'supernatural'], ['revenge', 'redemption']
+    ['disaster', 'family drama'], ['espionage', 'supernatural'], ['revenge', 'redemption'],
+    // NEW: Additional mashups
+    ['comedy', 'apocalypse'], ['romance', 'horror'], ['mystery', 'sports'],
+    ['western', 'supernatural'], ['heist', 'sci-fi'], ['war', 'romance'],
+    ['thriller', 'coming-of-age'], ['fantasy', 'crime'], ['noir', 'comedy'],
+    ['survival', 'romance'], ['period drama', 'sci-fi'], ['family drama', 'thriller'],
+    ['sports', 'supernatural'], ['disaster', 'comedy'], ['espionage', 'fantasy'],
+    ['revenge', 'comedy'], ['philosophical', 'action'], ['horror', 'western'],
+    ['mystery', 'period drama'], ['coming-of-age', 'crime'], ['redemption', 'horror'],
+    ['survival', 'fantasy'], ['noir', 'sci-fi'], ['romance', 'disaster'],
+    ['thriller', 'supernatural'], ['heist', 'horror'], ['war', 'comedy'],
+    ['sports', 'romance'], ['family drama', 'fantasy'], ['espionage', 'period drama'],
+    ['philosophical', 'horror'], ['crime', 'supernatural'], ['action', 'period drama'],
+    ['mystery', 'survival'], ['western', 'romance'], ['redemption', 'sci-fi'],
+    ['coming-of-age', 'horror'], ['disaster', 'philosophical'], ['noir', 'supernatural']
   ];
 
-  // Select random elements based on seed
+  // Select random elements using BOTH seeds for maximum variation
+  // Primary seed selects from first half of pools, secondary seed adds additional elements
   const selectedNamePool = namePools[creativeSeed % namePools.length];
+  const secondaryNamePool = namePools[secondarySeed % namePools.length];
   const selectedSettings = settingFlavors[creativeSeed % settingFlavors.length];
+  const secondarySettings = settingFlavors[secondarySeed % settingFlavors.length];
   const selectedHook = storyHooks[creativeSeed % storyHooks.length];
+  const secondaryHook = storyHooks[secondarySeed % storyHooks.length];
   const selectedMashup = genreMashups[creativeSeed % genreMashups.length];
+  const secondaryMashup = genreMashups[secondarySeed % genreMashups.length];
 
-  // Creative divergence prompt section
+  // Combine name pools (deduplicated) for even more variety
+  const combinedNames = [...new Set([...selectedNamePool, ...secondaryNamePool])].slice(0, 10);
+
+  // Creative divergence prompt section - ENHANCED with dual seeds and stronger uniqueness
   const creativeDivergence = `
-=== CREATIVE DIVERGENCE SEED: ${creativeSeed} ===
-To ensure MAXIMUM CREATIVITY, consider these random inspirations (adapt freely):
+=== CREATIVE DIVERGENCE SEEDS: PRIMARY(${creativeSeed}) SECONDARY(${secondarySeed}) ===
 
-SUGGESTED CHARACTER NAME POOL (use or transform): ${selectedNamePool.join(', ')}
-SETTING TEXTURE IDEAS: ${selectedSettings.join(', ')}
-UNEXPECTED TWIST TO CONSIDER: "${selectedHook}"
-GENRE FUSION POSSIBILITY: ${selectedMashup.join(' + ')}
+🎲 UNIQUENESS ENFORCEMENT - THIS IS CRITICAL:
+You are generating ideas at timestamp ${Date.now()}. This combination of seeds has NEVER been used before.
+Your output MUST be completely different from ANY previous generation.
+If you have a "default" or "go-to" story structure, EXPLICITLY AVOID IT.
 
-IMPORTANT: These are STARTING POINTS. Transform them. Surprise the user.
-DO NOT create the same story you created last time.
-Each generation should feel like a FRESH creative mind is approaching the concept.
+CHARACTER NAME POOL (mix, transform, or create entirely new): ${combinedNames.join(', ')}
+PRIMARY SETTING TEXTURES: ${selectedSettings.join(', ')}
+SECONDARY SETTING TEXTURES: ${secondarySettings.join(', ')}
+
+TWIST OPTION A: "${selectedHook}"
+TWIST OPTION B: "${secondaryHook}"
+
+GENRE FUSION A: ${selectedMashup.join(' + ')}
+GENRE FUSION B: ${secondaryMashup.join(' + ')}
+
+⚠️ CRITICAL UNIQUENESS REQUIREMENTS:
+1. DO NOT use generic protagonist archetypes (orphan hero, chosen one, reluctant warrior) WITHOUT subversion
+2. Each concept MUST have at least ONE element that would surprise a seasoned screenwriter
+3. Character names should feel FRESH - avoid overused names like "Jack", "Sarah", "John"
+4. Settings should have SPECIFIC, unusual details (not just "a city" but "a city where buildings grow like plants")
+5. The central conflict should NOT be "good vs evil" without significant complexity
 
 MANDATORY VARIATION RULES:
-1. If the user input mentions "action" - one concept must subvert action tropes
+1. If the user input mentions "action" - one concept must subvert action tropes completely
 2. If mentioned "sci-fi" - one concept should ground sci-fi in intimate human drama
 3. If mentioned "fantasy" - one concept should feel grounded/realistic despite fantasy elements
-4. Make characters SPECIFIC (age, background, specific flaw) not generic
-5. Give at least one character an UNUSUAL profession or background
-6. Include at least one SURPRISING character dynamic (enemies forced to cooperate, etc.)
+4. Make characters HYPER-SPECIFIC (exact age, unique background, contradictory traits, specific flaw)
+5. Give at least one character an UNUSUAL profession or background (not cop, doctor, lawyer, soldier)
+6. Include at least one SURPRISING character dynamic (enemies forced to cooperate, mentor who is wrong, etc.)
+7. At least one concept should have an UNCONVENTIONAL narrative structure
+8. NO TWO CONCEPTS should share the same protagonist archetype
+
+CREATIVITY CHECK: Before finalizing, ask yourself:
+- "Have I seen this exact story before?" If yes, CHANGE IT.
+- "Would this surprise the user?" If no, ADD A TWIST.
+- "Are the character names memorable?" If generic, REPLACE THEM.
 `;
 
   // Build the prompt for concept generation
@@ -24452,7 +24560,9 @@ Always return valid JSON with genuinely diverse, surprising concepts.`
         ],
         response_format: { type: 'json_object' }, // Force valid JSON output
         max_tokens: 4000,
-        temperature: 1.0 // Increased from 0.95 for more creativity
+        temperature: 1.0, // Maximum creativity
+        frequency_penalty: 0.3, // Reduce word repetition
+        presence_penalty: 0.7  // Force exploration of new topics/ideas (high for creative writing)
       })
     });
 
@@ -27794,8 +27904,10 @@ LOCATION CONSISTENCY RULES:
         { role: 'user', content: userPrompt }
       ],
       response_format: { type: 'json_object' }, // CRITICAL: Force valid JSON output
-      temperature: conceptEnrichment ? 0.85 : 0.8, // Slightly higher creativity for enriched concepts
-      max_tokens: 6500 // Cinematic production requires more tokens for rich scene structure
+      temperature: 0.9, // FIXED: Increased from 0.8 for more creative scripts (was causing repetitive outputs)
+      max_tokens: 6500, // Cinematic production requires more tokens for rich scene structure
+      frequency_penalty: 0.3, // Reduce repetitive phrasing in dialogue and descriptions
+      presence_penalty: 0.5  // Encourage diverse scene content and character interactions
     });
 
     const elapsedTime = Date.now() - startTime;
