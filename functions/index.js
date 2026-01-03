@@ -24822,7 +24822,7 @@ exports.creationWizardGenerateScript = functions
   const {
     platform,
     aspectRatio,
-    targetDuration,
+    targetDuration = 180, // Default 3 minutes if not specified
     niche,
     subniche,
     style,
@@ -26977,7 +26977,7 @@ exports.creationWizardGenerateScript = functions
       Total Duration: ${targetDuration}s (${Math.round(targetDuration / 60)} minutes)
       Content Format: ${contentFormat}
       Scene Duration: ${actualSceneDuration}s (target: ${sceneDuration}s)
-      Number of Scenes: ${sceneCount}
+      Number of Scenes: ${sceneCount} (raw: ${rawSceneCount}, limits: ${limits.min}-${limits.max})
       Chunked Generation: ${needsChunkedGeneration ? `YES (${chunkCount} chunks × ${scenesPerChunk} scenes)` : 'NO (single generation)'}
       Shots per Scene: ${actualShotsPerScene} (${clipDuration}s clips)
       Shot Duration: ${shotDuration}s
