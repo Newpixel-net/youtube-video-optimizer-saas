@@ -28095,87 +28095,122 @@ tension_building, action_intense, emotional_sad, emotional_hopeful,
 triumphant, mysterious, peaceful, epic_scale, intimate, suspense
 
 === OUTPUT FORMAT ===
-Return ONLY valid JSON:
+Return ONLY valid JSON with EXACTLY ${sceneCount} scenes in the scenes array:
 {
   "title": "Compelling ${productionSettings.name} style title (50-70 chars)",
   "hook": "The attention-grabbing opening - can be narration or impactful dialogue",
   "characters": [
     {
-      "name": "Character's name",
-      "archetype": "The archetype (e.g., Reluctant Hero, Wise Mentor, Hidden Villain)",
+      "name": "Protagonist name",
+      "archetype": "The archetype (e.g., Reluctant Hero, Anti-Hero)",
       "visualDescription": "DETAILED visual description - exact appearance, clothing, features, distinguishing marks",
       "voiceDescription": "How they sound - accent, pitch, speech patterns, emotional range",
-      "role": "Their role in the story",
+      "role": "protagonist",
       "motivation": "What drives this character",
       "firstAppearance": 1,
-      "sceneAppearances": [1, 3, 5]
+      "sceneAppearances": [1, 2, 3, 4, 5]
+    },
+    {
+      "name": "Supporting character name",
+      "archetype": "Mentor/Ally/Love Interest",
+      "visualDescription": "Detailed appearance",
+      "voiceDescription": "Voice characteristics",
+      "role": "supporting",
+      "motivation": "Their motivation",
+      "firstAppearance": 2,
+      "sceneAppearances": [2, 4, 6]
+    },
+    {
+      "name": "Antagonist name",
+      "archetype": "Mastermind/Force/Mirror Villain",
+      "visualDescription": "Detailed appearance",
+      "voiceDescription": "Voice characteristics",
+      "role": "antagonist",
+      "motivation": "Their motivation",
+      "firstAppearance": 3,
+      "sceneAppearances": [3, 5, 7]
     }
   ],
   "scenes": [
     {
       "id": 1,
-      "sceneType": "opening_narration|dialogue|action|emotional|montage|revelation|closing_narration",
+      "sceneType": "opening_narration",
       "location": {
-        "name": "The specific location name (e.g., 'The Dojo', 'Corporate Tower', 'City Streets')",
-        "timeOfDay": "dawn|morning|midday|afternoon|golden_hour|dusk|night|deep_night",
-        "weather": "clear|overcast|rain_light|rain_heavy|fog|snow|storm",
-        "condition": "pristine|lived_in|neglected|damaged_light|damaged_heavy|destroyed|repaired",
-        "conditionDetails": "Specific details about damage or changes if not pristine/lived_in"
+        "name": "Opening Location",
+        "timeOfDay": "dawn",
+        "weather": "clear",
+        "condition": "pristine"
       },
-      "visualPrompt": "[Camera Movement] Detailed cinematography for AI video generation",
-      "visual": "[Camera Movement] Same as visualPrompt for backwards compatibility",
-      "sceneAction": "DETAILED ACTION SEQUENCE: The complete story action for this ${actualSceneDuration}-second scene. Describe ALL physical actions, character movements, interactions, and reactions in sequence. This will be divided into ${actualShotsPerScene} shots of ${clipDuration} seconds each. Example for a 30s scene with 3 shots: 'Kai stands on the rooftop surveying the city, his coat rippling in the wind. He turns to face Ryu and Li Mei, speaking with growing conviction as he outlines their mission. Ryu steps forward with a confident nod, cracking his knuckles. Li Mei places her hand on Kai\\'s shoulder reassuringly. Together they turn toward the rooftop edge. In unison, the three heroes leap from the building, coats billowing as they descend toward the neon-lit streets below.' Include: character movements, gestures, expressions changing, physical interactions, environmental responses.",
+      "visualPrompt": "[Sweeping crane shot] World-first opening description...",
+      "visual": "[Sweeping crane shot] Same as visualPrompt",
+      "sceneAction": "DETAILED ACTION: Complete sequence for this scene...",
       "audioLayer": {
-        "type": "voiceover|dialogue|internal_monologue|action_sfx|music_only",
-        "voiceover": "Narrator text if type=voiceover, otherwise null",
-        "dialogue": [
-          {
-            "character": "Name",
-            "line": "What they say",
-            "emotion": "emotional_state",
-            "delivery": "whispered|spoken_soft|spoken_firm|shouted|trembling|commanding|pleading",
-            "emphasis": ["key", "words"],
-            "pacing": "quick_clipped|measured_deliberate|halting_uncertain|rapid_breathless",
-            "eyeline": "locked_on_[character]|looking_away|glancing_at_[object]|eyes_closed",
-            "actionDuring": "subtle physical action while speaking"
-          }
-        ],
-        "internalMonologue": {
-          "character": "Name",
-          "thought": "Their internal thought",
-          "delivery": "soft_reflective|urgent_anxious|bitter_resigned",
-          "pacing": "slow_contemplative|fragmented_distressed"
-        },
-        "sfx": ["sound_effect_1", "sound_effect_2"],
-        "musicMood": "tension_building|action_intense|emotional_sad|etc",
-        "musicTransition": "continue|fade_out|crescendo|sudden_stop"
+        "type": "voiceover",
+        "voiceover": "Opening narration text that draws viewers in...",
+        "dialogue": [],
+        "sfx": ["ambient_sounds"],
+        "musicMood": "mysterious"
       },
-      "narration": "BACKWARDS COMPATIBLE: voiceover text or null (populated from audioLayer.voiceover)",
-      "duration": ${visualDuration},
-      "cameraMovement": ["Push in"],
-      "cameraIntent": "Why this camera move - what emotion/story it serves",
-      "transition": {
-        "type": "cut|smash_cut|fade_to_black|dissolve|match_cut|j_cut|l_cut",
-        "purpose": "Why this transition - what story beat it serves"
-      },
-      "charactersInScene": ["Character names from characters array"],
-      "sceneRole": "setup|conflict|rising_action|climax|resolution",
-
+      "narration": "Opening narration text...",
+      "duration": ${actualSceneDuration},
+      "cameraMovement": ["Sweeping crane", "Push in"],
+      "cameraIntent": "Establish the world before characters",
+      "transition": { "type": "dissolve", "purpose": "Smooth transition to character intro" },
+      "charactersInScene": [],
+      "sceneRole": "setup",
       "choreography": {
-        "sceneArc": "build_to_climax|tension_release|steady_build|peak_then_calm",
-        "intensityProgression": [0.4, 0.6, 0.85, 0.7],
-        "blocking": "Character positions and movements (e.g., 'Kai center-left facing Mei, moves to center')",
-        "keyBeats": [
-          "Beat 1 (0-2s): Establish - what happens",
-          "Beat 2 (2-5s): Develop - what happens",
-          "Beat 3 (5-8s): Peak - what happens",
-          "Beat 4 (8-10s): Resolve - what happens"
+        "sceneArc": "steady_build",
+        "intensityProgression": [0.2, 0.4, 0.5, 0.6],
+        "blocking": "Pure environment, no characters",
+        "keyBeats": ["Beat 1: World establishment", "Beat 2: Atmosphere", "Beat 3: Hint of story", "Beat 4: Transition"],
+        "eyeContact": "N/A",
+        "physicsNote": "Wind, light, atmosphere",
+        "environmentSync": "World responds to story tone"
+      }
+    },
+    {
+      "id": 2,
+      "sceneType": "dialogue",
+      "location": {
+        "name": "Character Introduction Location",
+        "timeOfDay": "morning",
+        "weather": "clear",
+        "condition": "lived_in"
+      },
+      "visualPrompt": "[Medium shot] Character introduction with dialogue...",
+      "visual": "[Medium shot] Same as visualPrompt",
+      "sceneAction": "DETAILED ACTION: Characters interact, establish relationships...",
+      "audioLayer": {
+        "type": "dialogue",
+        "voiceover": null,
+        "dialogue": [
+          { "character": "Protagonist", "line": "Dialogue line", "emotion": "determined", "delivery": "spoken_firm" }
         ],
-        "eyeContact": "Key gaze moments (e.g., 'Kai looks at artifact then to Mei')",
-        "physicsNote": "Body language hints (e.g., 'weight forward, breath held')",
-        "environmentSync": "Environment reactions (e.g., 'artifact glows brighter at contact')"
+        "sfx": ["footsteps", "ambient"],
+        "musicMood": "tension_building"
+      },
+      "narration": null,
+      "duration": ${actualSceneDuration},
+      "cameraMovement": ["Push in"],
+      "cameraIntent": "Draw viewer into character conflict",
+      "transition": { "type": "cut", "purpose": "Sharp transition to action" },
+      "charactersInScene": ["Protagonist name", "Supporting character name"],
+      "sceneRole": "conflict",
+      "choreography": {
+        "sceneArc": "build_to_climax",
+        "intensityProgression": [0.4, 0.6, 0.8, 0.7],
+        "blocking": "Characters face each other, tension builds",
+        "keyBeats": ["Beat 1: Establish positions", "Beat 2: Tension builds", "Beat 3: Confrontation", "Beat 4: Resolution"],
+        "eyeContact": "Locked gazes during key dialogue",
+        "physicsNote": "Tense postures, controlled breathing",
+        "environmentSync": "Light shifts with mood"
       }
     }
+    // ... CONTINUE WITH ${sceneCount - 2} MORE SCENES following the story arc ...
+    // Scene 3: Rising action
+    // Scene 4-${sceneCount - 2}: Development and escalation
+    // Scene ${sceneCount - 1}: Climax
+    // Scene ${sceneCount}: Resolution/CTA
   ],
   "cta": "Call-to-action woven naturally into story (not presentation-style)",
   "totalDuration": ${targetDuration},
@@ -28258,7 +28293,20 @@ LOCATION CONSISTENCY RULES:
    - If battle happened at location in scene 3, show damage in scene 7
    - If time passed, show appropriate changes
 10. Each scene's "location" field must reference a location from the "locations" array
-11. The "styleBible" must be consistent across ALL scenes - this is the visual DNA of the entire production`;
+11. The "styleBible" must be consistent across ALL scenes - this is the visual DNA of the entire production
+
+⚠️ CRITICAL SCENE COUNT REQUIREMENT ⚠️
+You MUST generate EXACTLY ${sceneCount} scenes in the "scenes" array.
+- NOT 1 scene, NOT 2 scenes - EXACTLY ${sceneCount} scenes
+- Each scene should be approximately ${actualSceneDuration} seconds
+- Total duration across all scenes: ${targetDuration} seconds
+- The JSON example above shows 2 scenes as a template - you must generate ${sceneCount - 2} MORE scenes
+- Scene IDs must be sequential: 1, 2, 3, ... ${sceneCount}
+
+YOUR RESPONSE WILL BE REJECTED IF:
+- scenes array has fewer than ${sceneCount} scenes
+- Any single scene is longer than ${actualSceneDuration * 2} seconds
+- Total scenes don't add up to approximately ${targetDuration} seconds`;
 
 
     // Log enrichment data for debugging
@@ -28544,6 +28592,12 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
 
     } else {
       // === SINGLE GENERATION (original flow for shorter content) ===
+      // Calculate dynamic max_tokens based on scene count
+      // Each scene needs ~400-600 tokens, plus ~1500 for characters/metadata
+      const estimatedTokensNeeded = 1500 + (sceneCount * 550);
+      const dynamicMaxTokens = Math.min(16000, Math.max(8000, estimatedTokensNeeded));
+      console.log(`[creationWizardGenerateScript] Token allocation: ${sceneCount} scenes → ${dynamicMaxTokens} max_tokens`);
+
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
@@ -28552,7 +28606,7 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
         ],
         response_format: { type: 'json_object' }, // CRITICAL: Force valid JSON output
         temperature: 0.9, // FIXED: Increased from 0.8 for more creative scripts (was causing repetitive outputs)
-        max_tokens: 6500, // Cinematic production requires more tokens for rich scene structure
+        max_tokens: dynamicMaxTokens, // Dynamic based on scene count (was 6500, caused 1-scene outputs)
         frequency_penalty: 0.3, // Reduce repetitive phrasing in dialogue and descriptions
         presence_penalty: 0.5  // Encourage diverse scene content and character interactions
       });
