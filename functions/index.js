@@ -58098,12 +58098,10 @@ exports.creationWizardGenerateMultitalkVideo = functions
 
       // Generate seed
       const seed = Math.floor(Math.random() * 999999999999);
+      const timestamp = Date.now();
 
-      // Generate unique filename for video output (R2 uses flat structure)
-      const r2FileName = `multitalk_${projectId || uid}_scene${sceneId}_shot${shotIndex}_${Date.now()}_${seed}.mp4`;
-
-      // Create Cloudflare R2 presigned URL for upload
-      // R2 works with the Multitalk worker (Firebase Storage doesn't)
+      // Create Cloudflare R2 client
+      // R2 works reliably with RunPod (Firebase Storage has network issues from RunPod)
       const r2Config = functions.config().r2;
       if (!r2Config?.account_id || !r2Config?.access_key_id || !r2Config?.access_key_secret) {
         throw new functions.https.HttpsError('failed-precondition', 'Cloudflare R2 not configured');
@@ -58118,18 +58116,59 @@ exports.creationWizardGenerateMultitalkVideo = functions
         },
       });
 
+      const bucketName = r2Config.bucket_name || 'multitalk-videos';
+      const r2PublicBase = 'https://pub-45d8d7703ee841ac947bf4df52b73f44.r2.dev';
+
+      // Upload image to R2 (RunPod can't reliably access Firebase Storage)
+      console.log('[creationWizardGenerateMultitalkVideo] Downloading image from Firebase...');
+      const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
+      const imageBuffer = Buffer.from(imageResponse.data);
+      const imageExt = imageUrl.includes('.webp') ? 'webp' : 'png';
+      const r2ImageKey = `multitalk_input_${projectId || uid}_${timestamp}_image.${imageExt}`;
+
+      await r2Client.send(new PutObjectCommand({
+        Bucket: bucketName,
+        Key: r2ImageKey,
+        Body: imageBuffer,
+        ContentType: imageExt === 'webp' ? 'image/webp' : 'image/png',
+      }));
+      const r2ImageUrl = `${r2PublicBase}/${r2ImageKey}`;
+      console.log('[creationWizardGenerateMultitalkVideo] Image uploaded to R2:', r2ImageKey);
+
+      // Upload audio to R2
+      console.log('[creationWizardGenerateMultitalkVideo] Downloading audio from Firebase...');
+      const audioResponse = await axios.get(effectiveAudioUrl, { responseType: 'arraybuffer', timeout: 30000 });
+      const audioBuffer = Buffer.from(audioResponse.data);
+      const r2AudioKey = `multitalk_input_${projectId || uid}_${timestamp}_audio.mp3`;
+
+      await r2Client.send(new PutObjectCommand({
+        Bucket: bucketName,
+        Key: r2AudioKey,
+        Body: audioBuffer,
+        ContentType: 'audio/mpeg',
+      }));
+      const r2AudioUrl = `${r2PublicBase}/${r2AudioKey}`;
+      console.log('[creationWizardGenerateMultitalkVideo] Audio uploaded to R2:', r2AudioKey);
+
+      // Generate unique filename for video output
+      const r2VideoKey = `multitalk_${projectId || uid}_scene${sceneId}_shot${shotIndex}_${timestamp}_${seed}.mp4`;
+
       const putCommand = new PutObjectCommand({
-        Bucket: r2Config.bucket_name || 'multitalk-videos',
-        Key: r2FileName,
+        Bucket: bucketName,
+        Key: r2VideoKey,
         ContentType: 'application/octet-stream',
       });
 
       const uploadUrl = await getSignedUrl(r2Client, putCommand, { expiresIn: 3600 });
 
       // Public URL for accessing the video after upload
-      const publicVideoUrl = `https://pub-45d8d7703ee841ac947bf4df52b73f44.r2.dev/${r2FileName}`;
+      const publicVideoUrl = `${r2PublicBase}/${r2VideoKey}`;
 
-      console.log('[creationWizardGenerateMultitalkVideo] Using R2 upload URL for:', r2FileName);
+      console.log('[creationWizardGenerateMultitalkVideo] R2 URLs ready:', {
+        imageUrl: r2ImageUrl,
+        audioUrl: r2AudioUrl,
+        videoUploadUrl: uploadUrl.substring(0, 80) + '...'
+      });
 
       // Map aspect ratio to Multitalk format
       const aspectRatioMap = {
@@ -58195,9 +58234,9 @@ Tone: Natural, expressive.`;
       // Build RunPod input for Multitalk
       // IMPORTANT: Parameter names must match the Multitalk API exactly
       const runpodInput = {
-        // Core required parameters
-        image_url: imageUrl,
-        audio_url: effectiveAudioUrl,
+        // Core required parameters - use R2 URLs (RunPod can't access Firebase Storage)
+        image_url: r2ImageUrl,
+        audio_url: r2AudioUrl,
         video_upload_url: uploadUrl,   // Handler expects video_upload_url
 
         // Audio timing (format: "M:SS")
@@ -58228,9 +58267,9 @@ Tone: Natural, expressive.`;
       };
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
-        imageUrl: imageUrl.substring(0, 100) + '...',
-        audioUrl: effectiveAudioUrl.substring(0, 100) + '...',
-        uploadUrl: uploadUrl.substring(0, 80) + '...',
+        r2ImageUrl: r2ImageUrl,
+        r2AudioUrl: r2AudioUrl,
+        videoUploadUrl: uploadUrl.substring(0, 80) + '...',
         audioCropEnd: runpodInput.audio_crop_end_time,
         numFrames: runpodInput.num_frames,
         fps: runpodInput.fps,
@@ -58276,7 +58315,7 @@ Tone: Natural, expressive.`;
         sceneId,
         shotIndex,
         videoUrl: publicVideoUrl,  // R2 public URL
-        fileName: r2FileName,
+        fileName: r2VideoKey,
         checkEndpoint: `https://api.runpod.ai/v2/mekewddvpqb0b4/status/${jobId}`
       };
 
