@@ -58133,8 +58133,8 @@ exports.creationWizardGenerateMultitalkVideo = functions
             contentType = ext === 'webp' ? 'image/webp' : 'image/png';
           }
 
-          // Upload to a new public location
-          const publicPath = `multitalk_public/${uid}/${timestamp}_${fileType}.${ext}`;
+          // Upload to a location covered by storage rules (creation-projects has public read)
+          const publicPath = `creation-projects/${uid}/multitalk-temp/${timestamp}_${fileType}.${ext}`;
           const file = bucket.file(publicPath);
 
           await file.save(buffer, {
