@@ -39611,35 +39611,39 @@ const VISUAL_STYLE_DNA = {
     description: 'Hollywood blockbuster look, dramatic but grounded in reality - like Marvel live-action films',
     icon: '🎬',
 
-    // CRITICAL FIX: Added explicit photorealistic keywords to prevent CGI rendering
-    // Must emphasize REAL human beings, NOT 3D characters
-    promptPrefix: 'PHOTOREALISTIC cinematic film still, shot on 35mm film, REAL HUMAN BEING photographed on set, actual living person NOT CGI, Hollywood live-action blockbuster quality like Marvel movies, genuine professional actors with real skin, dramatic cinematography, shot on location with professional movie lighting, Kodak Vision3 film stock aesthetic,',
+    // CRITICAL FIX: Enhanced photorealistic keywords with specific camera/lens language
+    // Must emphasize REAL human beings photographed on professional cinema cameras
+    // Modeled after high-end AI cinema prompts with specific equipment references
+    promptPrefix: 'Realistic cinematic anamorphic shot, PHOTOREALISTIC film still photographed on ARRI Alexa 35 with ARRI Signature Prime lens 50mm, actual REAL HUMAN BEING photographed on set NOT CGI NOT 3D render, genuine professional actor with real skin captured on camera, Kodak Vision3 500T 5219 film stock aesthetic with authentic organic film grain, Hollywood blockbuster production quality like Dune or Blade Runner 2049, professional cinematographer lighting, shallow depth of field with anamorphic oval bokeh and subtle lens flare,',
 
     cameraLanguage: {
-      primary: 'Shot on ARRI Alexa 65 with Panavision anamorphic lenses, 35mm film grain',
+      primary: 'Shot on ARRI Alexa 35 with ARRI Signature Prime 50mm lens, anamorphic characteristics, cinematic shallow DOF',
       alternatives: [
-        'RED V-Raptor with Cooke Anamorphic/i',
-        'Sony Venice with Hawk V-Lite anamorphics',
-        'ARRI Alexa Mini LF with vintage Kowa anamorphics'
+        'ARRI Alexa 65 with Panavision Ultra Vista anamorphic 40mm',
+        'RED V-Raptor with Cooke Anamorphic/i Full Frame 50mm T2.3',
+        'Sony Venice 2 with Zeiss Supreme Prime 65mm',
+        'ARRI Alexa Mini LF with vintage Kowa anamorphic 75mm'
       ],
-      sensorDescription: 'large format sensor, anamorphic lens characteristics, authentic film grain texture',
-      shutterLanguage: 'cinematic motion blur, 24fps aesthetic'
+      focalLengths: ['35mm wide establishing', '50mm standard cinematic', '85mm portrait/closeup', '135mm telephoto compression'],
+      sensorDescription: 'large format 65mm sensor, 2.39:1 anamorphic aspect ratio, authentic organic film grain texture, natural lens aberrations',
+      shutterLanguage: '24fps cinematic motion, 180-degree shutter angle, natural motion blur'
     },
 
     lightingStyle: {
-      approach: 'Dramatic three-point lighting with motivated sources',
-      keywords: ['key light with character', 'atmospheric fill', 'rim light separation', 'practical motivation', 'volumetric atmosphere', 'natural skin-friendly lighting'],
-      avoid: ['flat lighting', 'amateur on-camera flash', 'unmotivated colors', 'CGI lighting']
+      approach: 'Professional three-point Hollywood lighting with motivated practical sources',
+      keywords: ['sculpting key light at 45 degrees', 'soft atmospheric fill preserving shadow detail', 'rim light separation from background', 'practical motivated sources visible in frame', 'volumetric god rays and atmospheric haze', 'natural skin-flattering lighting with subsurface glow'],
+      colorTemperature: 'warm tungsten key 3200K mixed with cool fill 5600K for depth',
+      avoid: ['flat even lighting', 'amateur on-camera flash', 'unmotivated colored gels', 'CGI global illumination', 'harsh unflattering shadows']
     },
 
     textureKeywords: [
-      'natural human skin with visible pores and texture',
-      'real fabric weave and wrinkles',
-      'movie-quality costumes and props with authentic wear',
-      'high-budget production design with real materials',
-      'atmospheric depth and haze',
-      'anamorphic lens characteristics like oval bokeh and subtle flares',
-      'authentic film grain texture'
+      'natural human skin photographed on camera with visible pores fine lines and microtexture',
+      'real fabric with authentic weave wrinkles and wear patterns',
+      'movie-quality wardrobe and props with production designer attention to detail',
+      '$100M+ production design with practical sets and real materials',
+      'atmospheric depth with haze dust motes and volumetric light',
+      'anamorphic lens signature: oval bokeh horizontal flares natural vignetting',
+      'Kodak Vision3 organic film grain not digital noise'
     ],
 
     // CRITICAL FIX: Expanded and strengthened negative keywords
@@ -39674,19 +39678,21 @@ const VISUAL_STYLE_DNA = {
       shadows: 'Deep shadows with detail'
     },
 
-    // CRITICAL FIX: Stronger emphasis on real human skin
+    // CRITICAL FIX: Stronger emphasis on real photographed human skin like Hollywood actors
     skinRendering: {
-      texture: 'REAL human skin photographed on camera, natural visible pores, fine lines, skin texture like Hollywood actors, refined but authentically imperfect',
-      subsurface: 'natural subsurface scattering exactly like photographed human skin',
-      color: 'real human skin tones from actual ethnicity, natural undertones, blood vessel visibility in thin areas, authentic complexion variations',
-      avoid: '3D rendered skin, CGI skin, plastic skin, waxy skin, synthetic skin, porcelain doll skin, airbrushed, smooth perfect skin, video game character skin'
+      texture: 'REAL human skin captured on ARRI cinema camera, natural visible pores and fine lines like professional film photography, skin texture exactly like Hollywood A-list actors photographed on set, refined but authentically imperfect with natural microtexture',
+      subsurface: 'natural subsurface scattering visible in ears and thin skin areas exactly like photographed human skin on film, warm glow from blood beneath skin',
+      color: 'real human skin tones matching actual ethnicity, natural pink/yellow/olive undertones, visible blood vessels in temples and thin areas, authentic complexion variations and natural skin color gradients',
+      imperfections: 'subtle natural skin imperfections like Hollywood actors: fine expression lines, occasional freckles or beauty marks, natural skin texture variation, NOT airbrushed or retouched',
+      avoid: '3D rendered skin, CGI skin, plastic skin, waxy skin, synthetic skin, porcelain doll skin, airbrushed, smooth perfect skin, video game character skin, digital smoothing, beauty filter look'
     },
 
     technicalSpecs: {
-      resolution: '6K cinematic quality with authentic 35mm film grain',
-      sharpness: 'Cinema sharpness, slight organic softness like real film',
-      noise: 'Authentic film grain texture (not digital noise)',
-      dof: 'Shallow cinematic depth of field with natural bokeh'
+      resolution: '6K ARRI RAW quality downscaled, ultra high detail with authentic Kodak Vision3 film grain structure',
+      sharpness: 'Cinema sharpness with slight organic softness like real 35mm film projection, not digitally over-sharpened',
+      noise: 'Authentic Kodak film grain texture with fine organic structure, NOT digital noise or compression artifacts',
+      dof: 'Shallow cinematic depth of field T1.4-T2.0 with natural anamorphic oval bokeh and smooth focus falloff',
+      colorScience: 'ARRI color science with film emulation LUT, accurate highlight rolloff and shadow detail preservation'
     }
   },
 
@@ -39995,29 +40001,41 @@ const VISUAL_STYLE_DNA = {
 
     let prefix = config.promptPrefix;
 
-    // Add camera language
+    // Add camera language - Enhanced with focal length when available
     const camera = this.getCameraLanguage(styleMode);
 
-    // Add skin rendering for human subjects
+    // Add skin rendering for human subjects - Enhanced to include all skin properties
     let skinText = '';
     if (hasHumanSubject && config.skinRendering) {
       const skin = config.skinRendering;
-      skinText = `${skin.texture}, ${skin.color || ''}`.trim();
+      const skinParts = [
+        skin.texture,
+        skin.color,
+        skin.subsurface,
+        skin.imperfections  // New field for natural imperfections
+      ].filter(Boolean);
+      skinText = skinParts.join(', ');
     }
 
-    // Build technical suffix
+    // Build technical suffix - Enhanced with color science
     const tech = config.technicalSpecs || {};
     const suffix = [
       tech.resolution || '4K quality',
       tech.sharpness || 'sharp focus',
+      tech.dof || '',
+      tech.colorScience || '',  // New field for color science
       config.colorGrading?.approach || ''
     ].filter(Boolean).join(', ');
 
     // Get negative prompt
     const negative = this.getNegativePrompt(styleMode);
 
-    // Get lighting keywords
-    const lighting = this.getLightingKeywords(styleMode).join(', ');
+    // Get lighting keywords - Enhanced with color temperature when available
+    const lightingKeywords = this.getLightingKeywords(styleMode);
+    const colorTemp = config.lightingStyle?.colorTemperature;
+    const lighting = colorTemp
+      ? [...lightingKeywords, colorTemp].join(', ')
+      : lightingKeywords.join(', ');
 
     return {
       prefix,
