@@ -25211,12 +25211,21 @@ exports.creationWizardGenerateScript = functions
         hookCritical: true
       },
       'long-form': {
-        name: 'Long-Form (5-20 min)',
+        name: 'Long-Form (5-10 min)',
         platforms: ['YouTube', 'Podcast video', 'Course content'],
         adaptations: 'Deep exploration. Multiple sub-sections. Varied pacing. Retention strategies throughout.',
         pacingMultiplier: 0.8,
         sceneCount: '10-25 scenes',
         hookCritical: true
+      },
+      'extended-form': {
+        name: 'Extended-Form (10-20 min)',
+        platforms: ['YouTube Long-form', 'Documentary', 'Course content', 'Film'],
+        adaptations: 'Epic storytelling. Uses chunked generation for seamless long narratives. Multiple acts. Deep character development.',
+        pacingMultiplier: 0.75,
+        sceneCount: '25-50 scenes (chunked)',
+        hookCritical: true,
+        chunkedGeneration: true
       },
       'episodic': {
         name: 'Episodic (Series)',
@@ -26729,6 +26738,14 @@ exports.creationWizardGenerateScript = functions
         targetSceneDuration: 40,
         minShotsPerScene: 4,
         maxShotsPerScene: 8
+      },
+      'extended-form': {
+        // 10-20 minute long-form content - uses chunked generation
+        minSceneDuration: 30,
+        maxSceneDuration: 50,
+        targetSceneDuration: 40,
+        minShotsPerScene: 3,
+        maxShotsPerScene: 8
       }
     };
 
@@ -26778,7 +26795,23 @@ exports.creationWizardGenerateScript = functions
     );
 
     // Step 2: Calculate number of scenes for total video duration
-    const sceneCount = Math.max(2, Math.min(12, Math.round(targetDuration / sceneDuration)));
+    // Scene limits based on content format (extended-form supports chunked generation for 10+ min videos)
+    const sceneCountLimits = {
+      'short-form': { min: 2, max: 8 },      // Up to ~2 minutes
+      'medium-form': { min: 2, max: 15 },    // Up to ~4 minutes
+      'long-form': { min: 4, max: 25 },      // Up to ~8 minutes
+      'extended-form': { min: 6, max: 50 },  // Up to ~20 minutes (uses chunked generation)
+      'episodic': { min: 4, max: 20 }        // Per episode
+    };
+    const limits = sceneCountLimits[contentFormat] || sceneCountLimits['medium-form'];
+    const rawSceneCount = Math.round(targetDuration / sceneDuration);
+    const sceneCount = Math.max(limits.min, Math.min(limits.max, rawSceneCount));
+
+    // Determine if chunked generation is needed (for 20+ scenes)
+    const CHUNK_THRESHOLD = 20;
+    const needsChunkedGeneration = sceneCount > CHUNK_THRESHOLD;
+    const chunkCount = needsChunkedGeneration ? Math.ceil(sceneCount / CHUNK_THRESHOLD) : 1;
+    const scenesPerChunk = needsChunkedGeneration ? Math.ceil(sceneCount / chunkCount) : sceneCount;
 
     // Step 3: Recalculate actual scene duration to fit exactly
     const actualSceneDuration = Math.round(targetDuration / sceneCount);
@@ -26809,10 +26842,11 @@ exports.creationWizardGenerateScript = functions
 
     // Log Hollywood scene math
     console.log(`[creationWizardGenerateScript] Hollywood Scene Math:
-      Total Duration: ${targetDuration}s
+      Total Duration: ${targetDuration}s (${Math.round(targetDuration / 60)} minutes)
       Content Format: ${contentFormat}
       Scene Duration: ${actualSceneDuration}s (target: ${sceneDuration}s)
       Number of Scenes: ${sceneCount}
+      Chunked Generation: ${needsChunkedGeneration ? `YES (${chunkCount} chunks × ${scenesPerChunk} scenes)` : 'NO (single generation)'}
       Shots per Scene: ${actualShotsPerScene} (${clipDuration}s clips)
       Shot Duration: ${shotDuration}s
       Narration per Scene: ${narrationDuration}s (~${wordsPerScene} words)`);
@@ -27927,6 +27961,143 @@ LOCATION CONSISTENCY RULES:
       });
     }
 
+    // === CHUNKED GENERATION HELPER FUNCTION ===
+    // Generates a chunk of scenes with narrative context from previous chunks
+    async function generateScriptChunk(chunkNumber, totalChunks, scenesInChunk, startSceneNumber, previousScenesContext) {
+      const isFirstChunk = chunkNumber === 1;
+      const isLastChunk = chunkNumber === totalChunks;
+
+      // Build chunk-specific prompt additions
+      let chunkInstructions = '';
+      if (totalChunks > 1) {
+        chunkInstructions = `
+
+=== CHUNKED GENERATION: PART ${chunkNumber} OF ${totalChunks} ===
+You are generating scenes ${startSceneNumber} to ${startSceneNumber + scenesInChunk - 1} of a ${sceneCount}-scene production.
+Generate EXACTLY ${scenesInChunk} scenes in this chunk.
+
+`;
+        if (isFirstChunk) {
+          chunkInstructions += `This is the FIRST CHUNK. Establish:
+- All characters with complete visual descriptions and voice profiles
+- The world/setting with full location details
+- The story hook and initial conflict
+- The styleBible that will be consistent across ALL chunks
+- Scene numbers should start at 1
+
+`;
+        } else {
+          chunkInstructions += `This is a CONTINUATION CHUNK. You MUST:
+- Maintain EXACT character names, appearances, and voice profiles from previous chunks
+- Continue the story naturally from where it left off
+- Keep the same styleBible, locations, and visual approach
+- Scene numbers should start at ${startSceneNumber}
+- Reference the same locations established earlier (may add new ones if story requires)
+
+=== PREVIOUS STORY CONTEXT ===
+${previousScenesContext}
+=== END PREVIOUS CONTEXT ===
+
+Continue the story seamlessly. Characters should remember previous events.
+`;
+        }
+
+        if (isLastChunk) {
+          chunkInstructions += `This is the FINAL CHUNK. You MUST:
+- Bring the story to a satisfying conclusion
+- Resolve character arcs established in earlier chunks
+- Include the climax and resolution
+- End with impactful CTA woven into the conclusion
+`;
+        } else {
+          chunkInstructions += `This is a MIDDLE CHUNK. You MUST:
+- Continue building tension and story development
+- Keep scenes engaging with rising action
+- End this chunk at a natural story beat (but NOT the climax)
+- Leave threads for the next chunk to continue
+`;
+        }
+      }
+
+      // Modify user prompt with chunk instructions
+      const chunkUserPrompt = chunkInstructions ? userPrompt.replace(
+        'YOUR TASK:',
+        chunkInstructions + 'YOUR TASK:'
+      ).replace(
+        `"sceneCount": ${sceneCount}`,
+        `"sceneCount": ${scenesInChunk}`
+      ).replace(
+        `Number of Scenes: ${sceneCount}`,
+        `Number of Scenes: ${scenesInChunk} (chunk ${chunkNumber}/${totalChunks})`
+      ) : userPrompt;
+
+      // Adjust max_tokens based on chunk size
+      const tokensPerScene = 350;
+      const baseTokens = 2500; // For characters, metadata, etc.
+      const chunkMaxTokens = Math.min(8000, baseTokens + (scenesInChunk * tokensPerScene));
+
+      console.log(`[creationWizardGenerateScript] Generating chunk ${chunkNumber}/${totalChunks}: ${scenesInChunk} scenes (tokens: ${chunkMaxTokens})`);
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: chunkUserPrompt }
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.9,
+        max_tokens: chunkMaxTokens,
+        frequency_penalty: 0.3,
+        presence_penalty: 0.5
+      });
+
+      const responseText = completion.choices[0].message.content.trim();
+      const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+      try {
+        return JSON.parse(cleanJson);
+      } catch (parseError) {
+        console.error(`[creationWizardGenerateScript] Chunk ${chunkNumber} parse error:`, parseError);
+        throw new functions.https.HttpsError('internal', `Failed to parse chunk ${chunkNumber} response`);
+      }
+    }
+
+    // Helper to create narrative handoff summary from previous scenes
+    function createNarrativeHandoff(previousChunks, characters, locations) {
+      const allPreviousScenes = previousChunks.flatMap(chunk => chunk.scenes || []);
+
+      // Summarize character states
+      const characterStates = characters.map(char => {
+        const charScenes = allPreviousScenes.filter(s =>
+          s.charactersInScene?.some(c => c === char.name || c.name === char.name)
+        );
+        const lastScene = charScenes[charScenes.length - 1];
+        return `- ${char.name}: Last seen in scene ${lastScene?.id || '?'} (${lastScene?.mood || 'neutral'} mood)`;
+      }).join('\n');
+
+      // Summarize key plot points from last few scenes
+      const recentScenes = allPreviousScenes.slice(-5);
+      const plotSummary = recentScenes.map(s =>
+        `Scene ${s.id}: ${s.narration?.substring(0, 100) || s.visualPrompt?.substring(0, 100) || 'Visual scene'}...`
+      ).join('\n');
+
+      // List established locations
+      const locationList = locations.map(loc => `- ${loc.name}: ${loc.description?.substring(0, 80) || loc.name}...`).join('\n');
+
+      return `
+CHARACTERS (maintain exactly):
+${characterStates}
+
+RECENT PLOT EVENTS:
+${plotSummary}
+
+ESTABLISHED LOCATIONS:
+${locationList}
+
+STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.round((allPreviousScenes.length / sceneCount) * 100)}% complete.
+`;
+    }
+
     // Call GPT-4o for script generation
     // Note: max_tokens increased to 6500 for cinematic production with:
     // - Full audioLayer structure per scene
@@ -27941,33 +28112,134 @@ LOCATION CONSISTENCY RULES:
     console.log(`[creationWizardGenerateScript] Starting GPT-4o call at ${new Date().toISOString()}`);
 
     const startTime = Date.now();
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' }, // CRITICAL: Force valid JSON output
-      temperature: 0.9, // FIXED: Increased from 0.8 for more creative scripts (was causing repetitive outputs)
-      max_tokens: 6500, // Cinematic production requires more tokens for rich scene structure
-      frequency_penalty: 0.3, // Reduce repetitive phrasing in dialogue and descriptions
-      presence_penalty: 0.5  // Encourage diverse scene content and character interactions
-    });
-
-    const elapsedTime = Date.now() - startTime;
-    console.log(`[creationWizardGenerateScript] GPT-4o completed in ${elapsedTime}ms (${(elapsedTime / 1000).toFixed(1)}s)`);
-
-    // Parse the response
-    const responseText = completion.choices[0].message.content.trim();
-    const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
     let script;
-    try {
-      script = JSON.parse(cleanJson);
-    } catch (parseError) {
-      console.error('[creationWizardGenerateScript] JSON parse error:', parseError);
-      console.error('[creationWizardGenerateScript] Raw response:', responseText);
-      throw new functions.https.HttpsError('internal', 'Failed to parse script response');
+
+    // === CHUNKED GENERATION FOR LONG-FORM CONTENT ===
+    if (needsChunkedGeneration) {
+      console.log(`[creationWizardGenerateScript] 🎬 CHUNKED GENERATION: ${chunkCount} chunks × ~${scenesPerChunk} scenes for ${sceneCount} total scenes`);
+
+      const chunks = [];
+      let currentSceneNumber = 1;
+
+      for (let chunkNum = 1; chunkNum <= chunkCount; chunkNum++) {
+        // Calculate scenes for this chunk (last chunk may have fewer)
+        const remainingScenes = sceneCount - (currentSceneNumber - 1);
+        const scenesThisChunk = chunkNum === chunkCount
+          ? remainingScenes
+          : Math.min(scenesPerChunk, remainingScenes);
+
+        // Build narrative handoff context from previous chunks
+        let previousContext = '';
+        if (chunkNum > 1 && chunks.length > 0) {
+          const firstChunk = chunks[0];
+          previousContext = createNarrativeHandoff(
+            chunks,
+            firstChunk.characters || [],
+            firstChunk.locations || []
+          );
+        }
+
+        console.log(`[creationWizardGenerateScript] Generating chunk ${chunkNum}/${chunkCount}: scenes ${currentSceneNumber}-${currentSceneNumber + scenesThisChunk - 1}`);
+
+        const chunkResult = await generateScriptChunk(
+          chunkNum,
+          chunkCount,
+          scenesThisChunk,
+          currentSceneNumber,
+          previousContext
+        );
+
+        // Validate chunk
+        if (!chunkResult.scenes || chunkResult.scenes.length === 0) {
+          throw new functions.https.HttpsError('internal', `Chunk ${chunkNum} generated no scenes`);
+        }
+
+        // Renumber scenes to ensure sequential IDs across chunks
+        chunkResult.scenes = chunkResult.scenes.map((scene, idx) => ({
+          ...scene,
+          id: currentSceneNumber + idx
+        }));
+
+        chunks.push(chunkResult);
+        currentSceneNumber += chunkResult.scenes.length;
+
+        console.log(`[creationWizardGenerateScript] Chunk ${chunkNum} complete: ${chunkResult.scenes.length} scenes generated`);
+      }
+
+      // Merge all chunks into single script
+      const firstChunk = chunks[0];
+      script = {
+        title: firstChunk.title,
+        hook: firstChunk.hook,
+        characters: firstChunk.characters || [], // Characters from first chunk are canonical
+        locations: [], // Merge locations from all chunks
+        scenes: [],
+        cta: chunks[chunks.length - 1].cta || firstChunk.cta, // CTA from last chunk
+        totalDuration: targetDuration,
+        audioDesign: firstChunk.audioDesign,
+        metadata: firstChunk.metadata,
+        storyArchitecture: firstChunk.storyArchitecture,
+        styleBible: firstChunk.styleBible,
+        timing: {
+          sceneCount: sceneCount,
+          avgSceneDuration: actualSceneDuration,
+          pacing: pacing,
+          clipDuration: clipDuration,
+          shotsPerScene: actualShotsPerScene,
+          contentFormat: contentFormat,
+          architecture: 'hollywood',
+          chunkedGeneration: true,
+          chunkCount: chunkCount
+        },
+        productionMode: productionMode
+      };
+
+      // Merge scenes from all chunks
+      for (const chunk of chunks) {
+        script.scenes.push(...(chunk.scenes || []));
+
+        // Merge locations (deduplicate by name)
+        if (chunk.locations) {
+          for (const loc of chunk.locations) {
+            if (!script.locations.find(l => l.name === loc.name)) {
+              script.locations.push(loc);
+            }
+          }
+        }
+      }
+
+      const totalElapsed = Date.now() - startTime;
+      console.log(`[creationWizardGenerateScript] 🎬 CHUNKED GENERATION COMPLETE: ${script.scenes.length} scenes in ${(totalElapsed / 1000).toFixed(1)}s`);
+
+    } else {
+      // === SINGLE GENERATION (original flow for shorter content) ===
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        response_format: { type: 'json_object' }, // CRITICAL: Force valid JSON output
+        temperature: 0.9, // FIXED: Increased from 0.8 for more creative scripts (was causing repetitive outputs)
+        max_tokens: 6500, // Cinematic production requires more tokens for rich scene structure
+        frequency_penalty: 0.3, // Reduce repetitive phrasing in dialogue and descriptions
+        presence_penalty: 0.5  // Encourage diverse scene content and character interactions
+      });
+
+      const elapsedTime = Date.now() - startTime;
+      console.log(`[creationWizardGenerateScript] GPT-4o completed in ${elapsedTime}ms (${(elapsedTime / 1000).toFixed(1)}s)`);
+
+      // Parse the response
+      const responseText = completion.choices[0].message.content.trim();
+      const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+      try {
+        script = JSON.parse(cleanJson);
+      } catch (parseError) {
+        console.error('[creationWizardGenerateScript] JSON parse error:', parseError);
+        console.error('[creationWizardGenerateScript] Raw response:', responseText);
+        throw new functions.https.HttpsError('internal', 'Failed to parse script response');
+      }
     }
 
     // Validate and normalize the script structure
