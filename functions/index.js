@@ -58392,15 +58392,18 @@ exports.creationWizardCheckMultitalkStatus = functions.https.onCall(async (data,
 
     if (result.status === 'COMPLETED') {
       // Check if the handler returned an error status in output
-      // RunPod marks job as COMPLETED even when handler returns {status: 500, message: "error"}
-      if (result.output?.status === 500 || result.output?.status === 400) {
+      // RunPod marks job as COMPLETED even when handler returns errors
+      // Handle any non-200 status code as an error (e.g., 221, 400, 500, etc.)
+      const outputStatus = result.output?.status;
+      if (outputStatus && outputStatus !== 200) {
         mappedStatus = 'FAILED';
-        errorMsg = result.output?.message || 'Multitalk worker returned an error';
+        errorMsg = result.output?.message || `Multitalk worker error (code: ${outputStatus})`;
         console.error('[creationWizardCheckMultitalkStatus] Worker error:', {
-          status: result.output?.status,
-          message: result.output?.message
+          status: outputStatus,
+          message: result.output?.message,
+          fullOutput: JSON.stringify(result.output).substring(0, 500)
         });
-      } else if (result.output?.status === 200) {
+      } else if (outputStatus === 200) {
         // Explicit success from handler
         mappedStatus = 'COMPLETED';
 
