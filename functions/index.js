@@ -28278,7 +28278,16 @@ Continue the story seamlessly. Characters should remember previous events.
       const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
       try {
-        return JSON.parse(cleanJson);
+        const parsed = JSON.parse(cleanJson);
+        // Return both data and token usage
+        return {
+          data: parsed,
+          usage: {
+            promptTokens: completion.usage?.prompt_tokens || 0,
+            completionTokens: completion.usage?.completion_tokens || 0,
+            totalTokens: completion.usage?.total_tokens || 0
+          }
+        };
       } catch (parseError) {
         console.error(`[creationWizardGenerateScript] Chunk ${chunkNumber} parse error:`, parseError);
         throw new functions.https.HttpsError('internal', `Failed to parse chunk ${chunkNumber} response`);
@@ -28336,6 +28345,8 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
 
     const startTime = Date.now();
     let script;
+    // Track token usage across both chunked and single generation paths
+    let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
     // === CHUNKED GENERATION FOR LONG-FORM CONTENT ===
     if (needsChunkedGeneration) {
@@ -28364,13 +28375,19 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
 
         console.log(`[creationWizardGenerateScript] Generating chunk ${chunkNum}/${chunkCount}: scenes ${currentSceneNumber}-${currentSceneNumber + scenesThisChunk - 1}`);
 
-        const chunkResult = await generateScriptChunk(
+        const chunkResponse = await generateScriptChunk(
           chunkNum,
           chunkCount,
           scenesThisChunk,
           currentSceneNumber,
           previousContext
         );
+
+        // Extract data and accumulate token usage
+        const chunkResult = chunkResponse.data;
+        tokenUsage.promptTokens += chunkResponse.usage?.promptTokens || 0;
+        tokenUsage.completionTokens += chunkResponse.usage?.completionTokens || 0;
+        tokenUsage.totalTokens += chunkResponse.usage?.totalTokens || 0;
 
         // Validate chunk
         if (!chunkResult.scenes || chunkResult.scenes.length === 0) {
@@ -28463,6 +28480,11 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
         console.error('[creationWizardGenerateScript] Raw response:', responseText);
         throw new functions.https.HttpsError('internal', 'Failed to parse script response');
       }
+
+      // Store token usage from single generation
+      tokenUsage.promptTokens = completion.usage?.prompt_tokens || 0;
+      tokenUsage.completionTokens = completion.usage?.completion_tokens || 0;
+      tokenUsage.totalTokens = completion.usage?.total_tokens || 0;
     }
 
     // Validate and normalize the script structure
@@ -28632,8 +28654,8 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
       userId: uid,
       type: 'script_generation',
       model: 'gpt-4o',
-      inputTokens: completion.usage?.prompt_tokens || 0,
-      outputTokens: completion.usage?.completion_tokens || 0,
+      inputTokens: tokenUsage.promptTokens,
+      outputTokens: tokenUsage.completionTokens,
       projectId: projectId || null,
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
@@ -28641,11 +28663,7 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
     return {
       success: true,
       script,
-      usage: {
-        promptTokens: completion.usage?.prompt_tokens || 0,
-        completionTokens: completion.usage?.completion_tokens || 0,
-        totalTokens: completion.usage?.total_tokens || 0
-      }
+      usage: tokenUsage
     };
 
   } catch (error) {
