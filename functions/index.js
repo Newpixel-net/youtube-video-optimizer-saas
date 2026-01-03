@@ -25,7 +25,7 @@ const { fal } = require('@fal-ai/client');
 const sharp = require('sharp');
 
 // Cloudflare R2 (S3-compatible) for Multitalk video uploads
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 // ==============================================
@@ -58132,7 +58132,11 @@ exports.creationWizardGenerateMultitalkVideo = functions
         Body: imageBuffer,
         ContentType: imageExt === 'webp' ? 'image/webp' : 'image/png',
       }));
-      const r2ImageUrl = `${r2PublicBase}/${r2ImageKey}`;
+      // Generate presigned GET URL for image (no public access needed)
+      const r2ImageUrl = await getSignedUrl(r2Client, new GetObjectCommand({
+        Bucket: bucketName,
+        Key: r2ImageKey,
+      }), { expiresIn: 3600 });
       console.log('[creationWizardGenerateMultitalkVideo] Image uploaded to R2:', r2ImageKey);
 
       // Upload audio to R2
@@ -58147,26 +58151,30 @@ exports.creationWizardGenerateMultitalkVideo = functions
         Body: audioBuffer,
         ContentType: 'audio/mpeg',
       }));
-      const r2AudioUrl = `${r2PublicBase}/${r2AudioKey}`;
+      // Generate presigned GET URL for audio (no public access needed)
+      const r2AudioUrl = await getSignedUrl(r2Client, new GetObjectCommand({
+        Bucket: bucketName,
+        Key: r2AudioKey,
+      }), { expiresIn: 3600 });
       console.log('[creationWizardGenerateMultitalkVideo] Audio uploaded to R2:', r2AudioKey);
 
       // Generate unique filename for video output
       const r2VideoKey = `multitalk_${projectId || uid}_scene${sceneId}_shot${shotIndex}_${timestamp}_${seed}.mp4`;
 
-      const putCommand = new PutObjectCommand({
+      // Presigned PUT URL for video upload
+      const uploadUrl = await getSignedUrl(r2Client, new PutObjectCommand({
         Bucket: bucketName,
         Key: r2VideoKey,
         ContentType: 'application/octet-stream',
-      });
+      }), { expiresIn: 3600 });
 
-      const uploadUrl = await getSignedUrl(r2Client, putCommand, { expiresIn: 3600 });
-
-      // Public URL for accessing the video after upload
+      // For video playback, we'll need public access OR generate presigned URL when checking status
+      // For now, use public URL format (user can enable public access for output videos only)
       const publicVideoUrl = `${r2PublicBase}/${r2VideoKey}`;
 
-      console.log('[creationWizardGenerateMultitalkVideo] R2 URLs ready:', {
-        imageUrl: r2ImageUrl,
-        audioUrl: r2AudioUrl,
+      console.log('[creationWizardGenerateMultitalkVideo] R2 URLs ready (presigned):', {
+        imageUrl: r2ImageUrl.substring(0, 80) + '...',
+        audioUrl: r2AudioUrl.substring(0, 80) + '...',
         videoUploadUrl: uploadUrl.substring(0, 80) + '...'
       });
 
