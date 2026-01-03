@@ -58248,7 +58248,7 @@ Tone: Natural, expressive.`;
 
         // Video settings
         aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
-        scale_to_length: 1024,    // Match working Python test (1024, not 1280)
+        scale_to_length: 1280,    // Match working example (1280)
         scale_to_side: 'None',  // Must be "None" string to match workflow
         fps: fps,
         num_frames: numFrames,
