@@ -24,10 +24,6 @@ const { GoogleGenAI } = require('@google/genai');
 const { fal } = require('@fal-ai/client');
 const sharp = require('sharp');
 
-// Cloudflare R2 (S3-compatible) for Multitalk video uploads
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-
 // ==============================================
 // IMAGE DIMENSION ENFORCEMENT
 // Ensures consistent exact pixel dimensions for all aspect ratios
@@ -58096,85 +58092,86 @@ exports.creationWizardGenerateMultitalkVideo = functions
         audioUrl: effectiveAudioUrl?.substring(0, 100)
       });
 
-      // Generate seed
+      // Generate seed and timestamp
       const seed = Math.floor(Math.random() * 999999999999);
       const timestamp = Date.now();
 
-      // Create Cloudflare R2 client
-      // R2 works reliably with RunPod (Firebase Storage has network issues from RunPod)
-      const r2Config = functions.config().r2;
-      if (!r2Config?.account_id || !r2Config?.access_key_id || !r2Config?.access_key_secret) {
-        throw new functions.https.HttpsError('failed-precondition', 'Cloudflare R2 not configured');
-      }
+      const bucket = admin.storage().bucket();
 
-      const r2Client = new S3Client({
-        region: 'auto',
-        endpoint: `https://${r2Config.account_id}.r2.cloudflarestorage.com`,
-        credentials: {
-          accessKeyId: r2Config.access_key_id,
-          secretAccessKey: r2Config.access_key_secret,
-        },
+      // Helper: Convert any Firebase URL to public format accessible from RunPod
+      // Token-based URLs (firebasestorage.googleapis.com?token=...) don't work from server environments
+      // We need to re-upload and make public to get storage.googleapis.com URLs
+      const ensurePublicUrl = async (url, fileType) => {
+        if (!url) return url;
+
+        // Already a public GCS URL (storage.googleapis.com without token) - return as-is
+        if (url.includes('storage.googleapis.com/') && !url.includes('firebasestorage.') && !url.includes('token=')) {
+          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} already public:`, url.substring(0, 80));
+          return url;
+        }
+
+        // For any Firebase URL (token-based or otherwise), convert to public:
+        // 1. Download the file
+        // 2. Re-upload to a public location
+        // 3. Make it public
+        // 4. Return the public URL
+        console.log(`[creationWizardGenerateMultitalkVideo] Converting ${fileType} to public URL...`);
+
+        try {
+          // Download the file
+          const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+          const buffer = Buffer.from(response.data);
+
+          // Determine extension and content type
+          let ext = 'bin';
+          let contentType = 'application/octet-stream';
+          if (fileType === 'audio') {
+            ext = 'mp3';
+            contentType = 'audio/mpeg';
+          } else if (fileType === 'image') {
+            ext = url.includes('.webp') ? 'webp' : 'png';
+            contentType = ext === 'webp' ? 'image/webp' : 'image/png';
+          }
+
+          // Upload to a new public location
+          const publicPath = `multitalk_public/${uid}/${timestamp}_${fileType}.${ext}`;
+          const file = bucket.file(publicPath);
+
+          await file.save(buffer, {
+            metadata: { contentType }
+          });
+
+          await file.makePublic();
+
+          const publicUrl = `https://storage.googleapis.com/${bucket.name}/${publicPath}`;
+          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} converted to public:`, publicUrl);
+          return publicUrl;
+
+        } catch (conversionError) {
+          console.error(`[creationWizardGenerateMultitalkVideo] Failed to convert ${fileType}:`, conversionError.message);
+          throw new functions.https.HttpsError('internal', `Failed to prepare ${fileType} for RunPod access: ${conversionError.message}`);
+        }
+      };
+
+      // Ensure both image and audio are publicly accessible from RunPod
+      const publicImageUrl = await ensurePublicUrl(imageUrl, 'image');
+      const publicAudioUrl = await ensurePublicUrl(effectiveAudioUrl, 'audio');
+
+      // Generate unique filename for video output in Firebase Storage
+      const videoFileName = `creation-projects/${projectId || uid}/multitalk-videos/scene_${sceneId}_shot_${shotIndex}_${timestamp}_${seed}.mp4`;
+      const videoFile = bucket.file(videoFileName);
+
+      // Create signed URL for video upload (RunPod will upload the generated video here)
+      const [uploadUrl] = await videoFile.getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 60 * 60 * 1000, // 60 minutes
+        contentType: 'video/mp4',
       });
 
-      const bucketName = r2Config.bucket_name || 'multitalk-videos';
-      const r2PublicBase = 'https://pub-45d8d7703ee841ac947bf4df52b73f44.r2.dev';
-
-      // Upload image to R2 (RunPod can't reliably access Firebase Storage)
-      console.log('[creationWizardGenerateMultitalkVideo] Downloading image from Firebase...');
-      const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
-      const imageBuffer = Buffer.from(imageResponse.data);
-      const imageExt = imageUrl.includes('.webp') ? 'webp' : 'png';
-      const r2ImageKey = `multitalk_input_${projectId || uid}_${timestamp}_image.${imageExt}`;
-
-      await r2Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: r2ImageKey,
-        Body: imageBuffer,
-        ContentType: imageExt === 'webp' ? 'image/webp' : 'image/png',
-      }));
-      // Generate presigned GET URL for image (no public access needed)
-      const r2ImageUrl = await getSignedUrl(r2Client, new GetObjectCommand({
-        Bucket: bucketName,
-        Key: r2ImageKey,
-      }), { expiresIn: 3600 });
-      console.log('[creationWizardGenerateMultitalkVideo] Image uploaded to R2:', r2ImageKey);
-
-      // Upload audio to R2
-      console.log('[creationWizardGenerateMultitalkVideo] Downloading audio from Firebase...');
-      const audioResponse = await axios.get(effectiveAudioUrl, { responseType: 'arraybuffer', timeout: 30000 });
-      const audioBuffer = Buffer.from(audioResponse.data);
-      const r2AudioKey = `multitalk_input_${projectId || uid}_${timestamp}_audio.mp3`;
-
-      await r2Client.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: r2AudioKey,
-        Body: audioBuffer,
-        ContentType: 'audio/mpeg',
-      }));
-      // Generate presigned GET URL for audio (no public access needed)
-      const r2AudioUrl = await getSignedUrl(r2Client, new GetObjectCommand({
-        Bucket: bucketName,
-        Key: r2AudioKey,
-      }), { expiresIn: 3600 });
-      console.log('[creationWizardGenerateMultitalkVideo] Audio uploaded to R2:', r2AudioKey);
-
-      // Generate unique filename for video output
-      const r2VideoKey = `multitalk_${projectId || uid}_scene${sceneId}_shot${shotIndex}_${timestamp}_${seed}.mp4`;
-
-      // Presigned PUT URL for video upload
-      const uploadUrl = await getSignedUrl(r2Client, new PutObjectCommand({
-        Bucket: bucketName,
-        Key: r2VideoKey,
-        ContentType: 'application/octet-stream',
-      }), { expiresIn: 3600 });
-
-      // For video playback, we'll need public access OR generate presigned URL when checking status
-      // For now, use public URL format (user can enable public access for output videos only)
-      const publicVideoUrl = `${r2PublicBase}/${r2VideoKey}`;
-
-      console.log('[creationWizardGenerateMultitalkVideo] R2 URLs ready (presigned):', {
-        imageUrl: r2ImageUrl.substring(0, 80) + '...',
-        audioUrl: r2AudioUrl.substring(0, 80) + '...',
+      console.log('[creationWizardGenerateMultitalkVideo] Firebase URLs ready:', {
+        imageUrl: publicImageUrl.substring(0, 80),
+        audioUrl: publicAudioUrl.substring(0, 80),
         videoUploadUrl: uploadUrl.substring(0, 80) + '...'
       });
 
@@ -58242,10 +58239,10 @@ Tone: Natural, expressive.`;
       // Build RunPod input for Multitalk
       // IMPORTANT: Parameter names must match the Multitalk API exactly
       const runpodInput = {
-        // Core required parameters - use R2 URLs (RunPod can't access Firebase Storage)
-        image_url: r2ImageUrl,
-        audio_url: r2AudioUrl,
-        video_upload_url: uploadUrl,   // Handler expects video_upload_url
+        // Core required parameters - use public Firebase Storage URLs
+        image_url: publicImageUrl,
+        audio_url: publicAudioUrl,
+        video_upload_url: uploadUrl,   // Handler expects video_upload_url (signed write URL)
 
         // Audio timing (format: "M:SS")
         audio_crop_start_time: '0:00',
@@ -58275,8 +58272,8 @@ Tone: Natural, expressive.`;
       };
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
-        r2ImageUrl: r2ImageUrl,
-        r2AudioUrl: r2AudioUrl,
+        imageUrl: publicImageUrl,
+        audioUrl: publicAudioUrl,
         videoUploadUrl: uploadUrl.substring(0, 80) + '...',
         audioCropEnd: runpodInput.audio_crop_end_time,
         numFrames: runpodInput.num_frames,
@@ -58322,8 +58319,8 @@ Tone: Natural, expressive.`;
         status,
         sceneId,
         shotIndex,
-        videoUrl: publicVideoUrl,  // R2 public URL
-        fileName: r2VideoKey,
+        videoUrl: `https://storage.googleapis.com/${bucket.name}/${videoFileName}`,  // Firebase Storage public URL
+        fileName: videoFileName,  // Firebase Storage path for status check
         checkEndpoint: `https://api.runpod.ai/v2/mekewddvpqb0b4/status/${jobId}`
       };
 
@@ -58339,7 +58336,7 @@ Tone: Natural, expressive.`;
  */
 exports.creationWizardCheckMultitalkStatus = functions.https.onCall(async (data, context) => {
   await verifyAuth(context);
-  const { jobId, videoKey } = data;  // videoKey is the R2 file key from generate function
+  const { jobId, videoKey } = data;  // videoKey is the Firebase Storage file path from generate function
 
   if (!jobId) {
     throw new functions.https.HttpsError('invalid-argument', 'Job ID is required');
@@ -58381,48 +58378,58 @@ exports.creationWizardCheckMultitalkStatus = functions.https.onCall(async (data,
         // Explicit success from handler
         mappedStatus = 'COMPLETED';
 
-        // Generate presigned GET URL for video playback (no public access needed)
+        // Make the video file public and return public URL
         if (videoKey) {
-          const r2Config = functions.config().r2;
-          if (r2Config?.account_id && r2Config?.access_key_id && r2Config?.access_key_secret) {
-            const r2Client = new S3Client({
-              region: 'auto',
-              endpoint: `https://${r2Config.account_id}.r2.cloudflarestorage.com`,
-              credentials: {
-                accessKeyId: r2Config.access_key_id,
-                secretAccessKey: r2Config.access_key_secret,
-              },
-            });
-            const bucketName = r2Config.bucket_name || 'multitalk-videos';
-            videoUrl = await getSignedUrl(r2Client, new GetObjectCommand({
-              Bucket: bucketName,
-              Key: videoKey,
-            }), { expiresIn: 3600 });  // 1 hour expiry
-            console.log('[creationWizardCheckMultitalkStatus] Generated presigned video URL');
+          try {
+            const bucket = admin.storage().bucket();
+            const file = bucket.file(videoKey);
+            await file.makePublic();
+            videoUrl = `https://storage.googleapis.com/${bucket.name}/${videoKey}`;
+            console.log('[creationWizardCheckMultitalkStatus] Video made public:', videoUrl);
+          } catch (publicError) {
+            console.error('[creationWizardCheckMultitalkStatus] Failed to make video public:', publicError.message);
+            // Fallback: try to generate a signed read URL
+            try {
+              const bucket = admin.storage().bucket();
+              const [signedUrl] = await bucket.file(videoKey).getSignedUrl({
+                version: 'v4',
+                action: 'read',
+                expires: Date.now() + 3600000  // 1 hour
+              });
+              videoUrl = signedUrl;
+              console.log('[creationWizardCheckMultitalkStatus] Generated signed URL as fallback');
+            } catch (signError) {
+              console.error('[creationWizardCheckMultitalkStatus] Failed to generate signed URL:', signError.message);
+            }
           }
         }
       } else {
         // Legacy handling - assume success if no explicit status
         mappedStatus = 'COMPLETED';
 
-        // Generate presigned GET URL for video playback
+        // Make the video file public and return public URL
         if (videoKey) {
-          const r2Config = functions.config().r2;
-          if (r2Config?.account_id && r2Config?.access_key_id && r2Config?.access_key_secret) {
-            const r2Client = new S3Client({
-              region: 'auto',
-              endpoint: `https://${r2Config.account_id}.r2.cloudflarestorage.com`,
-              credentials: {
-                accessKeyId: r2Config.access_key_id,
-                secretAccessKey: r2Config.access_key_secret,
-              },
-            });
-            const bucketName = r2Config.bucket_name || 'multitalk-videos';
-            videoUrl = await getSignedUrl(r2Client, new GetObjectCommand({
-              Bucket: bucketName,
-              Key: videoKey,
-            }), { expiresIn: 3600 });
-            console.log('[creationWizardCheckMultitalkStatus] Generated presigned video URL');
+          try {
+            const bucket = admin.storage().bucket();
+            const file = bucket.file(videoKey);
+            await file.makePublic();
+            videoUrl = `https://storage.googleapis.com/${bucket.name}/${videoKey}`;
+            console.log('[creationWizardCheckMultitalkStatus] Video made public:', videoUrl);
+          } catch (publicError) {
+            console.error('[creationWizardCheckMultitalkStatus] Failed to make video public:', publicError.message);
+            // Fallback: try to generate a signed read URL
+            try {
+              const bucket = admin.storage().bucket();
+              const [signedUrl] = await bucket.file(videoKey).getSignedUrl({
+                version: 'v4',
+                action: 'read',
+                expires: Date.now() + 3600000  // 1 hour
+              });
+              videoUrl = signedUrl;
+              console.log('[creationWizardCheckMultitalkStatus] Generated signed URL as fallback');
+            } catch (signError) {
+              console.error('[creationWizardCheckMultitalkStatus] Failed to generate signed URL:', signError.message);
+            }
           }
         }
       }
