@@ -24322,6 +24322,126 @@ exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, con
     ['coming-of-age', 'horror'], ['disaster', 'philosophical'], ['noir', 'supernatural']
   ];
 
+  // === PHASE 4: VARIATION ENFORCEMENT SYSTEM ===
+  // Comprehensive anti-repetition mechanisms to ensure every generation is unique
+
+  // BANNED CLICHÉS - AI must actively avoid these overused patterns
+  const BANNED_CLICHES = [
+    // Opening clichés
+    'It was a dark and stormy night',
+    'Little did they know',
+    'Everything was about to change',
+    'In a world where',
+    // Character clichés
+    'the chosen one',
+    'orphan with mysterious powers',
+    'grizzled detective with a dark past',
+    'rebellious princess who doesn\'t want to marry',
+    'nerdy guy who gets the popular girl',
+    // Plot clichés
+    'it was all a dream',
+    'the power of friendship saves the day',
+    'love at first sight with the enemy',
+    'convenient amnesia',
+    'everyone thought they were dead but they survived',
+    // Dialogue clichés
+    'I\'ve got a bad feeling about this',
+    'We\'re not so different, you and I',
+    'I didn\'t sign up for this',
+    'Is that all you\'ve got?',
+    'This ends now'
+  ];
+
+  // NARRATIVE STRUCTURE VARIATIONS - Randomly select to force different story shapes
+  const narrativeVariations = [
+    { type: 'in-medias-res', instruction: 'Start in the middle of the action. Open at the crisis point, then weave in context.' },
+    { type: 'reverse-chronology', instruction: 'Show the ending first. Let viewers piece together how we got there.' },
+    { type: 'parallel-stories', instruction: 'Two seemingly unrelated stories that collide at the climax.' },
+    { type: 'unreliable-perspective', instruction: 'The narrator/protagonist is missing crucial information or lying.' },
+    { type: 'anthology', instruction: 'Multiple short connected stories sharing a theme.' },
+    { type: 'countdown', instruction: 'A ticking clock drives urgency. Real-time or compressed.' },
+    { type: 'frame-story', instruction: 'Story within a story. The telling itself is part of the narrative.' },
+    { type: 'circular', instruction: 'End where you began, but with transformed meaning.' },
+    { type: 'mystery-reveal', instruction: 'Build to a revelation that recontextualizes everything.' },
+    { type: 'character-mosaic', instruction: 'Multiple POVs build a complete picture none could see alone.' }
+  ];
+
+  // OPENING SCENE VARIATIONS - Force different entry points
+  const openingVariations = [
+    'Start with a striking visual with no dialogue for 5+ seconds',
+    'Open on a character making a irreversible decision',
+    'Begin with a question that won\'t be answered until the end',
+    'Start with the aftermath of something we\'ll see later',
+    'Open on an intimate, quiet moment before chaos',
+    'Begin with a contrast: beauty hiding darkness, or vice versa',
+    'Start with a character lying to someone (or themselves)',
+    'Open with sensory overload: sound, color, motion',
+    'Begin at an ending: a funeral, a goodbye, a final moment',
+    'Start with a rule being broken'
+  ];
+
+  // CHARACTER SUBVERSIONS - Force unexpected character directions
+  const characterSubversions = [
+    'The mentor figure is deeply flawed and partially wrong',
+    'The villain has a point that the hero eventually accepts',
+    'The comic relief character carries the emotional weight',
+    'The traditional hero archetype is actually the supporting character',
+    'The love interest has their own complete arc independent of romance',
+    'The obvious villain is not the real threat',
+    'The weak character becomes strong through intellect, not power',
+    'The strong character\'s strength becomes their downfall',
+    'The outsider was right about everything all along',
+    'The authority figure earns respect rather than demanding it'
+  ];
+
+  // EMOTIONAL PATTERN VARIATIONS - Prevent same emotional beats
+  const emotionalPatterns = [
+    'melancholy → defiance → bittersweet hope',
+    'tension → unexpected humor → deeper tension',
+    'wonder → loss → resilient joy',
+    'anger → understanding → complicated peace',
+    'fear → courage → earned confidence',
+    'joy → sacrifice → meaningful loss',
+    'confusion → clarity → new mystery',
+    'isolation → connection → independence',
+    'despair → small victory → cautious hope',
+    'excitement → failure → wisdom'
+  ];
+
+  // Select random variations based on crypto seeds
+  const selectedNarrativeVar = narrativeVariations[creativeSeed % narrativeVariations.length];
+  const selectedOpeningVar = openingVariations[secondarySeed % openingVariations.length];
+  const selectedCharacterSub = characterSubversions[(creativeSeed + secondarySeed) % characterSubversions.length];
+  const selectedEmotionalPattern = emotionalPatterns[creativeSeed % emotionalPatterns.length];
+
+  // Build variation enforcement section for prompts
+  const variationEnforcement = `
+=== PHASE 4: VARIATION ENFORCEMENT (MANDATORY) ===
+
+🚫 BANNED CLICHÉS - NEVER USE THESE:
+${BANNED_CLICHES.slice(0, 10).map(c => `- "${c}"`).join('\n')}
+
+✨ REQUIRED NARRATIVE APPROACH: ${selectedNarrativeVar.type.toUpperCase()}
+${selectedNarrativeVar.instruction}
+
+🎬 OPENING REQUIREMENT:
+${selectedOpeningVar}
+
+👤 CHARACTER SUBVERSION TO INCLUDE:
+${selectedCharacterSub}
+
+💫 EMOTIONAL ARC PATTERN:
+${selectedEmotionalPattern}
+
+⚠️ FINAL UNIQUENESS CHECK:
+Before outputting, verify:
+1. No banned clichés appear in dialogue or narration
+2. The narrative structure matches the required approach
+3. At least one character subverts expectations
+4. The emotional arc follows the specified pattern
+5. The opening matches the requirement above
+`;
+
   // Select random elements using BOTH seeds for maximum variation
   // Primary seed selects from first half of pools, secondary seed adds additional elements
   const selectedNamePool = namePools[creativeSeed % namePools.length];
@@ -24335,6 +24455,17 @@ exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, con
 
   // Combine name pools (deduplicated) for even more variety
   const combinedNames = [...new Set([...selectedNamePool, ...secondaryNamePool])].slice(0, 10);
+
+  // === PHASE 4: Log variation enforcement selections ===
+  console.log('[creationWizardGenerateConcepts] Phase 4 Variation Enforcement:', {
+    seeds: { primary: creativeSeed, secondary: secondarySeed },
+    narrativeApproach: selectedNarrativeVar.type,
+    openingStyle: selectedOpeningVar.substring(0, 50) + '...',
+    characterSubversion: selectedCharacterSub.substring(0, 50) + '...',
+    emotionalPattern: selectedEmotionalPattern,
+    genreMashups: [selectedMashup.join('+'), secondaryMashup.join('+')],
+    hooks: [selectedHook.substring(0, 40) + '...', secondaryHook.substring(0, 40) + '...']
+  });
 
   // Creative divergence prompt section - ENHANCED with dual seeds and stronger uniqueness
   const creativeDivergence = `
@@ -24485,6 +24616,7 @@ CRITICAL: You MUST generate FRESH, UNIQUE content every time. Never repeat patte
 USER'S CORE IDEA:
 ${rawInput || 'Create something engaging and original'}
 
+${variationEnforcement}
 ${creativeDivergence}
 ${productionContext}
 ${enrichmentContext}
@@ -26910,6 +27042,96 @@ CONTENT FORMAT: ${formatSettings.name}
 🚫 ANTI-GENERIC RULES (NEVER DO THESE):
 ${ANTI_GENERIC_RULES.slice(0, 6).map(r => `- ${r}`).join('\n')}`;
 
+    // === PHASE 4: SCRIPT VARIATION ENFORCEMENT ===
+    // Generate crypto-based seeds for script-specific variation
+    const scriptSeed = crypto.randomBytes(4).readUInt32BE(0);
+    const dialogueSeed = crypto.randomBytes(4).readUInt32BE(0);
+
+    // Script-specific banned phrases
+    const SCRIPT_BANNED_PHRASES = [
+      // Opening clichés
+      'In a world where', 'Once upon a time', 'It was a dark', 'Everything changed when',
+      // Dialogue clichés
+      'We need to talk', 'It\'s not what it looks like', 'I can explain',
+      'You don\'t understand', 'We\'re running out of time', 'There\'s no time to explain',
+      'I\'ve got a bad feeling', 'We\'re not so different', 'This ends now',
+      // Narration clichés
+      'Little did they know', 'What happened next would change everything',
+      'They had no idea', 'The clock was ticking', 'Time was running out'
+    ];
+
+    // Scene transition variations - force different approaches
+    const sceneTransitionStyles = [
+      'Match cut on visual element or emotion',
+      'Sound bridge - audio from next scene begins early',
+      'J-cut or L-cut - split audio/visual',
+      'Jump cut for energy or disorientation',
+      'Dissolve for time passage or connection',
+      'Fade through color for mood shift',
+      'Wipe for playful or retro feel',
+      'Smash cut for comedy or shock',
+      'Iris for intimacy or expansion',
+      'Split screen for parallel action'
+    ];
+
+    // Dialogue style variations
+    const dialogueStyles = [
+      'Subtext-heavy: Characters mean more than they say',
+      'Rapid-fire: Quick exchanges, interruptions, overlaps',
+      'Minimalist: Few words, maximum impact',
+      'Poetic: Rhythmic, metaphorical language',
+      'Naturalistic: Hesitations, incomplete thoughts',
+      'Dramatic monologue: One character dominates',
+      'Call-and-response: Rhythmic exchanges',
+      'Interrogation: One probes, one deflects',
+      'Comedic timing: Beats, pauses, reversals',
+      'Lyrical: Almost musical phrasing'
+    ];
+
+    // Select based on seeds
+    const selectedTransitionStyle = sceneTransitionStyles[scriptSeed % sceneTransitionStyles.length];
+    const selectedDialogueStyle = dialogueStyles[dialogueSeed % dialogueStyles.length];
+
+    // === PHASE 4: Log script variation enforcement ===
+    console.log('[creationWizardGenerateScript] Phase 4 Script Variation Enforcement:', {
+      seeds: { script: scriptSeed, dialogue: dialogueSeed },
+      transitionStyle: selectedTransitionStyle,
+      dialogueApproach: selectedDialogueStyle,
+      bannedPhrasesCount: SCRIPT_BANNED_PHRASES.length
+    });
+
+    // Build script variation enforcement
+    const scriptVariationEnforcement = `
+
+=== PHASE 4: SCRIPT VARIATION ENFORCEMENT ===
+Generation ID: ${scriptSeed}-${dialogueSeed} (ensures unique output)
+
+🚫 BANNED PHRASES IN THIS SCRIPT:
+${SCRIPT_BANNED_PHRASES.slice(0, 8).map(p => `- "${p}"`).join('\n')}
+
+🎬 TRANSITION STYLE FOR THIS SCRIPT:
+Focus on: ${selectedTransitionStyle}
+Every scene transition should have PURPOSE - never just "cut to".
+
+💬 DIALOGUE APPROACH:
+${selectedDialogueStyle}
+Every line of dialogue should reflect this style.
+
+📝 UNIQUENESS REQUIREMENTS:
+1. First scene must NOT be a standard establishing shot - subvert expectations
+2. At least one scene should have NO dialogue - pure visual storytelling
+3. Include at least one UNEXPECTED character moment (surprise, contradiction)
+4. The climax should NOT be predictable - add a twist or subversion
+5. End on an image or line that LINGERS - not a neat resolution
+
+⚠️ BEFORE FINALIZING, CHECK:
+- No banned phrases appear anywhere
+- Each scene has a unique purpose and feel
+- Dialogue sounds like real people (not exposition bots)
+- Visual descriptions are SPECIFIC (not generic)
+- Character actions reveal personality
+`;
+
     // ============================================================
     // PHASE 5: DEEP STORY ARCHITECTURE
     // Inject enriched concept data for complex, character-driven stories
@@ -27256,6 +27478,7 @@ ${cameraGuidance}
 ${genreGuidance}
 ${formatGuidance}
 ${antiGenericGuidance}
+${scriptVariationEnforcement}
 ${deepStoryArchitecture}
 
 You create scripts for ${platform || 'social media'} in ${aspectRatio || '16:9'} format, specializing in ${niche || 'general'} content.
