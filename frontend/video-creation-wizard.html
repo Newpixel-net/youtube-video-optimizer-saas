@@ -14973,7 +14973,10 @@
             state.production.subType = null;
             state.production.subTypeConfig = null;
             // Set initial duration based on production type
-            state.production.targetDuration = typeConfig.defaultDuration?.min || 180;
+            const typeDuration = typeConfig.defaultDuration?.min || 180;
+            state.production.targetDuration = typeDuration;
+            // CRITICAL: Sync to legacy state for script generation
+            state.platform.targetDuration = typeDuration;
             render();
         }
 
@@ -14999,7 +15002,10 @@
             state.production.subTypeConfig = subTypeConfig;
             // Update duration to sub-type's suggested range
             if (subTypeConfig.suggestedDuration) {
-                state.production.targetDuration = subTypeConfig.suggestedDuration.min;
+                const subTypeDuration = subTypeConfig.suggestedDuration.min;
+                state.production.targetDuration = subTypeDuration;
+                // CRITICAL: Sync to legacy state for script generation
+                state.platform.targetDuration = subTypeDuration;
             }
             render();
         }
