@@ -10676,7 +10676,7 @@
 
                     showToast('🎤 Multitalk video started! Polling...', 'success');
 
-                    // Start polling for Multitalk - pass the video key for presigned URL generation
+                    // Start polling for Multitalk - pass the video file path for status check
                     startMultitalkVideoPolling(sceneId, shotIndex, result.data.jobId, result.data.fileName);
                 } else {
                     throw new Error(result.data.message || 'Failed to start Multitalk video');
@@ -10728,7 +10728,7 @@
 
                     if (result.data.status === 'COMPLETED') {
                         clearInterval(pollInterval);
-                        // Use the presigned URL from the backend for video playback
+                        // Use the public URL from the backend for video playback
                         shot.videoUrl = result.data.videoUrl;
                         shot.videoStatus = 'ready';
                         shot.videoError = null;
