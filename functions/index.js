@@ -24421,17 +24421,17 @@ exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, con
 🚫 BANNED CLICHÉS - NEVER USE THESE:
 ${BANNED_CLICHES.slice(0, 10).map(c => `- "${c}"`).join('\n')}
 
-✨ REQUIRED NARRATIVE APPROACH: ${selectedNarrativeVar.type.toUpperCase()}
-${selectedNarrativeVar.instruction}
+✨ REQUIRED NARRATIVE APPROACH: ${(selectedNarrativeVar?.type || 'unique').toUpperCase()}
+${selectedNarrativeVar?.instruction || 'Create a unique narrative structure.'}
 
 🎬 OPENING REQUIREMENT:
-${selectedOpeningVar}
+${selectedOpeningVar || 'Start with something unexpected that grabs attention.'}
 
 👤 CHARACTER SUBVERSION TO INCLUDE:
-${selectedCharacterSub}
+${selectedCharacterSub || 'Subvert at least one character expectation.'}
 
 💫 EMOTIONAL ARC PATTERN:
-${selectedEmotionalPattern}
+${selectedEmotionalPattern || 'tension → revelation → resolution'}
 
 ⚠️ FINAL UNIQUENESS CHECK:
 Before outputting, verify:
@@ -24459,12 +24459,12 @@ Before outputting, verify:
   // === PHASE 4: Log variation enforcement selections ===
   console.log('[creationWizardGenerateConcepts] Phase 4 Variation Enforcement:', {
     seeds: { primary: creativeSeed, secondary: secondarySeed },
-    narrativeApproach: selectedNarrativeVar.type,
-    openingStyle: selectedOpeningVar.substring(0, 50) + '...',
-    characterSubversion: selectedCharacterSub.substring(0, 50) + '...',
-    emotionalPattern: selectedEmotionalPattern,
-    genreMashups: [selectedMashup.join('+'), secondaryMashup.join('+')],
-    hooks: [selectedHook.substring(0, 40) + '...', secondaryHook.substring(0, 40) + '...']
+    narrativeApproach: selectedNarrativeVar?.type || 'unknown',
+    openingStyle: (selectedOpeningVar || '').substring(0, 50),
+    characterSubversion: (selectedCharacterSub || '').substring(0, 50),
+    emotionalPattern: selectedEmotionalPattern || 'unknown',
+    genreMashups: [(selectedMashup || []).join('+'), (secondaryMashup || []).join('+')],
+    hooks: [(selectedHook || '').substring(0, 40), (secondaryHook || '').substring(0, 40)]
   });
 
   // Creative divergence prompt section - ENHANCED with dual seeds and stronger uniqueness
@@ -27095,9 +27095,9 @@ ${ANTI_GENERIC_RULES.slice(0, 6).map(r => `- ${r}`).join('\n')}`;
     // === PHASE 4: Log script variation enforcement ===
     console.log('[creationWizardGenerateScript] Phase 4 Script Variation Enforcement:', {
       seeds: { script: scriptSeed, dialogue: dialogueSeed },
-      transitionStyle: selectedTransitionStyle,
-      dialogueApproach: selectedDialogueStyle,
-      bannedPhrasesCount: SCRIPT_BANNED_PHRASES.length
+      transitionStyle: selectedTransitionStyle || 'default',
+      dialogueApproach: selectedDialogueStyle || 'natural',
+      bannedPhrasesCount: SCRIPT_BANNED_PHRASES?.length || 0
     });
 
     // Build script variation enforcement
@@ -27107,14 +27107,14 @@ ${ANTI_GENERIC_RULES.slice(0, 6).map(r => `- ${r}`).join('\n')}`;
 Generation ID: ${scriptSeed}-${dialogueSeed} (ensures unique output)
 
 🚫 BANNED PHRASES IN THIS SCRIPT:
-${SCRIPT_BANNED_PHRASES.slice(0, 8).map(p => `- "${p}"`).join('\n')}
+${(SCRIPT_BANNED_PHRASES || []).slice(0, 8).map(p => `- "${p}"`).join('\n')}
 
 🎬 TRANSITION STYLE FOR THIS SCRIPT:
-Focus on: ${selectedTransitionStyle}
+Focus on: ${selectedTransitionStyle || 'purposeful cuts'}
 Every scene transition should have PURPOSE - never just "cut to".
 
 💬 DIALOGUE APPROACH:
-${selectedDialogueStyle}
+${selectedDialogueStyle || 'Natural and authentic'}
 Every line of dialogue should reflect this style.
 
 📝 UNIQUENESS REQUIREMENTS:
