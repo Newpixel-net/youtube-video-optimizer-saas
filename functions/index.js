@@ -58098,9 +58098,9 @@ exports.creationWizardGenerateMultitalkVideo = functions
 
       const bucket = admin.storage().bucket();
 
-      // Helper: Convert any Firebase URL to a signed URL accessible from RunPod
-      // Token-based URLs (firebasestorage.googleapis.com?token=...) don't work reliably from server environments
-      // We re-upload and generate signed URLs which always work
+      // Helper: Convert any Firebase URL to a simple public URL accessible from RunPod
+      // Long signed URLs with query parameters may cause issues with the handler
+      // Using makePublic() + simple URL format instead
       const ensureAccessibleUrl = async (url, fileType) => {
         if (!url) return url;
 
@@ -58130,16 +58130,25 @@ exports.creationWizardGenerateMultitalkVideo = functions
             metadata: { contentType }
           });
 
-          // Generate signed read URL (works without special IAM permissions)
-          const [signedUrl] = await file.getSignedUrl({
-            version: 'v4',
-            action: 'read',
-            expires: Date.now() + 60 * 60 * 1000, // 60 minutes
-          });
+          // Make file public for simple URL access (no query params)
+          try {
+            await file.makePublic();
+            console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} made public successfully`);
+          } catch (publicError) {
+            console.log(`[creationWizardGenerateMultitalkVideo] makePublic failed: ${publicError.message}, using signed URL fallback`);
+            // Fall back to signed URL if makePublic fails
+            const [signedUrl] = await file.getSignedUrl({
+              version: 'v4',
+              action: 'read',
+              expires: Date.now() + 60 * 60 * 1000,
+            });
+            return signedUrl;
+          }
 
-          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} signed URL generated (length=${signedUrl.length}):`, signedUrl.substring(0, 100) + '...');
-          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} URL has signature:`, signedUrl.includes('X-Goog-Signature'));
-          return signedUrl;
+          // Use simple public URL format (no query parameters)
+          const publicUrl = `https://storage.googleapis.com/${bucket.name}/${tempPath}`;
+          console.log(`[creationWizardGenerateMultitalkVideo] ${fileType} public URL (length=${publicUrl.length}):`, publicUrl);
+          return publicUrl;
 
         } catch (conversionError) {
           console.error(`[creationWizardGenerateMultitalkVideo] Failed to convert ${fileType}:`, conversionError.message);
@@ -58265,16 +58274,15 @@ Tone: Natural, expressive.`;
         scheduler: 'lcm'
       };
 
-      // Log FULL URLs for debugging (remove this after fixing)
+      // Log URLs for debugging
       console.log('[creationWizardGenerateMultitalkVideo] FULL image URL:', accessibleImageUrl);
       console.log('[creationWizardGenerateMultitalkVideo] FULL audio URL:', accessibleAudioUrl);
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
         imageUrlLength: accessibleImageUrl.length,
         audioUrlLength: accessibleAudioUrl.length,
-        imageHasSignature: accessibleImageUrl.includes('X-Goog-Signature'),
-        audioHasSignature: accessibleAudioUrl.includes('X-Goog-Signature'),
-        videoUploadUrl: uploadUrl.substring(0, 80) + '...',
+        imageIsPublic: !accessibleImageUrl.includes('X-Goog-Signature'),
+        audioIsPublic: !accessibleAudioUrl.includes('X-Goog-Signature'),
         audioCropEnd: runpodInput.audio_crop_end_time,
         numFrames: runpodInput.num_frames,
         fps: runpodInput.fps,
