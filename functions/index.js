@@ -24151,7 +24151,7 @@ CRITICAL:
   } catch (error) {
     console.error('[creationWizardImproveIdea] Error:', error);
 
-    // Provide a reasonable fallback
+    // Provide a reasonable fallback WITH MULTIPLE CHARACTERS
     return {
       success: true,
       fallback: true,
@@ -24164,8 +24164,24 @@ CRITICAL:
       genreFusion: 'Action-Adventure with Fantasy elements',
       visualSignature: 'Dynamic cinematography with immersive world-building',
       hookLine: 'A journey unlike any other awaits.',
-      characters: [{ archetype: 'The Protagonist', uniqueTwist: 'Original backstory', visualDescription: 'Distinctive look' }],
-      worldBuilding: { setting: 'A unique world', rules: 'Original concept', atmosphere: 'Immersive' }
+      narrativeArchitecture: {
+        structure: 'dual_protagonist',
+        structureReason: 'Two leads create dynamic tension and allow for parallel storytelling',
+        storyEngine: 'relationship_dynamics',
+        protagonistCount: '2',
+        keyBeats: ['Initial conflict establishes stakes', 'Forced alliance', 'Trust tested', 'United against common threat', 'Resolution with changed relationship']
+      },
+      characters: [
+        { name: 'The Protagonist', archetype: 'reluctant_hero', role: 'protagonist', flaw: 'Fears their own power', arc: 'Learns to embrace responsibility', uniqueTwist: 'Original backstory', visualDescription: 'Distinctive look with practical attire' },
+        { name: 'The Rival', archetype: 'anti_hero', role: 'protagonist', flaw: 'Trusts no one', arc: 'Discovers the value of allies', uniqueTwist: 'Unexpected moral code', visualDescription: 'Striking appearance that hints at hidden depth' },
+        { name: 'The Mentor', archetype: 'mentor', role: 'supporting', flaw: 'Hides a dangerous secret', arc: 'Must face consequences of past', uniqueTwist: 'Not what they seem', visualDescription: 'Wise appearance masking intensity' },
+        { name: 'The Antagonist', archetype: 'mastermind', role: 'antagonist', flaw: 'Cannot see own hypocrisy', arc: 'Believes they are the hero', uniqueTwist: 'Sympathetic motivation', visualDescription: 'Imposing presence with calculated style' }
+      ],
+      characterRelationships: [
+        { char1: 'The Protagonist', char2: 'The Rival', relationshipType: 'rivals', tension: 'Competing goals that slowly align', evolution: 'From enemies to reluctant allies to friends' },
+        { char1: 'The Protagonist', char2: 'The Mentor', relationshipType: 'mentor-student', tension: 'Hidden truth threatens trust', evolution: 'From guidance to betrayal to understanding' }
+      ],
+      worldBuilding: { setting: 'A unique world between realities', uniqueMechanic: 'Rules that challenge expectations', limitations: ['Cannot undo certain choices', 'Power has a cost'], visualLanguage: 'Contrast between light and shadow', atmosphere: 'Immersive and unpredictable' }
     };
   }
 });
@@ -24639,7 +24655,7 @@ REQUIREMENTS:
 ${enrichment ? `7. Build on the enriched production bible data (narrative architecture, characters, relationships)
 8. Use the detected story engine and adapt it for each structure` : ''}
 
-Return EXACTLY this JSON structure:
+Return EXACTLY this JSON structure (NOTE: EVERY concept MUST have 3-5 characters minimum!):
 {
   "ideas": [
     {
@@ -24653,11 +24669,32 @@ Return EXACTLY this JSON structure:
 
       "characters": [
         {
-          "name": "Original character name",
-          "archetype": "KEY from archetypes",
-          "role": "protagonist/supporting/antagonist/ensemble",
-          "flaw": "Specific flaw",
-          "arc": "Transformation"
+          "name": "Protagonist name - unique, memorable",
+          "archetype": "KEY from archetypes (e.g., anti_hero, reluctant_hero)",
+          "role": "protagonist",
+          "flaw": "Specific character flaw",
+          "arc": "How they transform"
+        },
+        {
+          "name": "Supporting character name",
+          "archetype": "KEY (e.g., mentor, loyal_friend, trickster)",
+          "role": "supporting",
+          "flaw": "Their flaw",
+          "arc": "Their change"
+        },
+        {
+          "name": "Antagonist or rival name",
+          "archetype": "KEY (e.g., mastermind, mirror_villain, fallen_hero)",
+          "role": "antagonist",
+          "flaw": "Their flaw",
+          "arc": "Their trajectory"
+        },
+        {
+          "name": "Additional character name",
+          "archetype": "KEY (varies per story)",
+          "role": "supporting/ensemble",
+          "flaw": "Their flaw",
+          "arc": "Their role in story"
         }
       ],
 
@@ -24666,6 +24703,11 @@ Return EXACTLY this JSON structure:
           "between": "Character 1 & Character 2",
           "type": "rivals/allies/lovers/mentor-student/family",
           "tension": "Source of conflict"
+        },
+        {
+          "between": "Character 1 & Character 3",
+          "type": "enemies/complicated/hidden-connection",
+          "tension": "What drives their conflict"
         }
       ],
 
@@ -24684,9 +24726,15 @@ Return EXACTLY this JSON structure:
   ]
 }
 
-CRITICAL DIVERSITY CHECK before responding:
-- Are all 3 structures DIFFERENT? (Required!)
-- Are protagonist counts VARIED? (Required!)
+⚠️ CRITICAL REQUIREMENTS - YOUR RESPONSE WILL BE REJECTED IF:
+- Any concept has FEWER than 3 characters (MINIMUM 3-5 per concept!)
+- All 3 structures are the SAME (must be DIFFERENT!)
+- Characters lack relationships (need meaningful connections!)
+- User requested "multiple/several characters" and you only created 1-2
+
+DIVERSITY CHECK before responding:
+- Does EACH concept have 3-5 distinct characters? (Required!)
+- Are all 3 narrative structures DIFFERENT? (Required!)
 - Do the stories feel like different shows/films? (Required!)`;
 
   try {
@@ -24762,7 +24810,7 @@ Always return valid JSON with genuinely diverse, surprising concepts.`
   } catch (error) {
     console.error('[creationWizardGenerateConcepts] Error:', error);
 
-    // Return fallback ideas if AI fails
+    // Return fallback ideas if AI fails - WITH PROPER CHARACTERS
     return {
       success: true,
       fallback: true,
@@ -24771,6 +24819,20 @@ Always return valid JSON with genuinely diverse, surprising concepts.`
           title: 'Original Concept 1',
           logline: `A unique exploration of ${rawInput || 'an untold story'}`,
           description: 'An original narrative with compelling characters',
+          narrativeStructure: 'dual_protagonist',
+          storyEngine: 'relationship_dynamics',
+          protagonistCount: '2',
+          characters: [
+            { name: 'Alex Chen', archetype: 'reluctant_hero', role: 'protagonist', flaw: 'Fear of commitment', arc: 'Learns to trust others' },
+            { name: 'Jordan Vale', archetype: 'anti_hero', role: 'protagonist', flaw: 'Reckless ambition', arc: 'Finds meaning beyond success' },
+            { name: 'Dr. Morgan Wells', archetype: 'mentor', role: 'supporting', flaw: 'Hidden agenda', arc: 'Redemption through sacrifice' },
+            { name: 'The Director', archetype: 'mastermind', role: 'antagonist', flaw: 'Obsessive control', arc: 'Undone by hubris' }
+          ],
+          keyRelationships: [
+            { between: 'Alex & Jordan', type: 'rivals', tension: 'Competing for the same goal' },
+            { between: 'Alex & Morgan', type: 'mentor-student', tension: 'Trust issues' }
+          ],
+          worldSetting: { location: 'Near-future metropolis', uniqueRule: 'Technology has blurred reality', atmosphere: 'Tense and uncertain' },
           uniqueElements: ['Original protagonist', 'Fresh setting', 'Unique twist'],
           mood: 'Engaging',
           tone: 'Dynamic'
@@ -24779,6 +24841,21 @@ Always return valid JSON with genuinely diverse, surprising concepts.`
           title: 'Original Concept 2',
           logline: `A dramatic journey through ${rawInput || 'new territory'}`,
           description: 'A character-driven story with emotional depth',
+          narrativeStructure: 'ensemble',
+          storyEngine: 'escalating_threat',
+          protagonistCount: '4',
+          characters: [
+            { name: 'Maya Torres', archetype: 'leader', role: 'protagonist', flaw: 'Carries guilt from past failure', arc: 'Learns to forgive herself' },
+            { name: 'Kai Nakamura', archetype: 'specialist', role: 'ensemble', flaw: 'Trusts no one', arc: 'Opens up to team' },
+            { name: 'Zara Ahmed', archetype: 'heart', role: 'ensemble', flaw: 'Too idealistic', arc: 'Balances hope with reality' },
+            { name: 'Victor Crane', archetype: 'wildcard', role: 'ensemble', flaw: 'Self-destructive tendencies', arc: 'Finds purpose' },
+            { name: 'The Architect', archetype: 'force_of_nature', role: 'antagonist', flaw: 'Cannot see own destruction', arc: 'Realizes too late' }
+          ],
+          keyRelationships: [
+            { between: 'Maya & Kai', type: 'complicated', tension: 'Past romantic history' },
+            { between: 'Zara & Victor', type: 'allies', tension: 'Opposing worldviews' }
+          ],
+          worldSetting: { location: 'Isolated research station', uniqueRule: 'Cut off from outside help', atmosphere: 'Claustrophobic and paranoid' },
           uniqueElements: ['Complex characters', 'Unexpected development', 'Strong visuals'],
           mood: 'Dramatic',
           tone: 'Intense'
@@ -24787,6 +24864,20 @@ Always return valid JSON with genuinely diverse, surprising concepts.`
           title: 'Original Concept 3',
           logline: `An exploration of ${rawInput || 'human experience'}`,
           description: 'A thoughtful piece with universal themes',
+          narrativeStructure: 'mystery_procedural',
+          storyEngine: 'mystery_layers',
+          protagonistCount: '1',
+          characters: [
+            { name: 'Detective Sam Reyes', archetype: 'wounded_healer', role: 'protagonist', flaw: 'Haunted by unsolved case', arc: 'Finds closure and peace' },
+            { name: 'Elena Cross', archetype: 'trickster', role: 'supporting', flaw: 'Hides behind humor', arc: 'Reveals true self' },
+            { name: 'Marcus Webb', archetype: 'loyal_friend', role: 'supporting', flaw: 'Too loyal for own good', arc: 'Learns when to step back' },
+            { name: 'The Phantom', archetype: 'mirror_villain', role: 'antagonist', flaw: 'Reflects protagonist\'s darkness', arc: 'Forces protagonist to confront self' }
+          ],
+          keyRelationships: [
+            { between: 'Sam & Elena', type: 'partners', tension: 'Different methods' },
+            { between: 'Sam & The Phantom', type: 'enemies', tension: 'Personal vendetta' }
+          ],
+          worldSetting: { location: 'Rain-soaked coastal city', uniqueRule: 'Secrets buried everywhere', atmosphere: 'Moody and atmospheric' },
           uniqueElements: ['Relatable themes', 'Visual storytelling', 'Memorable moments'],
           mood: 'Thoughtful',
           tone: 'Contemplative'
