@@ -58090,56 +58090,10 @@ exports.creationWizardGenerateMultitalkVideo = functions
     }
 
     try {
-      // Helper function to make a Firebase Storage file public and return its public URL
-      // This ensures files uploaded from frontend are accessible from RunPod
-      const makeFilePublicAndGetUrl = async (url) => {
-        if (!url) return url;
-
-        // Already a public GCS URL - return as-is
-        if (url.includes('storage.googleapis.com/') && !url.includes('firebasestorage.')) {
-          return url;
-        }
-
-        // Extract file path from Firebase Storage URL
-        // From: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH%2Ffile.ext?alt=media&token=...
-        const firebaseMatch = url.match(/firebasestorage\.googleapis\.com\/v0\/b\/([^/]+)\/o\/([^?]+)/);
-        if (firebaseMatch) {
-          const bucket = firebaseMatch[1];
-          const encodedPath = firebaseMatch[2];
-          const decodedPath = decodeURIComponent(encodedPath);
-
-          try {
-            // Make the file public
-            const file = admin.storage().bucket(bucket).file(decodedPath);
-            await file.makePublic();
-            console.log('[creationWizardGenerateMultitalkVideo] Made file public:', decodedPath);
-          } catch (publicError) {
-            // File might already be public or we don't have permission - continue anyway
-            console.log('[creationWizardGenerateMultitalkVideo] makePublic note:', publicError.message);
-          }
-
-          // Return public URL format
-          const publicUrl = `https://storage.googleapis.com/${bucket}/${decodedPath}`;
-          console.log('[creationWizardGenerateMultitalkVideo] Converted to public URL:', {
-            original: url.substring(0, 80) + '...',
-            public: publicUrl
-          });
-          return publicUrl;
-        }
-
-        // Return as-is for other URL types (R2, external, etc.)
-        return url;
-      };
-
-      // Convert input URLs to publicly accessible format (and make files public if needed)
-      const publicImageUrl = await makeFilePublicAndGetUrl(imageUrl);
-      const publicAudioUrl = await makeFilePublicAndGetUrl(effectiveAudioUrl);
-
-      console.log('[creationWizardGenerateMultitalkVideo] URL processing complete:', {
-        originalImageUrl: imageUrl?.substring(0, 60) + '...',
-        publicImageUrl: publicImageUrl?.substring(0, 60) + '...',
-        originalAudioUrl: effectiveAudioUrl?.substring(0, 60) + '...',
-        publicAudioUrl: publicAudioUrl?.substring(0, 60) + '...'
+      // Log input URLs for debugging
+      console.log('[creationWizardGenerateMultitalkVideo] Input URLs:', {
+        imageUrl: imageUrl?.substring(0, 100),
+        audioUrl: effectiveAudioUrl?.substring(0, 100)
       });
 
       // Generate seed
@@ -58241,9 +58195,9 @@ Tone: Natural, expressive.`;
       // Build RunPod input for Multitalk
       // IMPORTANT: Parameter names must match the Multitalk API exactly
       const runpodInput = {
-        // Core required parameters - use public URLs for RunPod access
-        image_url: publicImageUrl,
-        audio_url: publicAudioUrl,
+        // Core required parameters
+        image_url: imageUrl,
+        audio_url: effectiveAudioUrl,
         video_upload_url: uploadUrl,   // Handler expects video_upload_url
 
         // Audio timing (format: "M:SS")
@@ -58256,7 +58210,7 @@ Tone: Natural, expressive.`;
 
         // Video settings
         aspect_ratio: aspectRatioMap[aspectRatio] || '16:9',
-        scale_to_length: 1280,    // 720p resolution (1280x720 for 16:9)
+        scale_to_length: 1024,    // Match working Python test (1024, not 1280)
         scale_to_side: 'None',  // Must be "None" string to match workflow
         fps: fps,
         num_frames: numFrames,
@@ -58274,10 +58228,8 @@ Tone: Natural, expressive.`;
       };
 
       console.log('[creationWizardGenerateMultitalkVideo] RunPod input:', {
-        originalImageUrl: imageUrl.substring(0, 60) + '...',
-        publicImageUrl: publicImageUrl.substring(0, 60) + '...',
-        originalAudioUrl: effectiveAudioUrl.substring(0, 60) + '...',
-        publicAudioUrl: publicAudioUrl.substring(0, 60) + '...',
+        imageUrl: imageUrl.substring(0, 100) + '...',
+        audioUrl: effectiveAudioUrl.substring(0, 100) + '...',
         uploadUrl: uploadUrl.substring(0, 80) + '...',
         audioCropEnd: runpodInput.audio_crop_end_time,
         numFrames: runpodInput.num_frames,
