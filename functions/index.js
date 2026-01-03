@@ -23907,7 +23907,9 @@ exports.creationWizardDeleteProject = functions.https.onCall(async (data, contex
  * - worldBuilding: World rules for fantasy/scifi concepts
  * - characters: Suggested original character archetypes
  */
-exports.creationWizardImproveIdea = functions.https.onCall(async (data, context) => {
+exports.creationWizardImproveIdea = functions
+  .runWith({ timeoutSeconds: 120, memory: '512MB' }) // GPT-4o can take 30-60s for complex prompts
+  .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   const {
     rawInput,
@@ -24202,7 +24204,9 @@ CRITICAL:
  * Returns:
  * - ideas: Array of 3 unique concept options with titles, loglines, unique elements
  */
-exports.creationWizardGenerateConcepts = functions.https.onCall(async (data, context) => {
+exports.creationWizardGenerateConcepts = functions
+  .runWith({ timeoutSeconds: 180, memory: '512MB' }) // GPT-4o with complex prompts needs time
+  .https.onCall(async (data, context) => {
   const uid = await verifyAuth(context);
   const { rawInput, styleReference, avoidElements, production, enrichment } = data;
 
@@ -28095,7 +28099,11 @@ tension_building, action_intense, emotional_sad, emotional_hopeful,
 triumphant, mysterious, peaceful, epic_scale, intimate, suspense
 
 === OUTPUT FORMAT ===
-Return ONLY valid JSON with EXACTLY ${sceneCount} scenes in the scenes array:
+IMPORTANT: Generate EXACTLY ${sceneCount} COMPLETE scenes (not 1, not 2, but ${sceneCount} scenes!)
+The example below shows 5 scenes as a template. You must generate ALL ${sceneCount} scenes with FULL details.
+Each scene MUST have narration text OR dialogue - NOT "Music only" for every scene!
+
+Return ONLY valid JSON:
 {
   "title": "Compelling ${productionSettings.name} style title (50-70 chars)",
   "hook": "The attention-grabbing opening - can be narration or impactful dialogue",
@@ -28205,12 +28213,10 @@ Return ONLY valid JSON with EXACTLY ${sceneCount} scenes in the scenes array:
         "physicsNote": "Tense postures, controlled breathing",
         "environmentSync": "Light shifts with mood"
       }
-    }
-    // ... CONTINUE WITH ${sceneCount - 2} MORE SCENES following the story arc ...
-    // Scene 3: Rising action
-    // Scene 4-${sceneCount - 2}: Development and escalation
-    // Scene ${sceneCount - 1}: Climax
-    // Scene ${sceneCount}: Resolution/CTA
+    },
+    {"id": 3, "sceneType": "action", "narration": "Scene 3 narration...", "duration": ${actualSceneDuration}},
+    {"id": 4, "sceneType": "emotional", "narration": "Scene 4 narration...", "duration": ${actualSceneDuration}},
+    {"id": 5, "sceneType": "dialogue", "narration": null, "audioLayer": {"type": "dialogue"}, "duration": ${actualSceneDuration}}
   ],
   "cta": "Call-to-action woven naturally into story (not presentation-style)",
   "totalDuration": ${targetDuration},
