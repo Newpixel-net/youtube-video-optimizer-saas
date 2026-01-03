@@ -15206,6 +15206,22 @@
                 const selectedIdea = hasSelectedIdea ? concept.ideas[concept.selectedIdea] : concept.ideas[0];
                 const selectedIndex = hasSelectedIdea ? concept.selectedIdea : 0;
 
+                // DEFENSIVE: Helper to safely render text (prevents corrupted data display)
+                const safeText = (val, maxLen = 1000) => {
+                    if (val === null || val === undefined) return '';
+                    if (typeof val !== 'string') {
+                        console.warn('[Concept Display] Non-string value detected:', typeof val, val);
+                        return typeof val === 'object' ? '' : String(val).substring(0, maxLen);
+                    }
+                    // Check for corrupted data (high ratio of replacement characters)
+                    const replacementChars = (val.match(/\uFFFD/g) || []).length;
+                    if (replacementChars > val.length * 0.1) {
+                        console.warn('[Concept Display] Corrupted data detected, skipping render');
+                        return '[Data corrupted - please regenerate]';
+                    }
+                    return val.substring(0, maxLen);
+                };
+
                 // Auto-select first concept if none selected
                 if (!hasSelectedIdea && concept.ideas.length > 0) {
                     // Don't auto-select here, just show first as preview
@@ -15225,22 +15241,22 @@
                         <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(236, 72, 153, 0.1)); border: 2px solid ${hasSelectedIdea ? '#8b5cf6' : 'rgba(139, 92, 246, 0.3)'}; border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1rem;">
                             <!-- Title & Logline -->
                             <div style="font-weight: 700; font-size: 1.1rem; color: white; margin-bottom: 0.5rem;">
-                                ${selectedIdea?.title || 'Untitled Concept'}
+                                ${safeText(selectedIdea?.title, 100) || 'Untitled Concept'}
                             </div>
                             <div style="font-size: 0.9rem; color: rgba(255,255,255,0.85); line-height: 1.6; margin-bottom: 1rem;">
-                                ${selectedIdea?.logline || selectedIdea?.description || ''}
+                                ${safeText(selectedIdea?.logline) || safeText(selectedIdea?.description) || ''}
                             </div>
 
                             <!-- Narrative Architecture Badges -->
                             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                                ${selectedIdea?.narrativeStructure ? `
+                                ${selectedIdea?.narrativeStructure && typeof selectedIdea.narrativeStructure === 'string' ? `
                                 <span style="font-size: 0.7rem; padding: 0.25rem 0.6rem; background: rgba(139, 92, 246, 0.3); border-radius: 0.35rem; color: #c4b5fd; font-weight: 500;">
-                                    📖 ${selectedIdea.narrativeStructure.replace(/_/g, ' ')}
+                                    📖 ${safeText(selectedIdea.narrativeStructure, 50).replace(/_/g, ' ')}
                                 </span>
                                 ` : ''}
-                                ${selectedIdea?.storyEngine ? `
+                                ${selectedIdea?.storyEngine && typeof selectedIdea.storyEngine === 'string' ? `
                                 <span style="font-size: 0.7rem; padding: 0.25rem 0.6rem; background: rgba(236, 72, 153, 0.3); border-radius: 0.35rem; color: #f9a8d4; font-weight: 500;">
-                                    ⚡ ${selectedIdea.storyEngine.replace(/_/g, ' ')}
+                                    ⚡ ${safeText(selectedIdea.storyEngine, 50).replace(/_/g, ' ')}
                                 </span>
                                 ` : ''}
                                 ${selectedIdea?.protagonistCount ? `
@@ -15267,8 +15283,8 @@
                                 <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                                     ${selectedIdea.characters.slice(0, 4).map(char => `
                                         <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; padding: 0.5rem 0.75rem;">
-                                            <div style="font-size: 0.8rem; font-weight: 600; color: white;">${char.name || 'Unknown'}</div>
-                                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">${char.archetype || char.role || ''}</div>
+                                            <div style="font-size: 0.8rem; font-weight: 600; color: white;">${safeText(char?.name, 50) || 'Unknown'}</div>
+                                            <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">${safeText(char?.archetype, 30) || safeText(char?.role, 30) || ''}</div>
                                         </div>
                                     `).join('')}
                                     ${selectedIdea.characters.length > 4 ? `<div style="font-size: 0.7rem; color: rgba(255,255,255,0.4); align-self: center;">+${selectedIdea.characters.length - 4} more</div>` : ''}
@@ -15276,28 +15292,28 @@
                             </div>
                             ` : ''}
 
-                            <!-- World Setting -->
-                            ${selectedIdea?.worldSetting ? `
+                            <!-- World Setting - DEFENSIVE: only render if worldSetting is an object -->
+                            ${selectedIdea?.worldSetting && typeof selectedIdea.worldSetting === 'object' ? `
                             <div style="margin-bottom: 1rem;">
                                 <div style="font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.6); margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.5px;">World</div>
                                 <div style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">
-                                    ${selectedIdea.worldSetting.location || ''}${selectedIdea.worldSetting.atmosphere ? ` — ${selectedIdea.worldSetting.atmosphere}` : ''}
+                                    ${safeText(selectedIdea.worldSetting.location, 200) || ''}${selectedIdea.worldSetting.atmosphere ? ` — ${safeText(selectedIdea.worldSetting.atmosphere, 200)}` : ''}
                                 </div>
                             </div>
                             ` : ''}
 
-                            <!-- Theme -->
-                            ${selectedIdea?.theme ? `
+                            <!-- Theme - DEFENSIVE: only render if theme is a string -->
+                            ${selectedIdea?.theme && typeof selectedIdea.theme === 'string' ? `
                             <div style="background: rgba(255,255,255,0.03); border-radius: 0.5rem; padding: 0.75rem; border-left: 3px solid #8b5cf6;">
                                 <div style="font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.5); margin-bottom: 0.25rem;">DEEPER MEANING</div>
-                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.8); font-style: italic;">${selectedIdea.theme}</div>
+                                <div style="font-size: 0.8rem; color: rgba(255,255,255,0.8); font-style: italic;">${safeText(selectedIdea.theme, 500)}</div>
                             </div>
                             ` : ''}
 
-                            <!-- Visual Style -->
-                            ${concept.styleReference || selectedIdea?.visualApproach ? `
+                            <!-- Visual Style - DEFENSIVE: validate string types -->
+                            ${(concept.styleReference && typeof concept.styleReference === 'string') || (selectedIdea?.visualApproach && typeof selectedIdea.visualApproach === 'string') ? `
                             <div style="margin-top: 0.75rem; font-size: 0.75rem; color: rgba(255,255,255,0.6);">
-                                <span style="color: #8b5cf6; font-weight: 500;">Visual Style:</span> ${concept.styleReference || selectedIdea?.visualApproach || ''}
+                                <span style="color: #8b5cf6; font-weight: 500;">Visual Style:</span> ${safeText(concept.styleReference) || safeText(selectedIdea?.visualApproach) || ''}
                             </div>
                             ` : ''}
                         </div>
@@ -15314,10 +15330,10 @@
                                     <div onclick="selectConceptIdea(${index})"
                                          style="cursor: pointer; padding: 0.5rem 0.75rem; border-radius: 0.5rem; background: ${concept.selectedIdea === index ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${concept.selectedIdea === index ? '#8b5cf6' : 'rgba(255,255,255,0.1)'}; transition: all 0.2s; flex: 1; min-width: 150px; max-width: calc(33% - 0.5rem);">
                                         <div style="font-size: 0.75rem; font-weight: 600; color: ${concept.selectedIdea === index ? '#c4b5fd' : 'white'}; margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.35rem;">
-                                            ${concept.selectedIdea === index ? '✓' : `${index + 1}.`} ${idea.title || 'Concept ' + (index + 1)}
+                                            ${concept.selectedIdea === index ? '✓' : `${index + 1}.`} ${safeText(idea?.title, 50) || 'Concept ' + (index + 1)}
                                         </div>
                                         <div style="font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                                            ${idea.narrativeStructure ? idea.narrativeStructure.replace(/_/g, ' ') : idea.mood || ''}
+                                            ${idea?.narrativeStructure && typeof idea.narrativeStructure === 'string' ? safeText(idea.narrativeStructure, 30).replace(/_/g, ' ') : safeText(idea?.mood, 30) || ''}
                                         </div>
                                     </div>
                                 `).join('')}
