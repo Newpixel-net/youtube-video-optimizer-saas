@@ -28424,18 +28424,24 @@ Continue the story seamlessly. Characters should remember previous events.
 
       try {
         const parsed = JSON.parse(cleanJson);
+        // Log token usage for debugging
+        const usage = {
+          promptTokens: completion.usage?.prompt_tokens || 0,
+          completionTokens: completion.usage?.completion_tokens || 0,
+          totalTokens: completion.usage?.total_tokens || 0
+        };
+        console.log(`[creationWizardGenerateScript] Chunk ${chunkNumber} token usage - Prompt: ${usage.promptTokens}, Completion: ${usage.completionTokens}`);
+
         // Return both data and token usage
         return {
           data: parsed,
-          usage: {
-            promptTokens: completion.usage?.prompt_tokens || 0,
-            completionTokens: completion.usage?.completion_tokens || 0,
-            totalTokens: completion.usage?.total_tokens || 0
-          }
+          usage: usage
         };
       } catch (parseError) {
         console.error(`[creationWizardGenerateScript] Chunk ${chunkNumber} parse error:`, parseError);
-        throw new functions.https.HttpsError('internal', `Failed to parse chunk ${chunkNumber} response`);
+        console.error(`[creationWizardGenerateScript] Chunk ${chunkNumber} raw response preview (first 1500 chars):`, responseText.substring(0, 1500));
+        console.error(`[creationWizardGenerateScript] Chunk ${chunkNumber} raw response end (last 500 chars):`, responseText.substring(responseText.length - 500));
+        throw new functions.https.HttpsError('internal', `Failed to parse chunk ${chunkNumber} response - check logs for details`);
       }
     }
 
@@ -28520,23 +28526,69 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
 
         console.log(`[creationWizardGenerateScript] Generating chunk ${chunkNum}/${chunkCount}: scenes ${currentSceneNumber}-${currentSceneNumber + scenesThisChunk - 1}`);
 
-        const chunkResponse = await generateScriptChunk(
-          chunkNum,
-          chunkCount,
-          scenesThisChunk,
-          currentSceneNumber,
-          previousContext
-        );
+        // === RETRY MECHANISM FOR CHUNK GENERATION ===
+        const CHUNK_MAX_RETRIES = 2;
+        let chunkResult = null;
+        let chunkLastError = null;
 
-        // Extract data and accumulate token usage
-        const chunkResult = chunkResponse.data;
-        tokenUsage.promptTokens += chunkResponse.usage?.promptTokens || 0;
-        tokenUsage.completionTokens += chunkResponse.usage?.completionTokens || 0;
-        tokenUsage.totalTokens += chunkResponse.usage?.totalTokens || 0;
+        for (let chunkAttempt = 1; chunkAttempt <= CHUNK_MAX_RETRIES; chunkAttempt++) {
+          try {
+            if (chunkAttempt > 1) {
+              console.log(`[creationWizardGenerateScript] Retrying chunk ${chunkNum} (attempt ${chunkAttempt}/${CHUNK_MAX_RETRIES})`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
 
-        // Validate chunk
-        if (!chunkResult.scenes || chunkResult.scenes.length === 0) {
-          throw new functions.https.HttpsError('internal', `Chunk ${chunkNum} generated no scenes`);
+            const chunkResponse = await generateScriptChunk(
+              chunkNum,
+              chunkCount,
+              scenesThisChunk,
+              currentSceneNumber,
+              previousContext
+            );
+
+            // Extract data and accumulate token usage
+            chunkResult = chunkResponse.data;
+            tokenUsage.promptTokens += chunkResponse.usage?.promptTokens || 0;
+            tokenUsage.completionTokens += chunkResponse.usage?.completionTokens || 0;
+            tokenUsage.totalTokens += chunkResponse.usage?.totalTokens || 0;
+
+            // === CHUNK RESPONSE NORMALIZATION ===
+            if (!chunkResult.scenes || !Array.isArray(chunkResult.scenes)) {
+              // Try to recover scenes from alternative structures
+              const altKeys = ['scene', 'allScenes', 'videoScenes'];
+              for (const key of altKeys) {
+                if (chunkResult[key] && Array.isArray(chunkResult[key]) && chunkResult[key].length > 0) {
+                  console.log(`[creationWizardGenerateScript] Chunk ${chunkNum}: Found scenes under "${key}", normalizing...`);
+                  chunkResult.scenes = chunkResult[key];
+                  break;
+                }
+              }
+            }
+
+            // Validate chunk after normalization
+            if (chunkResult.scenes && Array.isArray(chunkResult.scenes) && chunkResult.scenes.length > 0) {
+              console.log(`[creationWizardGenerateScript] ✅ Chunk ${chunkNum} successfully generated ${chunkResult.scenes.length} scenes`);
+              break; // Success!
+            }
+
+            // Diagnostic logging for failed chunk
+            console.error(`[creationWizardGenerateScript] ❌ Chunk ${chunkNum} validation failed on attempt ${chunkAttempt}:`);
+            console.error(`  - chunkResult keys: ${Object.keys(chunkResult || {}).join(', ')}`);
+            console.error(`  - scenes type: ${typeof chunkResult?.scenes}`);
+            console.error(`  - scenes length: ${chunkResult?.scenes?.length ?? 'N/A'}`);
+
+            chunkLastError = new Error(`Chunk ${chunkNum} returned invalid structure`);
+
+          } catch (chunkApiError) {
+            console.error(`[creationWizardGenerateScript] Chunk ${chunkNum} API error on attempt ${chunkAttempt}:`, chunkApiError);
+            chunkLastError = chunkApiError;
+          }
+        }
+
+        // Final chunk validation
+        if (!chunkResult || !chunkResult.scenes || chunkResult.scenes.length === 0) {
+          console.error(`[creationWizardGenerateScript] Chunk ${chunkNum} failed after ${CHUNK_MAX_RETRIES} attempts`);
+          throw new functions.https.HttpsError('internal', `Chunk ${chunkNum}/${chunkCount} generated no scenes after retries. Try a shorter video duration.`);
         }
 
         // Renumber scenes to ensure sequential IDs across chunks
@@ -28604,43 +28656,154 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
       const dynamicMaxTokens = Math.min(16000, Math.max(8000, estimatedTokensNeeded));
       console.log(`[creationWizardGenerateScript] Token allocation: ${sceneCount} scenes → ${dynamicMaxTokens} max_tokens`);
 
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        response_format: { type: 'json_object' }, // CRITICAL: Force valid JSON output
-        temperature: 0.9, // FIXED: Increased from 0.8 for more creative scripts (was causing repetitive outputs)
-        max_tokens: dynamicMaxTokens, // Dynamic based on scene count (was 6500, caused 1-scene outputs)
-        frequency_penalty: 0.3, // Reduce repetitive phrasing in dialogue and descriptions
-        presence_penalty: 0.5  // Encourage diverse scene content and character interactions
-      });
+      // === RETRY MECHANISM FOR ROBUST SCRIPT GENERATION ===
+      const MAX_RETRIES = 2;
+      let lastError = null;
+      let attemptTokens = dynamicMaxTokens;
 
-      const elapsedTime = Date.now() - startTime;
-      console.log(`[creationWizardGenerateScript] GPT-4o completed in ${elapsedTime}ms (${(elapsedTime / 1000).toFixed(1)}s)`);
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          console.log(`[creationWizardGenerateScript] GPT-4o attempt ${attempt}/${MAX_RETRIES} with ${attemptTokens} max_tokens`);
 
-      // Parse the response
-      const responseText = completion.choices[0].message.content.trim();
-      const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const completion = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            response_format: { type: 'json_object' }, // CRITICAL: Force valid JSON output
+            temperature: attempt === 1 ? 0.9 : 0.7, // Lower temperature on retry for more reliable output
+            max_tokens: attemptTokens,
+            frequency_penalty: 0.3,
+            presence_penalty: 0.5
+          });
 
-      try {
-        script = JSON.parse(cleanJson);
-      } catch (parseError) {
-        console.error('[creationWizardGenerateScript] JSON parse error:', parseError);
-        console.error('[creationWizardGenerateScript] Raw response:', responseText);
-        throw new functions.https.HttpsError('internal', 'Failed to parse script response');
+          const elapsedTime = Date.now() - startTime;
+          console.log(`[creationWizardGenerateScript] GPT-4o completed in ${elapsedTime}ms (${(elapsedTime / 1000).toFixed(1)}s)`);
+
+          // Store token usage
+          tokenUsage.promptTokens = completion.usage?.prompt_tokens || 0;
+          tokenUsage.completionTokens = completion.usage?.completion_tokens || 0;
+          tokenUsage.totalTokens = completion.usage?.total_tokens || 0;
+
+          // Log token usage for debugging
+          console.log(`[creationWizardGenerateScript] Token usage - Prompt: ${tokenUsage.promptTokens}, Completion: ${tokenUsage.completionTokens}, Total: ${tokenUsage.totalTokens}`);
+
+          // Parse the response
+          const responseText = completion.choices[0].message.content.trim();
+          const cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+          try {
+            script = JSON.parse(cleanJson);
+          } catch (parseError) {
+            console.error('[creationWizardGenerateScript] JSON parse error:', parseError);
+            console.error('[creationWizardGenerateScript] Raw response (first 2000 chars):', responseText.substring(0, 2000));
+            lastError = new Error('Failed to parse script response as JSON');
+            // Increase tokens on retry
+            attemptTokens = Math.min(16000, attemptTokens + 2000);
+            continue;
+          }
+
+          // === RESPONSE STRUCTURE NORMALIZATION ===
+          // Try to recover scenes from alternative structures GPT might return
+          if (!script.scenes || !Array.isArray(script.scenes)) {
+            console.warn('[creationWizardGenerateScript] scenes not found in expected location, attempting recovery...');
+
+            // Check alternative locations where GPT might put scenes
+            const alternativeKeys = ['scene', 'allScenes', 'videoScenes', 'scriptScenes', 'content'];
+            for (const key of alternativeKeys) {
+              if (script[key] && Array.isArray(script[key]) && script[key].length > 0) {
+                console.log(`[creationWizardGenerateScript] Found scenes under "${key}", normalizing...`);
+                script.scenes = script[key];
+                break;
+              }
+            }
+
+            // Check if script is nested under a wrapper key
+            const topLevelKeys = Object.keys(script);
+            if (topLevelKeys.length === 1 && typeof script[topLevelKeys[0]] === 'object') {
+              const nested = script[topLevelKeys[0]];
+              if (nested.scenes && Array.isArray(nested.scenes)) {
+                console.log(`[creationWizardGenerateScript] Found scenes nested under "${topLevelKeys[0]}", unwrapping...`);
+                script = nested;
+              }
+            }
+          }
+
+          // Validate scenes after normalization
+          if (script.scenes && Array.isArray(script.scenes) && script.scenes.length > 0) {
+            console.log(`[creationWizardGenerateScript] ✅ Successfully generated ${script.scenes.length} scenes on attempt ${attempt}`);
+            break; // Success! Exit retry loop
+          }
+
+          // === DIAGNOSTIC LOGGING FOR FAILED VALIDATION ===
+          console.error('[creationWizardGenerateScript] ❌ Script validation failed - detailed diagnostics:');
+          console.error(`  - script type: ${typeof script}`);
+          console.error(`  - script keys: ${Object.keys(script || {}).join(', ') || 'none'}`);
+          console.error(`  - script.scenes type: ${typeof script?.scenes}`);
+          console.error(`  - script.scenes is array: ${Array.isArray(script?.scenes)}`);
+          console.error(`  - script.scenes length: ${script?.scenes?.length ?? 'N/A'}`);
+          console.error(`  - script.title: ${script?.title ? 'present' : 'missing'}`);
+          console.error(`  - script.characters: ${script?.characters ? `present (${script.characters.length})` : 'missing'}`);
+          console.error(`  - Completion tokens used: ${tokenUsage.completionTokens} / ${attemptTokens} max`);
+
+          // Check if response was likely truncated
+          const truncationRatio = tokenUsage.completionTokens / attemptTokens;
+          if (truncationRatio > 0.95) {
+            console.error(`[creationWizardGenerateScript] ⚠️ Response likely TRUNCATED (${(truncationRatio * 100).toFixed(1)}% of max tokens used)`);
+          }
+
+          // Log partial response for debugging
+          console.error(`[creationWizardGenerateScript] Raw response preview (first 1000 chars): ${cleanJson.substring(0, 1000)}`);
+          console.error(`[creationWizardGenerateScript] Raw response end (last 500 chars): ${cleanJson.substring(cleanJson.length - 500)}`);
+
+          lastError = new Error(`GPT returned invalid structure: scenes=${typeof script?.scenes}, length=${script?.scenes?.length ?? 0}`);
+
+          // Increase tokens on retry to avoid truncation
+          attemptTokens = Math.min(16000, attemptTokens + 2000);
+
+          if (attempt < MAX_RETRIES) {
+            console.log(`[creationWizardGenerateScript] Retrying with ${attemptTokens} max_tokens...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Brief delay before retry
+          }
+
+        } catch (apiError) {
+          console.error(`[creationWizardGenerateScript] GPT API error on attempt ${attempt}:`, apiError);
+          lastError = apiError;
+
+          if (attempt < MAX_RETRIES) {
+            attemptTokens = Math.min(16000, attemptTokens + 2000);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Longer delay for API errors
+          }
+        }
       }
-
-      // Store token usage from single generation
-      tokenUsage.promptTokens = completion.usage?.prompt_tokens || 0;
-      tokenUsage.completionTokens = completion.usage?.completion_tokens || 0;
-      tokenUsage.totalTokens = completion.usage?.total_tokens || 0;
     }
 
-    // Validate and normalize the script structure
-    if (!script.scenes || !Array.isArray(script.scenes) || script.scenes.length === 0) {
-      throw new functions.https.HttpsError('internal', 'Invalid script structure - no scenes generated');
+    // === FINAL VALIDATION WITH DETAILED ERROR ===
+    if (!script || !script.scenes || !Array.isArray(script.scenes) || script.scenes.length === 0) {
+      // Determine the most helpful error message
+      let errorDetail = 'Invalid script structure - no scenes generated';
+
+      if (!script) {
+        errorDetail = 'Script generation failed - no response received after retries';
+      } else if (!script.scenes) {
+        errorDetail = 'Script generation failed - GPT response missing scenes array. Try a shorter duration or simpler concept.';
+      } else if (!Array.isArray(script.scenes)) {
+        errorDetail = `Script generation failed - scenes is ${typeof script.scenes} instead of array`;
+      } else if (script.scenes.length === 0) {
+        errorDetail = 'Script generation failed - GPT returned empty scenes array. Try a different topic or shorter duration.';
+      }
+
+      // Check if this might be a token/truncation issue
+      if (tokenUsage.completionTokens > 0) {
+        const maxUsed = Math.max(8000, 1500 + (sceneCount * 550));
+        if (tokenUsage.completionTokens / maxUsed > 0.9) {
+          errorDetail += ' (Response may have been truncated due to length)';
+        }
+      }
+
+      console.error(`[creationWizardGenerateScript] Final validation failed: ${errorDetail}`);
+      throw new functions.https.HttpsError('internal', errorDetail);
     }
 
     // PHASE 3: CHARACTER VOICE ASSIGNMENT
