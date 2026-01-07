@@ -163,7 +163,9 @@ function checkRateLimit(userId, action, maxRequestsPerMinute = 10) {
 }
 
 const openai = new OpenAI({
-  apiKey: functions.config().openai?.key || process.env.OPENAI_API_KEY
+  apiKey: functions.config().openai?.key || process.env.OPENAI_API_KEY,
+  timeout: 120000, // 120 seconds - prevents hanging requests from blocking the function
+  maxRetries: 0    // We handle retries ourselves with time-budget awareness
 });
 
 const youtube = google.youtube({
@@ -24902,8 +24904,8 @@ Always return valid JSON with genuinely diverse, surprising concepts.`
  */
 exports.creationWizardGenerateScript = functions
   .runWith({
-    timeoutSeconds: 300, // 5 minutes - needed for complex prompts with rich concept data
-    memory: '1GB' // Increase memory for large prompt processing
+    timeoutSeconds: 540, // 9 minutes (max for v1) - needed for complex prompts with retries
+    memory: '1GB' // Increased memory for large prompt processing
   })
   .https.onCall(async (data, context) => {
   try {
@@ -28526,18 +28528,29 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
 
         console.log(`[creationWizardGenerateScript] Generating chunk ${chunkNum}/${chunkCount}: scenes ${currentSceneNumber}-${currentSceneNumber + scenesThisChunk - 1}`);
 
-        // === RETRY MECHANISM FOR CHUNK GENERATION ===
+        // === RETRY MECHANISM FOR CHUNK GENERATION WITH TIME-BUDGET AWARENESS ===
         const CHUNK_MAX_RETRIES = 2;
+        const CHUNK_FUNCTION_TIMEOUT_MS = 540000; // 9 minutes (must match runWith config)
+        const CHUNK_MIN_TIME_FOR_RETRY_MS = 120000; // Need at least 2 minutes to retry a chunk
         let chunkResult = null;
         let chunkLastError = null;
 
         for (let chunkAttempt = 1; chunkAttempt <= CHUNK_MAX_RETRIES; chunkAttempt++) {
-          try {
-            if (chunkAttempt > 1) {
-              console.log(`[creationWizardGenerateScript] Retrying chunk ${chunkNum} (attempt ${chunkAttempt}/${CHUNK_MAX_RETRIES})`);
-              await new Promise(resolve => setTimeout(resolve, 1000));
-            }
+          // Check time budget before retry attempt
+          if (chunkAttempt > 1) {
+            const elapsedMs = Date.now() - startTime;
+            const remainingMs = CHUNK_FUNCTION_TIMEOUT_MS - elapsedMs;
+            console.log(`[creationWizardGenerateScript] Chunk ${chunkNum} time check: ${(remainingMs/1000).toFixed(1)}s remaining`);
 
+            if (remainingMs < CHUNK_MIN_TIME_FOR_RETRY_MS) {
+              console.error(`[creationWizardGenerateScript] ⏱️ Insufficient time to retry chunk ${chunkNum}`);
+              break;
+            }
+            console.log(`[creationWizardGenerateScript] Retrying chunk ${chunkNum} (attempt ${chunkAttempt}/${CHUNK_MAX_RETRIES})`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+
+          try {
             const chunkResponse = await generateScriptChunk(
               chunkNum,
               chunkCount,
@@ -28656,12 +28669,26 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
       const dynamicMaxTokens = Math.min(16000, Math.max(8000, estimatedTokensNeeded));
       console.log(`[creationWizardGenerateScript] Token allocation: ${sceneCount} scenes → ${dynamicMaxTokens} max_tokens`);
 
-      // === RETRY MECHANISM FOR ROBUST SCRIPT GENERATION ===
+      // === RETRY MECHANISM WITH TIME-BUDGET AWARENESS ===
       const MAX_RETRIES = 2;
+      const FUNCTION_TIMEOUT_MS = 540000; // 9 minutes (must match runWith config)
+      const MIN_TIME_FOR_RETRY_MS = 150000; // Need at least 2.5 minutes to attempt retry
       let lastError = null;
       let attemptTokens = dynamicMaxTokens;
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        // Check time budget before attempting (except for first attempt)
+        if (attempt > 1) {
+          const elapsedMs = Date.now() - startTime;
+          const remainingMs = FUNCTION_TIMEOUT_MS - elapsedMs;
+          console.log(`[creationWizardGenerateScript] Time check: ${(elapsedMs/1000).toFixed(1)}s elapsed, ${(remainingMs/1000).toFixed(1)}s remaining`);
+
+          if (remainingMs < MIN_TIME_FOR_RETRY_MS) {
+            console.error(`[creationWizardGenerateScript] ⏱️ Insufficient time for retry (${(remainingMs/1000).toFixed(1)}s < ${MIN_TIME_FOR_RETRY_MS/1000}s required)`);
+            break; // Exit retry loop - not enough time
+          }
+        }
+
         try {
           console.log(`[creationWizardGenerateScript] GPT-4o attempt ${attempt}/${MAX_RETRIES} with ${attemptTokens} max_tokens`);
 
@@ -28763,17 +28790,17 @@ STORY PROGRESS: ${allPreviousScenes.length} scenes completed, story is ${Math.ro
           attemptTokens = Math.min(16000, attemptTokens + 2000);
 
           if (attempt < MAX_RETRIES) {
-            console.log(`[creationWizardGenerateScript] Retrying with ${attemptTokens} max_tokens...`);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Brief delay before retry
+            console.log(`[creationWizardGenerateScript] Will retry with ${attemptTokens} max_tokens...`);
+            await new Promise(resolve => setTimeout(resolve, 500)); // Brief delay before retry
           }
 
         } catch (apiError) {
-          console.error(`[creationWizardGenerateScript] GPT API error on attempt ${attempt}:`, apiError);
+          console.error(`[creationWizardGenerateScript] GPT API error on attempt ${attempt}:`, apiError.message || apiError);
           lastError = apiError;
 
           if (attempt < MAX_RETRIES) {
             attemptTokens = Math.min(16000, attemptTokens + 2000);
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Longer delay for API errors
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Brief delay for API errors
           }
         }
       }
