@@ -1447,6 +1447,7 @@ const CreatorToolsPanel = {
     channelStats: null
   },
   lastVideoId: null,
+  sidebarObserver: null,
 
   /**
    * Create the panel DOM structure
@@ -1572,11 +1573,11 @@ const CreatorToolsPanel = {
     );
 
     if (secondaryColumn) {
-      // Insert at the top of the sidebar
-      if (!secondaryColumn.contains(this.container)) {
-        secondaryColumn.insertBefore(this.container, secondaryColumn.firstChild);
-      }
       this.container.classList.remove('yvo-fixed-mode');
+      // Always insert at the very top of the sidebar
+      this.insertAtTop(secondaryColumn);
+      // Start observing to maintain top position
+      this.observeSidebar(secondaryColumn);
     } else {
       // Fallback: Add to the right side of the page as fixed panel
       if (!document.body.contains(this.container)) {
@@ -1587,6 +1588,45 @@ const CreatorToolsPanel = {
 
     this.isVisible = true;
     this.loadData();
+  },
+
+  /**
+   * Insert panel at the very top of the sidebar
+   */
+  insertAtTop(sidebar) {
+    // Remove from current position if already in DOM
+    if (this.container.parentNode) {
+      this.container.parentNode.removeChild(this.container);
+    }
+    // Insert before the first child (at the very top)
+    if (sidebar.firstChild) {
+      sidebar.insertBefore(this.container, sidebar.firstChild);
+    } else {
+      sidebar.appendChild(this.container);
+    }
+  },
+
+  /**
+   * Observe sidebar for changes and maintain top position
+   */
+  observeSidebar(sidebar) {
+    // Stop any existing observer
+    if (this.sidebarObserver) {
+      this.sidebarObserver.disconnect();
+    }
+
+    this.sidebarObserver = new MutationObserver((mutations) => {
+      // Check if our panel is still at the top
+      if (sidebar.firstChild !== this.container && sidebar.contains(this.container)) {
+        // Something was inserted above us, move back to top
+        this.insertAtTop(sidebar);
+      }
+    });
+
+    this.sidebarObserver.observe(sidebar, {
+      childList: true,
+      subtree: false
+    });
   },
 
   /**
@@ -1610,6 +1650,11 @@ const CreatorToolsPanel = {
    * Hide the panel
    */
   hide() {
+    // Disconnect sidebar observer
+    if (this.sidebarObserver) {
+      this.sidebarObserver.disconnect();
+      this.sidebarObserver = null;
+    }
     if (this.container && this.container.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
