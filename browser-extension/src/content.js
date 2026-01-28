@@ -644,29 +644,140 @@ async function extractVideoInfo(videoId) {
  * Get player data from page scripts
  */
 function getPlayerData() {
-  // Try window.ytInitialPlayerResponse first
-  if (window.ytInitialPlayerResponse) {
+  // Try window.ytInitialPlayerResponse first (set by injected script)
+  if (window.ytInitialPlayerResponse && window.ytInitialPlayerResponse.videoDetails) {
     return window.ytInitialPlayerResponse;
   }
 
-  // Search for it in script tags
+  // Search for it in script tags (fallback)
   const scripts = document.querySelectorAll('script');
 
   for (const script of scripts) {
     const text = script.textContent;
 
-    if (text.includes('ytInitialPlayerResponse')) {
-      const match = text.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
-      if (match) {
-        try {
-          return JSON.parse(match[1]);
-        } catch {
-          // Continue to next script
+    if (text && text.includes('ytInitialPlayerResponse')) {
+      // Try multiple regex patterns to match different YouTube formats
+      const patterns = [
+        // Standard: var ytInitialPlayerResponse = {...};
+        /var\s+ytInitialPlayerResponse\s*=\s*(\{.+?\});?\s*(?:var\s|const\s|let\s|;|\n|$)/s,
+        // Window assignment: window.ytInitialPlayerResponse = {...}
+        /window(?:\[["']ytInitialPlayerResponse["']\]|\.ytInitialPlayerResponse)\s*=\s*(\{.+?\});?\s*(?:var\s|const\s|let\s|;|\n|$)/s,
+        // Direct assignment: ytInitialPlayerResponse = {...}
+        /(?:^|[;\s])ytInitialPlayerResponse\s*=\s*(\{.+?\});?\s*(?:var\s|const\s|let\s|;|\n|$)/s
+      ];
+
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          try {
+            const parsed = JSON.parse(match[1]);
+            if (parsed && parsed.videoDetails) {
+              // Cache for future use
+              window.ytInitialPlayerResponse = parsed;
+              return parsed;
+            }
+          } catch {
+            // Continue to next pattern
+          }
+        }
+      }
+
+      // Alternative: Find JSON object starting after 'ytInitialPlayerResponse'
+      const startIndex = text.indexOf('ytInitialPlayerResponse');
+      if (startIndex !== -1) {
+        // Find the first '{' after the assignment
+        const jsonStart = text.indexOf('{', startIndex);
+        if (jsonStart !== -1) {
+          // Try to extract balanced JSON
+          const extracted = extractBalancedJson(text, jsonStart);
+          if (extracted) {
+            try {
+              const parsed = JSON.parse(extracted);
+              if (parsed && parsed.videoDetails) {
+                window.ytInitialPlayerResponse = parsed;
+                return parsed;
+              }
+            } catch {
+              // Continue
+            }
+          }
         }
       }
     }
   }
 
+  return null;
+}
+
+/**
+ * Extract balanced JSON object from text starting at given index
+ */
+function extractBalancedJson(text, startIndex) {
+  if (text[startIndex] !== '{') return null;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = startIndex; i < text.length && i < startIndex + 500000; i++) {
+    const char = text[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (char === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+
+    if (char === '"' && !escape) {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{') depth++;
+      else if (char === '}') {
+        depth--;
+        if (depth === 0) {
+          return text.substring(startIndex, i + 1);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Wait for player data to become available with exponential backoff
+ * @param {number} maxWaitMs - Maximum time to wait (default 15 seconds)
+ * @param {number} initialDelayMs - Initial delay between checks (default 200ms)
+ * @returns {Promise<object|null>} - Player data or null if timeout
+ */
+async function waitForPlayerData(maxWaitMs = 15000, initialDelayMs = 200) {
+  const startTime = Date.now();
+  let delay = initialDelayMs;
+  let attempts = 0;
+  const maxAttempts = 20;
+
+  while (Date.now() - startTime < maxWaitMs && attempts < maxAttempts) {
+    attempts++;
+    const playerData = getPlayerData();
+
+    if (playerData && playerData.videoDetails) {
+      console.log(`[YVO Content] Player data found after ${attempts} attempts (${Date.now() - startTime}ms)`);
+      return playerData;
+    }
+
+    // Exponential backoff: 200ms, 300ms, 450ms, 675ms, etc. (capped at 2s)
+    await new Promise(resolve => setTimeout(resolve, delay));
+    delay = Math.min(delay * 1.5, 2000);
+  }
+
+  console.warn(`[YVO Content] Player data not available after ${maxWaitMs}ms (${attempts} attempts)`);
   return null;
 }
 
@@ -1449,19 +1560,23 @@ const CreatorToolsPanel = {
   /**
    * Show the panel on the page
    */
-  show() {
+  async show() {
     if (!this.container) {
       this.createPanel();
     }
 
-    // Find the secondary column (sidebar) on YouTube
-    const secondaryColumn = document.querySelector('#secondary, #secondary-inner, ytd-watch-flexy #secondary');
+    // Wait for YouTube's sidebar to be available (with timeout)
+    const secondaryColumn = await this.waitForElement(
+      '#secondary, #secondary-inner, ytd-watch-flexy #secondary',
+      5000
+    );
 
     if (secondaryColumn) {
       // Insert at the top of the sidebar
       if (!secondaryColumn.contains(this.container)) {
         secondaryColumn.insertBefore(this.container, secondaryColumn.firstChild);
       }
+      this.container.classList.remove('yvo-fixed-mode');
     } else {
       // Fallback: Add to the right side of the page as fixed panel
       if (!document.body.contains(this.container)) {
@@ -1472,6 +1587,23 @@ const CreatorToolsPanel = {
 
     this.isVisible = true;
     this.loadData();
+  },
+
+  /**
+   * Wait for a DOM element to become available
+   */
+  async waitForElement(selector, timeoutMs = 5000) {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      const element = document.querySelector(selector);
+      if (element) {
+        return element;
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    return null;
   },
 
   /**
@@ -1569,10 +1701,11 @@ const CreatorToolsPanel = {
   },
 
   /**
-   * Load and display video tags
+   * Load and display video tags with retry mechanism
    */
-  async loadTags() {
+  async loadTags(retryCount = 0) {
     const content = this.container.querySelector('[data-content="tags"]');
+    const maxRetries = 3;
 
     if (this.cachedData.metadata) {
       this.renderTags(this.cachedData.metadata.tags);
@@ -1582,16 +1715,58 @@ const CreatorToolsPanel = {
     content.innerHTML = '<div class="yvo-loading"><span class="yvo-spinner"></span>Loading tags...</div>';
 
     try {
+      // Wait for player data to become available before trying to get metadata
+      const playerData = await waitForPlayerData(10000, 300);
+
+      if (!playerData) {
+        throw new Error('YouTube data not available yet');
+      }
+
       const result = await getVideoMetadata();
 
       if (result.success) {
         this.cachedData.metadata = result.metadata;
         this.renderTags(result.metadata.tags);
+      } else if (result.error && retryCount < maxRetries) {
+        // Retry with exponential backoff
+        const delay = Math.pow(2, retryCount) * 500; // 500ms, 1s, 2s
+        console.log(`[YVO Content] Retrying loadTags (attempt ${retryCount + 1}/${maxRetries}) in ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.loadTags(retryCount + 1);
       } else {
-        this.renderTags([]);
+        this.renderTagsError('Could not load video data', retryCount >= maxRetries);
       }
     } catch (error) {
-      content.innerHTML = '<div class="yvo-error">Failed to load tags</div>';
+      console.error('[YVO Content] loadTags error:', error);
+      if (retryCount < maxRetries) {
+        const delay = Math.pow(2, retryCount) * 500;
+        console.log(`[YVO Content] Retrying loadTags after error (attempt ${retryCount + 1}/${maxRetries}) in ${delay}ms`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.loadTags(retryCount + 1);
+      }
+      this.renderTagsError(error.message || 'Failed to load tags', true);
+    }
+  },
+
+  /**
+   * Render error state with retry button
+   */
+  renderTagsError(message, showRetry = true) {
+    const content = this.container.querySelector('[data-content="tags"]');
+    content.innerHTML = `
+      <div class="yvo-error-state">
+        <span class="yvo-error-icon">⚠️</span>
+        <p>${this.escapeHtml(message)}</p>
+        ${showRetry ? '<button class="yvo-retry-btn">🔄 Retry</button>' : ''}
+        <small>Try refreshing the page if this persists</small>
+      </div>
+    `;
+
+    if (showRetry) {
+      content.querySelector('.yvo-retry-btn')?.addEventListener('click', () => {
+        this.cachedData.metadata = null;
+        this.loadTags(0);
+      });
     }
   },
 
@@ -1639,10 +1814,11 @@ const CreatorToolsPanel = {
   },
 
   /**
-   * Load and display SEO analysis
+   * Load and display SEO analysis with retry mechanism
    */
-  async loadSeoAnalysis() {
+  async loadSeoAnalysis(retryCount = 0) {
     const content = this.container.querySelector('[data-content="seo"]');
+    const maxRetries = 3;
 
     if (this.cachedData.seoScore) {
       this.renderSeoScore(this.cachedData.seoScore);
@@ -1652,11 +1828,20 @@ const CreatorToolsPanel = {
     content.innerHTML = '<div class="yvo-loading"><span class="yvo-spinner"></span>Analyzing SEO...</div>';
 
     try {
-      // Get metadata if not cached
+      // Wait for player data if not already cached
       if (!this.cachedData.metadata) {
+        const playerData = await waitForPlayerData(10000, 300);
+        if (!playerData) {
+          throw new Error('YouTube data not available yet');
+        }
+
         const result = await getVideoMetadata();
         if (result.success) {
           this.cachedData.metadata = result.metadata;
+        } else if (retryCount < maxRetries) {
+          const delay = Math.pow(2, retryCount) * 500;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return this.loadSeoAnalysis(retryCount + 1);
         } else {
           throw new Error('Could not get video data');
         }
@@ -1667,8 +1852,35 @@ const CreatorToolsPanel = {
       this.renderSeoScore(seoScore);
 
     } catch (error) {
-      content.innerHTML = '<div class="yvo-error">Failed to analyze SEO</div>';
+      console.error('[YVO Content] loadSeoAnalysis error:', error);
+      if (retryCount < maxRetries) {
+        const delay = Math.pow(2, retryCount) * 500;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.loadSeoAnalysis(retryCount + 1);
+      }
+      this.renderSeoError(error.message || 'Failed to analyze SEO');
     }
+  },
+
+  /**
+   * Render SEO error state with retry button
+   */
+  renderSeoError(message) {
+    const content = this.container.querySelector('[data-content="seo"]');
+    content.innerHTML = `
+      <div class="yvo-error-state">
+        <span class="yvo-error-icon">⚠️</span>
+        <p>${this.escapeHtml(message)}</p>
+        <button class="yvo-retry-btn">🔄 Retry</button>
+        <small>Try refreshing the page if this persists</small>
+      </div>
+    `;
+
+    content.querySelector('.yvo-retry-btn')?.addEventListener('click', () => {
+      this.cachedData.seoScore = null;
+      this.cachedData.metadata = null;
+      this.loadSeoAnalysis(0);
+    });
   },
 
   /**
@@ -2435,23 +2647,59 @@ const CreatorToolsPanel = {
   /**
    * Initialize panel on video pages
    */
-  init() {
+  async init() {
     if (this.isVideoPage()) {
-      // Wait a bit for YouTube to load its UI
-      setTimeout(() => this.show(), 1500);
+      // Wait for YouTube's UI elements to be ready before showing panel
+      console.log('[YVO Content] Initializing Creator Tools panel...');
+
+      // Wait for sidebar or page to be ready
+      const ready = await this.waitForYouTubeReady();
+      if (ready) {
+        await this.show();
+      } else {
+        console.warn('[YVO Content] YouTube UI not ready, will retry on navigation');
+      }
     }
+  },
+
+  /**
+   * Wait for YouTube page to be ready
+   */
+  async waitForYouTubeReady(timeoutMs = 8000) {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      // Check if essential YouTube elements exist
+      const hasVideoElement = !!document.querySelector('video.html5-main-video, video');
+      const hasPlayerContainer = !!document.querySelector('#movie_player, ytd-player');
+      const hasPageStructure = !!document.querySelector('ytd-watch-flexy, ytd-page-manager');
+
+      if (hasVideoElement && (hasPlayerContainer || hasPageStructure)) {
+        return true;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    return false;
   },
 
   /**
    * Handle URL changes (YouTube is SPA)
    */
-  handleNavigation() {
+  async handleNavigation() {
     if (this.isVideoPage()) {
+      // Clear cache for new video
+      const currentVideoId = getVideoId();
+      if (currentVideoId !== this.lastVideoId) {
+        this.cachedData = { metadata: null, transcript: null, seoScore: null, chapters: null, channelStats: null };
+      }
+
       if (!this.isVisible) {
-        this.show();
+        await this.show();
       } else {
         // Video changed, reload data
-        this.loadData();
+        await this.loadData();
       }
     } else {
       this.hide();
