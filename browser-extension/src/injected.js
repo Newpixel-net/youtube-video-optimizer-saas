@@ -9,8 +9,13 @@
 (function() {
   'use strict';
 
+  // Guard against duplicate injection
+  if (window.__YVO_INJECTED_LOADED__) return;
+  window.__YVO_INJECTED_LOADED__ = true;
+
   let lastVideoId = null;
   let sendInterval = null;
+  let navigationObserver = null;
 
   /**
    * Send data to content script
@@ -79,72 +84,46 @@
   }
 
   /**
-   * Try to get stream URL from player
-   */
-  function getStreamFromPlayer() {
-    try {
-      const player = document.querySelector('#movie_player');
-
-      if (player && typeof player.getVideoData === 'function') {
-        const videoData = player.getVideoData();
-
-        if (typeof player.getVideoUrl === 'function') {
-          const videoUrl = player.getVideoUrl();
-          sendToContentScript('YVO_STREAM_URL', { videoUrl });
-        }
-      }
-    } catch (error) {
-      console.error('YVO: Error getting stream from player:', error);
-    }
-  }
-
-  /**
-   * Start continuous sending of player data
+   * Start sending player data with proper interval management
    */
   function startDataSending() {
     // Clear any existing interval
     if (sendInterval) {
       clearInterval(sendInterval);
+      sendInterval = null;
     }
-
-    let attempts = 0;
-    const maxAttempts = 30; // 15 seconds at 500ms intervals
 
     // Try to send immediately
-    if (sendPlayerData()) {
-      console.log('[YVO Injected] Player data sent successfully');
-    }
+    sendPlayerData();
 
-    // Keep checking until we successfully send data multiple times
+    let attempts = 0;
+    const maxAttempts = 20; // 10 seconds at 500ms intervals
+
+    // Poll until data is available
     sendInterval = setInterval(() => {
       attempts++;
       const success = sendPlayerData();
 
-      if (success && attempts > 3) {
-        // After a few successful sends, reduce frequency
+      // Stop polling once we've successfully sent data a few times or hit max attempts
+      if ((success && attempts > 3) || attempts >= maxAttempts) {
         clearInterval(sendInterval);
-        // Continue sending every 2 seconds for navigation changes
-        sendInterval = setInterval(() => {
-          const currentVideoId = getVideoId();
-          if (currentVideoId !== lastVideoId) {
-            lastVideoId = currentVideoId;
-            sendPlayerData();
-          }
-        }, 2000);
-      }
-
-      if (attempts >= maxAttempts) {
-        clearInterval(sendInterval);
-        // Continue low-frequency checks
-        sendInterval = setInterval(() => {
-          const currentVideoId = getVideoId();
-          if (currentVideoId !== lastVideoId) {
-            lastVideoId = currentVideoId;
-            sendPlayerData();
-          }
-        }, 2000);
+        sendInterval = null;
       }
     }, 500);
+  }
+
+  /**
+   * Handle navigation changes
+   */
+  function handleNavigation() {
+    const currentVideoId = getVideoId();
+    if (currentVideoId !== lastVideoId) {
+      lastVideoId = currentVideoId;
+      if (currentVideoId) {
+        // Delay to let YouTube load new video data
+        setTimeout(() => startDataSending(), 800);
+      }
+    }
   }
 
   /**
@@ -154,30 +133,22 @@
     lastVideoId = getVideoId();
 
     // Start sending player data
-    startDataSending();
+    if (lastVideoId) {
+      startDataSending();
+    }
 
-    // Watch for navigation (YouTube is a SPA)
-    let lastUrl = location.href;
+    // Listen for YouTube's custom navigation event (most reliable)
+    document.addEventListener('yt-navigate-finish', handleNavigation);
 
-    new MutationObserver(() => {
-      if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        lastVideoId = getVideoId();
-        // Reset and restart data sending for new video
-        setTimeout(() => startDataSending(), 500);
-      }
-    }).observe(document, { subtree: true, childList: true });
-
-    // Also listen for player ready events
+    // Listen for player ready events
     document.addEventListener('yt-player-updated', () => {
       sendPlayerData();
     });
 
-    // Listen for yt-navigate-finish (YouTube's custom event for SPA navigation)
-    document.addEventListener('yt-navigate-finish', () => {
-      lastVideoId = getVideoId();
-      setTimeout(() => startDataSending(), 500);
-    });
+    // Fallback: Check URL periodically (less expensive than MutationObserver)
+    setInterval(() => {
+      handleNavigation();
+    }, 2000);
   }
 
   // Run when ready
