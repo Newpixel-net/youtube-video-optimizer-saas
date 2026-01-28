@@ -348,6 +348,11 @@ ytd-miniplayer .yvo-capture-overlay {
   overflow: hidden;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
+  /* Force panel to be first in flex/grid layouts */
+  order: -9999 !important;
+  /* Ensure we're at the top visually */
+  position: relative;
+  z-index: 100;
 }
 
 /* Fixed mode for when sidebar is not available */
