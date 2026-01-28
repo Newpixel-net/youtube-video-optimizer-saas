@@ -531,6 +531,49 @@ ytd-miniplayer .yvo-capture-overlay {
   font-size: 13px;
 }
 
+/* Error State with Retry */
+.yvo-error-state {
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.yvo-error-icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.yvo-error-state p {
+  margin: 0 0 12px 0;
+  color: #f87171;
+  font-size: 13px;
+}
+
+.yvo-error-state small {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  margin-top: 8px;
+}
+
+.yvo-retry-btn {
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 6px;
+  padding: 8px 16px;
+  color: #c4b5fd;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.yvo-retry-btn:hover {
+  background: rgba(139, 92, 246, 0.3);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #e9d5ff;
+}
+
 /* Empty State */
 .yvo-empty-state {
   padding: 24px 16px;
