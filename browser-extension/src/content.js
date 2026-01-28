@@ -14,6 +14,36 @@ let videoInfo = null;
 let streamUrls = null;
 
 /**
+ * Check if extension context is still valid
+ * Returns false if extension was reloaded/updated
+ */
+function isExtensionContextValid() {
+  try {
+    return typeof chrome !== 'undefined' &&
+           typeof chrome.runtime !== 'undefined' &&
+           typeof chrome.runtime.id !== 'undefined';
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Safe wrapper for chrome.runtime.sendMessage
+ */
+function safeSendMessage(message) {
+  if (!isExtensionContextValid()) {
+    console.warn('[YVO Content] Extension context invalidated, cannot send message');
+    return Promise.reject(new Error('Extension context invalidated'));
+  }
+  return chrome.runtime.sendMessage(message).catch(err => {
+    if (err.message?.includes('Extension context invalidated')) {
+      console.warn('[YVO Content] Extension context was invalidated');
+    }
+    throw err;
+  });
+}
+
+/**
  * Message handler for popup/background communication
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -1368,9 +1398,11 @@ function init() {
  * Report current video ID to background script for stream interception tracking
  */
 function reportCurrentVideoId() {
+  if (!isExtensionContextValid()) return;
+
   const videoId = getVideoId();
   if (videoId) {
-    chrome.runtime.sendMessage({
+    safeSendMessage({
       action: 'reportVideoId',
       videoId: videoId
     }).catch(() => {});
@@ -1383,12 +1415,25 @@ function reportCurrentVideoId() {
  * This allows access to YouTube's player API
  */
 function injectPageScript() {
-  const script = document.createElement('script');
-  script.src = chrome.runtime.getURL('src/injected.js');
-  script.onload = function() {
-    this.remove();
-  };
-  (document.head || document.documentElement).appendChild(script);
+  if (!isExtensionContextValid()) {
+    console.warn('[YVO Content] Cannot inject page script - extension context invalid');
+    return;
+  }
+
+  try {
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL('src/injected.js');
+    script.onload = function() {
+      this.remove();
+    };
+    script.onerror = function() {
+      console.error('[YVO Content] Failed to load injected script');
+      this.remove();
+    };
+    (document.head || document.documentElement).appendChild(script);
+  } catch (e) {
+    console.error('[YVO Content] Error injecting page script:', e);
+  }
 }
 
 /**
@@ -1554,7 +1599,7 @@ const CreatorToolsPanel = {
     panel.querySelector('.yvo-viral-clip-link').addEventListener('click', (e) => {
       e.preventDefault();
       // Send message to background to open popup or redirect
-      chrome.runtime.sendMessage({ action: 'openViralClipDetector' });
+      safeSendMessage({ action: 'openViralClipDetector' }).catch(() => {});
     });
   },
 
@@ -1615,11 +1660,24 @@ const CreatorToolsPanel = {
       this.sidebarObserver.disconnect();
     }
 
+    // Debounce to prevent excessive DOM manipulation
+    let debounceTimer = null;
+    let isRepositioning = false;
+
     this.sidebarObserver = new MutationObserver((mutations) => {
+      // Skip if we're currently repositioning (to avoid infinite loop)
+      if (isRepositioning) return;
+
       // Check if our panel is still at the top
       if (sidebar.firstChild !== this.container && sidebar.contains(this.container)) {
-        // Something was inserted above us, move back to top
-        this.insertAtTop(sidebar);
+        // Debounce the repositioning
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          isRepositioning = true;
+          this.insertAtTop(sidebar);
+          // Reset flag after a short delay
+          setTimeout(() => { isRepositioning = false; }, 100);
+        }, 50);
       }
     });
 
